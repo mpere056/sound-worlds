@@ -1,5 +1,6 @@
 import { parsePerformance, parseSong, type Song } from "@reaper-viz/core";
 import { captureCanvasPng, exportCanvasMp4, PixiBackend, supportsCanvasMp4 } from "@reaper-viz/render";
+import { MetroScene, type MetroPerformance } from "@reaper-viz/scene-metro";
 import { RunnerScene, type RunnerPerformance } from "@reaper-viz/scene-runner";
 import { TestPatternScene } from "@reaper-viz/scene-testpattern";
 import { Pane } from "tweakpane";
@@ -124,15 +125,27 @@ function addTuningBinding<T extends object, K extends keyof T>(
 
 async function loadConcept(concept: string): Promise<void> {
   scene?.destroy();
-  backend?.destroy();
   pane?.dispose();
   if (!song) return;
   statusTitle.textContent = "Building world";
   statusDetail.textContent = concept;
-  backend = await PixiBackend.create({ canvas, width: 1080, height: 1920 });
+  backend ??= await PixiBackend.create({ canvas, width: 1080, height: 1920 });
   pane = new Pane({ container: document.querySelector<HTMLDivElement>("#tweakpane")! });
   const bindingPane = pane as unknown as BindingPane;
-  if (concept === "runner") {
+  if (concept === "metro") {
+    const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.metro.json`);
+    if (!response.ok) throw new Error(`Metro performance request failed: ${response.status}`);
+    const performance = parsePerformance(await response.json()) as MetroPerformance;
+    const metro = new MetroScene(backend, performance);
+    scene = metro;
+    addTuningBinding(bindingPane, metro.tuning, "lineWeight", { min: 0.5, max: 1.5, step: 0.02, label: "Lines" });
+    addTuningBinding(bindingPane, metro.tuning, "gridOpacity", { min: 0, max: 1, step: 0.01, label: "Grid" });
+    addTuningBinding(bindingPane, metro.tuning, "stationScale", { min: 0.6, max: 1.6, step: 0.02, label: "Stations" });
+    sceneLabel.textContent = "Metro Map · M1 Static Network";
+    statusTitle.textContent = "Metro Map · complete network";
+    const fallbacks = performance.statics.lines.filter((line) => line.source === "audio-activity").length;
+    statusDetail.textContent = `${performance.statics.lines.length} lines · ${performance.statics.stations.length} stations · ${fallbacks} audio fallback`;
+  } else if (concept === "runner") {
     const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.runner.json`);
     if (!response.ok) throw new Error(`Runner performance request failed: ${response.status}`);
     const performance = parsePerformance(await response.json()) as RunnerPerformance;
@@ -183,15 +196,23 @@ async function loadProject(id: string): Promise<void> {
     runner.textContent = "Waveform Runner · R1 World";
     options.push(runner);
   }
+  if (project?.concepts.includes("metro")) {
+    const metro = document.createElement("option");
+    metro.value = "metro";
+    metro.textContent = "Metro Map · M1 Static Network";
+    options.push(metro);
+  }
   const testPattern = document.createElement("option");
   testPattern.value = "testpattern";
   testPattern.textContent = "Pipeline Test Pattern";
   options.push(testPattern);
-  const metro = document.createElement("option");
-  metro.value = "metro";
-  metro.textContent = "Metro Map · planned, not implemented";
-  metro.disabled = true;
-  options.push(metro);
+  if (!project?.concepts.includes("metro")) {
+    const metro = document.createElement("option");
+    metro.value = "metro";
+    metro.textContent = "Metro Map · compile required";
+    metro.disabled = true;
+    options.push(metro);
+  }
   conceptSelect.replaceChildren(...options);
   await loadConcept(options[0]?.value ?? "testpattern");
   animationFrame = requestAnimationFrame(tick);

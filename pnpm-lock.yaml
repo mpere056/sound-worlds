@@ -18,6 +18,12 @@ importers:
         specifier: ^3.2.4
         version: 3.2.6(@types/node@22.20.0)(lightningcss@1.32.0)
 
+  compilers/metro:
+    dependencies:
+      '@reaper-viz/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+
   compilers/runner:
     dependencies:
       '@reaper-viz/core':
@@ -32,6 +38,9 @@ importers:
       '@reaper-viz/render':
         specifier: workspace:*
         version: link:../render
+      '@reaper-viz/scene-metro':
+        specifier: workspace:*
+        version: link:../../scenes/metro
       '@reaper-viz/scene-runner':
         specifier: workspace:*
         version: link:../../scenes/runner
@@ -72,6 +81,18 @@ importers:
       '@reaper-viz/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@reaper-viz/render':
+        specifier: workspace:*
+        version: link:../../packages/render
+      pixi.js:
+        specifier: 8.19.0
+        version: 8.19.0
+
+  scenes/metro:
+    dependencies:
+      '@reaper-viz/compiler-metro':
+        specifier: workspace:*
+        version: link:../../compilers/metro
       '@reaper-viz/render':
         specifier: workspace:*
         version: link:../../packages/render

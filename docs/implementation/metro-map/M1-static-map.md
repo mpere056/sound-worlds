@@ -83,6 +83,15 @@ Property tests: octilinearity, spacing, determinism. Golden: one full
 
 ## Notes & risks
 
+Implementation status (2026-07-03): M1 now compiles deterministic MIDI lines,
+chord clusters, aligned-note interchanges, and octilinear edges. Audio-only
+tracks degrade to explicitly tagged activity shuttles sampled on the beat. The
+current real export produces 5 lines, 95 stations, and 90 edges entirely from
+that fallback because it contains no MIDI or detected onsets. Compiler,
+octilinearity, interchange, fallback, determinism, production-build, and schema
+checks pass. Browser selection is wired; final visual inspection is pending a
+responsive in-app browser session.
+
 - The tonic-centering decision affects every station position — get
   `key.confidence` handling right now or every later golden breaks.
 - Resist rendering polish here; M1's whole value is trusting the solver output.

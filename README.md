@@ -67,11 +67,13 @@ preview application are the next layer. The PixiJS backend and
 stream their master WAV, switch between compiled worlds, scrub, flash beats,
 expose safe-area guides, and export short H.264 MP4 previews or PNG stills.
 
-Waveform Runner R1 is the first compiled world. Its compiler turns master
+Waveform Runner R1 is the first animated compiled world. Its compiler turns master
 energy and waveform data into monotone motion, slope-limited terrain, a ground
 trajectory, and camera keys; its Pixi scene renders that data as a runner on a
-layered waveform landscape. Metro Map remains planned. The glowing orb is a
-pipeline diagnostic scene and is explicitly labeled as such in the app.
+layered waveform landscape. Metro Map M1 now compiles MIDI or honest
+audio-activity fallback lines into a complete static octilinear network. The
+glowing orb is a pipeline diagnostic scene and is explicitly labeled as such
+in the app.
 
 ### What the analyzer adds (for audio-only tracks)
 
