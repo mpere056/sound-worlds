@@ -1,7 +1,9 @@
 import { parsePerformance, sampleCurve, solvePalette, type Song, type SongEvent, type SongTrack } from "@reaper-viz/core";
 import type { MetroEdge, MetroLine, MetroPerformance, MetroPoint, MetroStation } from "./types.js";
+import { compileTrainSchedule, metroEvents } from "./trains.js";
 
 export * from "./types.js";
+export * from "./trains.js";
 
 const LINE_COLORS = ["#ef476f", "#118ab2", "#06d6a0", "#ffd166", "#9b5de5", "#f78c6b", "#4cc9f0", "#90be6d"];
 const DRUM_ROLES = new Set(["kick", "snare", "hats", "toms", "percussion", "drums"]);
@@ -162,9 +164,24 @@ export function compileMetro(song: Song): MetroPerformance {
       const to = byId.get(ids[index]!);
       if (!from || !to) continue;
       const poly = route(from.pos, to.pos);
-      edges.push({ id: `${line.id}:e${index}`, lineId: line.id, from: from.id, to: to.id, poly, length: polyLength(poly), revealT: to.revealT });
+      edges.push({
+        id: `${line.id}:e${index}`,
+        lineId: line.id,
+        from: from.id,
+        to: to.id,
+        poly,
+        length: polyLength(poly),
+        revealStartT: from.revealT,
+        revealT: to.revealT,
+      });
     }
   }
+  const trains = lines.map((line) => {
+    const ids = (perLine.get(line.id) ?? []).sort((a, b) => a.row - b.row || a.revealT - b.revealT)
+      .map((station) => canonical.get(station.id) ?? station.id)
+      .filter((id, index, all) => index === 0 || id !== all[index - 1]);
+    return compileTrainSchedule(line.id, ids, byId, edges);
+  });
   const xs = stations.map((station) => station.pos.x);
   const ys = stations.map((station) => station.pos.y);
   const performance: MetroPerformance = {
@@ -175,10 +192,10 @@ export function compileMetro(song: Song): MetroPerformance {
     fps: 60,
     resolution: { w: 1080, h: 1920 },
     palette: solvePalette(null, lines.map((line) => line.role)),
-    camera: [], curves: {}, events: [],
+    camera: [], curves: {}, events: metroEvents(stations, edges),
     statics: {
       lanes: { count: 12, laneX: Array.from({ length: 12 }, (_, index) => 90 + index * 75) },
-      lines, stations, edges,
+      lines, stations, edges, trains,
       bounds: { minX: Math.min(...xs, 90), minY: Math.min(...ys, 210), maxX: Math.max(...xs, 915), maxY: Math.max(...ys, 1650) },
       compileLog,
       compilerVersion: 1,

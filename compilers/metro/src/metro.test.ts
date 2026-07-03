@@ -25,6 +25,13 @@ describe("Metro Map M1 compiler", () => {
     expect(cluster?.span).toEqual([6, 10]);
   });
 
+  it("keeps train arrivals and blooms on source times", () => {
+    const song = buildFixtureSong({ bars: 1, patterns: [{ role: "lead", beats: [0, 1, 2], pitch: 60, kind: "note" }] });
+    const output = compileMetro(song);
+    expect(output.statics.trains[0]!.stops.map((stop) => stop.arriveT)).toEqual(song.tracks[0]!.events.map((event) => event.t));
+    expect(output.events.filter((event) => event.type === "station.bloom").map((event) => event.params.hitT)).toEqual(song.tracks[0]!.events.map((event) => event.t));
+  });
+
   it("routes every segment horizontally, vertically, or at 45 degrees", () => {
     const output = compileMetro(buildFixtureSong());
     for (const edge of output.statics.edges) for (let index = 1; index < edge.poly.length; index += 1) {

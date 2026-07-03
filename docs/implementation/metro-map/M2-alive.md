@@ -79,6 +79,15 @@ frame-hash equivalence test (the statelessness gate for this scene).
 
 ## Notes & risks
 
+Implementation status (2026-07-03): train schedules now preserve source
+arrival times, clamp dwell intervals, flag sprints, and emit reveal/bloom
+events with `hitT`. The scene derives edge reveal, train position, and bloom
+decay directly from the requested frame time, keeping scrubbing stateless. On
+the current audio-only export, the same machinery uses beat-sampled activity
+stations; MIDI exports retain exact note arrivals. Automated build, arrival,
+bloom, octilinearity, determinism, and schema checks pass. The 60-second
+audio/visual human sync check remains pending.
+
 - The scrub requirement forces the right architecture *now*: reveal progress
   must be computed from `revealT` vs `t`, never from "events I've seen." Get
   this wrong and M5's export is fine but dev scrubbing lies.

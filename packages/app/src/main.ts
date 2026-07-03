@@ -141,8 +141,8 @@ async function loadConcept(concept: string): Promise<void> {
     addTuningBinding(bindingPane, metro.tuning, "lineWeight", { min: 0.5, max: 1.5, step: 0.02, label: "Lines" });
     addTuningBinding(bindingPane, metro.tuning, "gridOpacity", { min: 0, max: 1, step: 0.01, label: "Grid" });
     addTuningBinding(bindingPane, metro.tuning, "stationScale", { min: 0.6, max: 1.6, step: 0.02, label: "Stations" });
-    sceneLabel.textContent = "Metro Map · M1 Static Network";
-    statusTitle.textContent = "Metro Map · complete network";
+    sceneLabel.textContent = "Metro Map · M2 Live Network";
+    statusTitle.textContent = "Metro Map · live network";
     const fallbacks = performance.statics.lines.filter((line) => line.source === "audio-activity").length;
     statusDetail.textContent = `${performance.statics.lines.length} lines · ${performance.statics.stations.length} stations · ${fallbacks} audio fallback`;
   } else if (concept === "runner") {
@@ -199,7 +199,7 @@ async function loadProject(id: string): Promise<void> {
   if (project?.concepts.includes("metro")) {
     const metro = document.createElement("option");
     metro.value = "metro";
-    metro.textContent = "Metro Map · M1 Static Network";
+    metro.textContent = "Metro Map · M2 Live Network";
     options.push(metro);
   }
   const testPattern = document.createElement("option");

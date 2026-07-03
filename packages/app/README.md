@@ -21,8 +21,8 @@ Then open `http://127.0.0.1:5173/`.
   performance is present and keeps unimplemented concepts visibly disabled.
 - Waveform Runner R1: deterministic motion, slope-limited waveform terrain,
   parallax layers, and a humanoid ground runner.
-- Metro Map M1: a complete static octilinear network with MIDI stations,
-  transfers and chord clusters, plus labeled audio-activity fallback lines.
+- Metro Map M2: a progressively drawn octilinear network with timestamped
+  trains and station blooms, plus MIDI and audio-activity line sources.
 - A separately labeled pipeline test pattern driven by master energy, beats,
   bars, and sections. It is not the Metro Map scene.
 - Beat sync flash, platform safe-area overlay, and live Tweakpane controls.

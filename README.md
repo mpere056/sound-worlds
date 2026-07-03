@@ -71,7 +71,8 @@ Waveform Runner R1 is the first animated compiled world. Its compiler turns mast
 energy and waveform data into monotone motion, slope-limited terrain, a ground
 trajectory, and camera keys; its Pixi scene renders that data as a runner on a
 layered waveform landscape. Metro Map M1 now compiles MIDI or honest
-audio-activity fallback lines into a complete static octilinear network. The
+audio-activity fallback lines into an octilinear network that draws itself,
+runs timestamped trains, and blooms stations on musical arrivals. The
 glowing orb is a pipeline diagnostic scene and is explicitly labeled as such
 in the app.
 
