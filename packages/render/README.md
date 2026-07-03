@@ -11,6 +11,8 @@ The current foundation includes:
 - `EventRuntime`: declarative `on` and `during` handler dispatch.
 - `eventProgress`: clamped span progress.
 - `sampleCamera`: deterministic camera-keyframe interpolation.
+- `PixiBackend`: fixed 1080×1920 WebGL drawing buffer, named layers, explicit
+  frame rendering, and RGBA pixel extraction.
 
-Pixi and Three backends, asset loading, accumulation checkpoints, and pixel
-readback are the next render phases.
+ThreeBackend, accumulation checkpoints, and the encoded export harness are the
+next render phases.

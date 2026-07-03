@@ -1,0 +1,21 @@
+{
+  "name": "@reaper-viz/app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@reaper-viz/core": "workspace:*",
+    "@reaper-viz/render": "workspace:*",
+    "@reaper-viz/scene-testpattern": "workspace:*",
+    "pixi.js": "8.19.0",
+    "tweakpane": "4.0.5"
+  },
+  "devDependencies": {
+    "vite": "8.1.3"
+  }
+}

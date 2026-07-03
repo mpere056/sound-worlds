@@ -17,8 +17,10 @@ TimedCurve operations, deterministic forkable PRNG, musical-time queries,
 back-solving, palettes, synthetic fixtures, and an enforced determinism check.
 The real generated song passes through the built core loader and query layer.
 The renderer-neutral clock, seek-safe event runtime, and camera interpolation
-are implemented and tested. PixiBackend, the dev shell, and the export harness
-remain to be implemented.
+are implemented and tested. PixiBackend and the responsive Vite dev shell now
+load the first real export, stream its WAV, render the energy/beat-driven test
+pattern, expose tuning controls, and provide sync/safe-area overlays. The
+encoded export harness remains to be implemented.
 
 ## Goal
 

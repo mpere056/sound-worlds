@@ -5,10 +5,11 @@
   "packageManager": "pnpm@10.12.4",
   "scripts": {
     "build": "corepack pnpm -r build",
+    "dev": "corepack pnpm --filter @reaper-viz/app dev",
     "test": "corepack pnpm -r test",
     "typecheck": "corepack pnpm -r typecheck",
     "check:determinism": "node tools/check-determinism.mjs",
-    "check": "corepack pnpm check:determinism && corepack pnpm typecheck && corepack pnpm test"
+    "check": "corepack pnpm check:determinism && corepack pnpm build && corepack pnpm test"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

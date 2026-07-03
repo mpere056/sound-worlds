@@ -62,7 +62,10 @@ songs. `corepack pnpm check` runs its determinism guard, typecheck, and tests.
 The renderer-neutral runtime is implemented under
 [`packages/render`](packages/render): frame-indexed timing, seek-safe event
 dispatch, span progress, and camera interpolation. Graphics backends and the
-preview application are the next layer.
+preview application are the next layer. The initial PixiJS backend and
+[`packages/app`](packages/app) preview shell now load real analyzed exports,
+stream their master WAV, render a deterministic 9:16 test scene, scrub, flash
+beats, expose safe-area guides, and provide live tuning controls.
 
 ### What the analyzer adds (for audio-only tracks)
 
