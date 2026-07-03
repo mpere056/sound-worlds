@@ -18,6 +18,12 @@ importers:
         specifier: ^3.2.4
         version: 3.2.6(@types/node@22.20.0)(lightningcss@1.32.0)
 
+  compilers/runner:
+    dependencies:
+      '@reaper-viz/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+
   packages/app:
     dependencies:
       '@reaper-viz/core':
@@ -26,6 +32,9 @@ importers:
       '@reaper-viz/render':
         specifier: workspace:*
         version: link:../render
+      '@reaper-viz/scene-runner':
+        specifier: workspace:*
+        version: link:../../scenes/runner
       '@reaper-viz/scene-testpattern':
         specifier: workspace:*
         version: link:../../scenes/_testpattern
@@ -60,6 +69,21 @@ importers:
 
   scenes/_testpattern:
     dependencies:
+      '@reaper-viz/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@reaper-viz/render':
+        specifier: workspace:*
+        version: link:../../packages/render
+      pixi.js:
+        specifier: 8.19.0
+        version: 8.19.0
+
+  scenes/runner:
+    dependencies:
+      '@reaper-viz/compiler-runner':
+        specifier: workspace:*
+        version: link:../../compilers/runner
       '@reaper-viz/core':
         specifier: workspace:*
         version: link:../../packages/core

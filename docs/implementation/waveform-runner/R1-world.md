@@ -88,6 +88,16 @@ ramp min-width, slope clamp property); trajectory evaluator (segment lookup,
 continuity harness — ready for R2); fixture: `bass-staircase`, `bass-drone`,
 `no-bass-fallback`. Golden frame at t=5 s.
 
+## Implementation status
+
+As of 2026-07-03, the real REAPER export has no bass MIDI, pitch, or onset
+events, so the source cascade correctly selects `master-envelope`. Motion,
+slope bounds, ground clearance, stateless scrubbing, and byte determinism are
+covered by automated tests. The bass plateau/staircase human check remains open
+until a bass-bearing fixture or export is available. R1 renders foreground
+strata and a humanoid runner earlier than the original art staging described
+above; jumps remain R2 work.
+
 ## Notes & risks
 
 - Getting `t(x)` right matters more than it looks: R2's clearance check and

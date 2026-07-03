@@ -11,6 +11,7 @@
   "dependencies": {
     "@reaper-viz/core": "workspace:*",
     "@reaper-viz/render": "workspace:*",
+    "@reaper-viz/scene-runner": "workspace:*",
     "@reaper-viz/scene-testpattern": "workspace:*",
     "pixi.js": "8.19.0",
     "tweakpane": "4.0.5"

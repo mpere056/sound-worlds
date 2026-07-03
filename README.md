@@ -62,11 +62,16 @@ songs. `corepack pnpm check` runs its determinism guard, typecheck, and tests.
 The renderer-neutral runtime is implemented under
 [`packages/render`](packages/render): frame-indexed timing, seek-safe event
 dispatch, span progress, and camera interpolation. Graphics backends and the
-preview application are the next layer. The initial PixiJS backend and
+preview application are the next layer. The PixiJS backend and
 [`packages/app`](packages/app) preview shell now load real analyzed exports,
-stream their master WAV, render a deterministic 9:16 test scene, scrub, flash
-beats, expose safe-area guides, provide live tuning controls, and export short
-H.264 MP4 previews or PNG stills.
+stream their master WAV, switch between compiled worlds, scrub, flash beats,
+expose safe-area guides, and export short H.264 MP4 previews or PNG stills.
+
+Waveform Runner R1 is the first compiled world. Its compiler turns master
+energy and waveform data into monotone motion, slope-limited terrain, a ground
+trajectory, and camera keys; its Pixi scene renders that data as a runner on a
+layered waveform landscape. Metro Map remains planned. The glowing orb is a
+pipeline diagnostic scene and is explicitly labeled as such in the app.
 
 ### What the analyzer adds (for audio-only tracks)
 

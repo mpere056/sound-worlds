@@ -58,17 +58,20 @@ function projectApi(): Plugin {
           if (url.pathname === "/api/projects") {
             const projects = await Promise.all((await projectNames()).map(async (id) => {
               const song = JSON.parse(await readFile(join(PROJECTS, id, "song.json"), "utf8")) as { meta: { name: string; durationSec: number } };
-              return { id, name: song.meta.name, durationSec: song.meta.durationSec };
+              const concepts = existsSync(join(PROJECTS, id, "performance.runner.json")) ? ["runner"] : [];
+              return { id, name: song.meta.name, durationSec: song.meta.durationSec, concepts };
             }));
             sendJson(response, 200, projects);
             return;
           }
-          const match = /^\/api\/projects\/([^/]+)\/(song\.json|master\.wav)$/.exec(url.pathname);
+          const match = /^\/api\/projects\/([^/]+)\/(song\.json|performance\.runner\.json|master\.wav)$/.exec(url.pathname);
           if (!match) { next(); return; }
           const project = await resolveProject(decodeURIComponent(match[1] ?? ""));
           if (!project) { sendJson(response, 404, { error: "Unknown project" }); return; }
-          if (match[2] === "song.json") {
-            sendJson(response, 200, JSON.parse(await readFile(join(project, "song.json"), "utf8")));
+          if (match[2]?.endsWith(".json")) {
+            const path = join(project, match[2]);
+            if (!existsSync(path)) { sendJson(response, 404, { error: "Compiled concept is unavailable" }); return; }
+            sendJson(response, 200, JSON.parse(await readFile(path, "utf8")));
           } else {
             streamAudio(request, response, join(project, "master.wav"));
           }

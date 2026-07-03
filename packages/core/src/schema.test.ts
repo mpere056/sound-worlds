@@ -19,6 +19,15 @@ describe("stage schemas", () => {
     expect(() => parsePerformance(performance)).toThrow(/sorted/);
   });
 
+  it("allows world-space values in performance curves", () => {
+    const performance = {
+      schemaVersion: 1, concept: "runner", seed: "fixture", durationSec: 2, fps: 60,
+      resolution: { w: 1080, h: 1920 }, palette: { bg: "#000000", roles: {} }, camera: [],
+      curves: { x: { t0: 0, dt: 1, values: [0, 24, 48] } }, events: [], statics: {},
+    };
+    expect(parsePerformance(performance).curves.x?.values[2]).toBe(48);
+  });
+
   it("accepts flat aesthetic tuning values", () => {
     expect(parseTuning({ glow: 0.5, night: true, label: "final" })).toEqual({ glow: 0.5, night: true, label: "final" });
   });

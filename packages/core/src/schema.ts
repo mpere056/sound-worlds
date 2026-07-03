@@ -3,7 +3,8 @@ import type { Performance, Song, Tuning } from "./types.js";
 
 const finite = z.number().finite();
 const unit = finite.min(0).max(1);
-const curve = z.object({ t0: finite.nonnegative(), dt: finite.positive(), values: z.array(unit) }).strict();
+const unitCurve = z.object({ t0: finite.nonnegative(), dt: finite.positive(), values: z.array(unit) }).strict();
+const numericCurve = z.object({ t0: finite.nonnegative(), dt: finite.positive(), values: z.array(finite) }).strict();
 const event = z.object({
   t: finite.nonnegative(), dur: finite.nonnegative(), pitch: finite.nullable(), vel: unit,
   kind: z.enum(["note", "onset"]),
@@ -28,11 +29,11 @@ export const songSchema = z.object({
   }).strict()),
   tracks: z.array(z.object({
     id: z.string().min(1), name: z.string().min(1), role: z.string().min(1), events: z.array(event),
-    curves: z.object({ rms: curve, centroid: curve, pitch: curve.nullable() }).strict(),
+    curves: z.object({ rms: unitCurve, centroid: unitCurve, pitch: unitCurve.nullable() }).strict(),
     spectra: z.array(z.object({ t: finite.nonnegative(), bands: z.array(unit) }).passthrough()),
   }).strict()).min(1),
   master: z.object({
-    energy: curve,
+    energy: unitCurve,
     waveform: z.object({ peaksPerSec: z.number().int().positive(), min: z.array(finite.min(-1).max(1)), max: z.array(finite.min(-1).max(1)) }).strict(),
     spectrogram: z.record(z.unknown()).nullable(), chords: z.array(z.record(z.unknown())),
     loudestHit: z.object({ t: finite.nonnegative(), trackId: z.string().min(1) }).strict(),
@@ -56,7 +57,7 @@ export const performanceSchema = z.object({
   camera: z.array(z.object({
     t: finite.nonnegative(), pos: z.tuple([finite, finite, finite]), zoom: finite.positive(), ease: z.string().optional(),
   }).strict()),
-  curves: z.record(curve), events: z.array(performanceEvent), statics: z.record(z.unknown()),
+  curves: z.record(numericCurve), events: z.array(performanceEvent), statics: z.record(z.unknown()),
 }).strict().superRefine((performance, context) => {
   for (let index = 1; index < performance.events.length; index += 1) {
     if ((performance.events[index]?.t ?? 0) < (performance.events[index - 1]?.t ?? 0)) {

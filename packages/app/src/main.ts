@@ -1,10 +1,12 @@
-import { parseSong, type Song } from "@reaper-viz/core";
+import { parsePerformance, parseSong, type Song } from "@reaper-viz/core";
 import { captureCanvasPng, exportCanvasMp4, PixiBackend, supportsCanvasMp4 } from "@reaper-viz/render";
+import { RunnerScene, type RunnerPerformance } from "@reaper-viz/scene-runner";
 import { TestPatternScene } from "@reaper-viz/scene-testpattern";
 import { Pane } from "tweakpane";
 import "./styles.css";
 
-interface ProjectSummary { id: string; name: string; durationSec: number; }
+interface ProjectSummary { id: string; name: string; durationSec: number; concepts: string[]; }
+interface ActiveScene { tuning: object; renderFrame(t: number): void; destroy(): void; }
 interface BindingApi { on(event: "change", handler: () => void): BindingApi; }
 interface BindingPane {
   addBinding<T extends object, K extends keyof T>(target: T, key: K, options: Record<string, unknown>): BindingApi;
@@ -18,16 +20,18 @@ root.innerHTML = `
     <aside class="panel">
       <header><div class="brand-kicker">Reaper → World</div><h1>Sound Worlds</h1><p class="lede">A deterministic preview room for music-driven worlds. Every frame answers to the song.</p></header>
       <section class="control-group"><label for="project">Project</label><select id="project"><option>Loading exports…</option></select></section>
+      <section class="control-group"><label for="concept">World</label><select id="concept"><option>Loading concepts…</option></select></section>
       <section class="control-group"><div class="eyebrow">Transport</div><div class="transport"><button class="play" id="play" aria-label="Play">▶</button><span class="timecode" id="time">00:00.000 / 00:00.000</span></div><input id="scrub" aria-label="Timeline" type="range" min="0" max="1" value="0" step="0.001" /><audio id="audio" preload="auto"></audio></section>
       <section class="checks"><label class="check">Sync flash <input id="sync" type="checkbox" checked /></label><label class="check">9:16 safe area <input id="guides" type="checkbox" /></label></section>
       <section class="tuning"><div class="eyebrow">Scene tuning</div><div id="tweakpane"></div></section>
       <section class="exports"><div class="eyebrow">Export</div><div class="export-actions"><button id="export-mp4" disabled>Render 3s MP4</button><button id="export-png">Save PNG</button></div><div class="export-progress" id="export-progress"><span></span></div><p>Preview MP4 is silent; the mastered WAV is attached in the delivery step.</p></section>
       <div class="status"><strong id="status-title">Waiting for project</strong><span id="status-detail">Analyzer output appears here automatically.</span></div>
     </aside>
-    <section class="stage-wrap"><div class="stage-meta"><span>Test pattern · PixiJS</span><span>1080 × 1920 · 60 FPS</span></div><div class="frame" id="frame"><canvas id="canvas"></canvas><div class="guide" id="guide"></div><div class="sync-flash" id="flash"></div></div></section>
+    <section class="stage-wrap"><div class="stage-meta"><span id="scene-label">Loading world…</span><span>1080 × 1920 · 60 FPS</span></div><div class="frame" id="frame"><canvas id="canvas"></canvas><div class="guide" id="guide"></div><div class="sync-flash" id="flash"></div></div></section>
   </main>`;
 
 const select = document.querySelector<HTMLSelectElement>("#project")!;
+const conceptSelect = document.querySelector<HTMLSelectElement>("#concept")!;
 const play = document.querySelector<HTMLButtonElement>("#play")!;
 const scrub = document.querySelector<HTMLInputElement>("#scrub")!;
 const timecode = document.querySelector<HTMLSpanElement>("#time")!;
@@ -42,11 +46,14 @@ const statusDetail = document.querySelector<HTMLElement>("#status-detail")!;
 const exportMp4 = document.querySelector<HTMLButtonElement>("#export-mp4")!;
 const exportPng = document.querySelector<HTMLButtonElement>("#export-png")!;
 const exportProgress = document.querySelector<HTMLDivElement>("#export-progress")!;
+const sceneLabel = document.querySelector<HTMLSpanElement>("#scene-label")!;
 
 let backend: PixiBackend | undefined;
-let scene: TestPatternScene | undefined;
+let scene: ActiveScene | undefined;
 let song: Song | undefined;
 let audio: HTMLAudioElement = audioElement;
+let projects: ProjectSummary[] = [];
+let currentProjectId = "";
 let animationFrame = 0;
 let previousBeat = -1;
 let pane: Pane | undefined;
@@ -106,12 +113,58 @@ function waitForAudioMetadata(element: HTMLAudioElement): Promise<void> {
   });
 }
 
-async function loadProject(id: string): Promise<void> {
-  cancelAnimationFrame(animationFrame);
-  audio.pause();
+function addTuningBinding<T extends object, K extends keyof T>(
+  bindingPane: BindingPane,
+  target: T,
+  key: K,
+  options: Record<string, unknown>,
+): void {
+  bindingPane.addBinding(target, key, options).on("change", () => renderAt(audio.currentTime));
+}
+
+async function loadConcept(concept: string): Promise<void> {
   scene?.destroy();
   backend?.destroy();
   pane?.dispose();
+  if (!song) return;
+  statusTitle.textContent = "Building world";
+  statusDetail.textContent = concept;
+  backend = await PixiBackend.create({ canvas, width: 1080, height: 1920 });
+  pane = new Pane({ container: document.querySelector<HTMLDivElement>("#tweakpane")! });
+  const bindingPane = pane as unknown as BindingPane;
+  if (concept === "runner") {
+    const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.runner.json`);
+    if (!response.ok) throw new Error(`Runner performance request failed: ${response.status}`);
+    const performance = parsePerformance(await response.json()) as RunnerPerformance;
+    const runner = new RunnerScene(backend, performance);
+    scene = runner;
+    addTuningBinding(bindingPane, runner.tuning, "terrainContrast", { min: 0.2, max: 1.4, step: 0.02, label: "Terrain" });
+    addTuningBinding(bindingPane, runner.tuning, "trail", { min: 0, max: 1, step: 0.01, label: "Trail" });
+    addTuningBinding(bindingPane, runner.tuning, "parallax", { min: 0.2, max: 1.5, step: 0.02, label: "Parallax" });
+    sceneLabel.textContent = "Waveform Runner · R1 World";
+    statusTitle.textContent = "Waveform Runner · ground world";
+    statusDetail.textContent = `${performance.statics.terrain.heights.length} terrain samples · ${performance.statics.terrain.source}`;
+  } else {
+    const diagnostics = new TestPatternScene(backend, song);
+    scene = diagnostics;
+    addTuningBinding(bindingPane, diagnostics.tuning, "glow", { min: 0, max: 1, step: 0.01, label: "Orb glow" });
+    addTuningBinding(bindingPane, diagnostics.tuning, "gridOpacity", { min: 0, max: 0.7, step: 0.01, label: "Grid" });
+    addTuningBinding(bindingPane, diagnostics.tuning, "motion", { min: 0, max: 2, step: 0.05, label: "Motion" });
+    sceneLabel.textContent = "Pipeline diagnostics · not Metro";
+    statusTitle.textContent = "Pipeline test pattern";
+    statusDetail.textContent = "Timing and export diagnostics only";
+  }
+  previousBeat = -1;
+  renderAt(audio.currentTime);
+  const mp4Supported = await supportsCanvasMp4(canvas.width, canvas.height);
+  exportMp4.disabled = !mp4Supported;
+  exportMp4.title = mp4Supported ? "Render a deterministic three-second silent MP4" : "H.264 WebCodecs encoding is unavailable in this browser";
+}
+
+async function loadProject(id: string): Promise<void> {
+  cancelAnimationFrame(animationFrame);
+  audio.pause();
+  currentProjectId = id;
   statusTitle.textContent = "Loading analyzed song";
   statusDetail.textContent = id;
   const response = await fetch(`/api/projects/${encodeURIComponent(id)}/song.json`);
@@ -120,22 +173,27 @@ async function loadProject(id: string): Promise<void> {
   audio.src = `/api/projects/${encodeURIComponent(id)}/master.wav`;
   audio.load();
   await waitForAudioMetadata(audio);
-  backend = await PixiBackend.create({ canvas, width: 1080, height: 1920 });
-  scene = new TestPatternScene(backend, song);
-  pane = new Pane({ container: document.querySelector<HTMLDivElement>("#tweakpane")! });
-  const bindingPane = pane as unknown as BindingPane;
-  bindingPane.addBinding(scene.tuning, "glow", { min: 0, max: 1, step: 0.01, label: "Orb glow" }).on("change", () => renderAt(audio.currentTime));
-  bindingPane.addBinding(scene.tuning, "gridOpacity", { min: 0, max: 0.7, step: 0.01, label: "Grid" }).on("change", () => renderAt(audio.currentTime));
-  bindingPane.addBinding(scene.tuning, "motion", { min: 0, max: 2, step: 0.05, label: "Motion" }).on("change", () => renderAt(audio.currentTime));
   scrub.max = String(song.meta.durationSec);
-  previousBeat = -1;
-  renderAt(0);
-  statusTitle.textContent = `${song.tracks.length} tracks · ${song.grid.bars.length} bars`;
-  statusDetail.textContent = `${song.grid.beats.length} beats · ${song.meta.durationSec.toFixed(3)} seconds`;
-  const mp4Supported = await supportsCanvasMp4(canvas.width, canvas.height);
-  exportMp4.disabled = !mp4Supported;
-  exportMp4.title = mp4Supported ? "Render a deterministic three-second silent MP4" : "H.264 WebCodecs encoding is unavailable in this browser";
-  audio.addEventListener("ended", () => { play.textContent = "▶"; play.setAttribute("aria-label", "Play"); });
+  audio.currentTime = 0;
+  const project = projects.find((candidate) => candidate.id === id);
+  const options: HTMLOptionElement[] = [];
+  if (project?.concepts.includes("runner")) {
+    const runner = document.createElement("option");
+    runner.value = "runner";
+    runner.textContent = "Waveform Runner · R1 World";
+    options.push(runner);
+  }
+  const testPattern = document.createElement("option");
+  testPattern.value = "testpattern";
+  testPattern.textContent = "Pipeline Test Pattern";
+  options.push(testPattern);
+  const metro = document.createElement("option");
+  metro.value = "metro";
+  metro.textContent = "Metro Map · planned, not implemented";
+  metro.disabled = true;
+  options.push(metro);
+  conceptSelect.replaceChildren(...options);
+  await loadConcept(options[0]?.value ?? "testpattern");
   animationFrame = requestAnimationFrame(tick);
 }
 
@@ -160,6 +218,11 @@ scrub.addEventListener("input", () => {
   renderAt(audio.currentTime);
 });
 select.addEventListener("change", () => void loadProject(select.value));
+conceptSelect.addEventListener("change", () => void loadConcept(conceptSelect.value));
+audio.addEventListener("ended", () => {
+  play.textContent = "▶";
+  play.setAttribute("aria-label", "Play");
+});
 guides.addEventListener("change", () => guide.classList.toggle("visible", guides.checked));
 exportPng.addEventListener("click", async () => {
   if (!song || !scene) return;
@@ -206,7 +269,7 @@ exportMp4.addEventListener("click", async () => {
 
 async function start(): Promise<void> {
   const response = await fetch("/api/projects");
-  const projects = await response.json() as ProjectSummary[];
+  projects = await response.json() as ProjectSummary[];
   if (!projects.length) {
     select.innerHTML = "<option>No analyzed projects</option>";
     select.disabled = true;
