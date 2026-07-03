@@ -1,0 +1,18 @@
+{
+  "name": "reaper-viz",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.12.4",
+  "scripts": {
+    "build": "corepack pnpm -r build",
+    "test": "corepack pnpm -r test",
+    "typecheck": "corepack pnpm -r typecheck",
+    "check:determinism": "node tools/check-determinism.mjs",
+    "check": "corepack pnpm check:determinism && corepack pnpm typecheck && corepack pnpm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

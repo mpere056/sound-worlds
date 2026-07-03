@@ -1,0 +1,100 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://reaper-viz.local/schema/song.v1.schema.json",
+  "title": "reaper-viz analyzed song",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "meta", "grid", "sections", "tracks", "master"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "meta": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "seed", "analysisHash", "contentEndSec", "durationSec", "key"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "seed": { "$ref": "#/definitions/hash" },
+        "analysisHash": { "$ref": "#/definitions/hash" },
+        "contentEndSec": { "type": "number", "exclusiveMinimum": 0 },
+        "durationSec": { "type": "number", "exclusiveMinimum": 0 },
+        "key": { "type": ["object", "null"] }
+      }
+    },
+    "grid": {
+      "type": "object", "additionalProperties": false,
+      "required": ["beats", "downbeats", "bars"],
+      "properties": {
+        "beats": { "type": "array", "items": { "type": "number", "minimum": 0 } },
+        "downbeats": { "type": "array", "items": { "type": "number", "minimum": 0 } },
+        "bars": { "type": "array", "items": { "$ref": "#/definitions/bar" } }
+      }
+    },
+    "sections": { "type": "array", "items": { "$ref": "#/definitions/section" } },
+    "tracks": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/track" } },
+    "master": {
+      "type": "object", "additionalProperties": false,
+      "required": ["energy", "waveform", "spectrogram", "chords", "loudestHit"],
+      "properties": {
+        "energy": { "$ref": "#/definitions/curve" },
+        "waveform": { "$ref": "#/definitions/waveform" },
+        "spectrogram": { "type": ["object", "null"] },
+        "chords": { "type": "array" },
+        "loudestHit": {
+          "type": "object", "additionalProperties": false, "required": ["t", "trackId"],
+          "properties": { "t": { "type": "number", "minimum": 0 }, "trackId": { "type": "string" } }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "curve": {
+      "type": "object", "additionalProperties": false, "required": ["t0", "dt", "values"],
+      "properties": {
+        "t0": { "type": "number", "minimum": 0 }, "dt": { "type": "number", "exclusiveMinimum": 0 },
+        "values": { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 1 } }
+      }
+    },
+    "event": {
+      "type": "object", "additionalProperties": false, "required": ["t", "dur", "pitch", "vel", "kind"],
+      "properties": {
+        "t": { "type": "number", "minimum": 0 }, "dur": { "type": "number", "minimum": 0 },
+        "pitch": { "type": ["number", "null"] }, "vel": { "type": "number", "minimum": 0, "maximum": 1 },
+        "kind": { "enum": ["note", "onset"] }
+      }
+    },
+    "track": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "name", "role", "events", "curves", "spectra"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 }, "name": { "type": "string", "minLength": 1 },
+        "role": { "type": "string", "minLength": 1 }, "events": { "type": "array", "items": { "$ref": "#/definitions/event" } },
+        "curves": {
+          "type": "object", "additionalProperties": false, "required": ["rms", "centroid", "pitch"],
+          "properties": { "rms": { "$ref": "#/definitions/curve" }, "centroid": { "$ref": "#/definitions/curve" }, "pitch": { "type": ["object", "null"] } }
+        },
+        "spectra": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "bar": {
+      "type": "object", "additionalProperties": false, "required": ["index", "startSec", "endSec"],
+      "properties": { "index": { "type": "integer", "minimum": 0 }, "startSec": { "type": "number", "minimum": 0 }, "endSec": { "type": "number", "minimum": 0 } }
+    },
+    "section": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "kind", "startSec", "endSec", "repeatGroup", "energy"],
+      "properties": {
+        "name": { "type": "string" }, "kind": { "enum": ["intro", "verse", "prechorus", "chorus", "bridge", "drop", "breakdown", "solo", "outro", "unknown"] },
+        "startSec": { "type": "number", "minimum": 0 }, "endSec": { "type": "number", "minimum": 0 },
+        "repeatGroup": { "type": "string" }, "energy": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "waveform": {
+      "type": "object", "additionalProperties": false, "required": ["peaksPerSec", "min", "max"],
+      "properties": {
+        "peaksPerSec": { "type": "integer", "minimum": 1 },
+        "min": { "type": "array", "items": { "type": "number", "minimum": -1, "maximum": 1 } },
+        "max": { "type": "array", "items": { "type": "number", "minimum": -1, "maximum": 1 } }
+      }
+    }
+  }
+}

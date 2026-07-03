@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 2,
+  "extractor": { "name": "reaper-viz-extractor", "version": "0.1.0", "reaperVersion": "fixture" },
+  "project": {
+    "name": "minimal-fixture",
+    "guid": "{FIXTURE-MINIMAL}",
+    "snapshotHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "contentHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "sampleRate": 48000,
+    "contentDurationSec": 4.0,
+    "audioDurationSec": 5.0,
+    "exportRange": { "source": "markers", "projectStartSec": 2.0, "projectEndSec": 6.0, "tailSec": 1.0 }
+  },
+  "tempo": [
+    { "id": 0, "timeSec": 0.0, "qn": 0.0, "bpm": 120.0, "tsNum": 4, "tsDen": 4, "linearRamp": false }
+  ],
+  "regions": [
+    { "id": 1, "name": "Intro", "startSec": 0.0, "endSec": 4.0, "startQn": 0.0, "endQn": 8.0, "color": "#4a90d9" }
+  ],
+  "markers": [],
+  "tracks": [
+    {
+      "index": 0,
+      "id": "{FIXTURE-KICK}",
+      "name": "Kick",
+      "color": "#d95f59",
+      "kind": "source",
+      "folderPath": ["Drums"],
+      "role": "kick",
+      "stem": {
+        "path": "stems/kick.wav",
+        "checksum": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSec": 5.0,
+        "renderMode": "post-track-fx-post-fader-pre-parent"
+      },
+      "midi": null,
+      "automation": []
+    }
+  ],
+  "master": {
+    "path": "master.wav",
+    "checksum": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "sampleRate": 48000,
+    "channels": 2,
+    "durationSec": 5.0
+  },
+  "reportPath": "export-report.json"
+}

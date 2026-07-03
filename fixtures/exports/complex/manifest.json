@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 2,
+  "extractor": { "name": "reaper-viz-extractor", "version": "0.1.0", "reaperVersion": "fixture" },
+  "project": {
+    "name": "complex-fixture",
+    "guid": "{FIXTURE-COMPLEX}",
+    "snapshotHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "contentHash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "sampleRate": 48000,
+    "contentDurationSec": 12.0,
+    "audioDurationSec": 14.0,
+    "exportRange": { "source": "time-selection", "projectStartSec": 10.0, "projectEndSec": 22.0, "tailSec": 2.0 }
+  },
+  "tempo": [
+    { "id": 0, "timeSec": 0.0, "qn": 0.0, "bpm": 120.0, "tsNum": 4, "tsDen": 4, "linearRamp": false },
+    { "id": 1, "timeSec": 4.0, "qn": 8.0, "bpm": 90.0, "tsNum": 3, "tsDen": 4, "linearRamp": true }
+  ],
+  "regions": [
+    { "id": 4, "name": "Verse 1", "startSec": 0.0, "endSec": 4.0, "startQn": 0.0, "endQn": 8.0, "color": "#4a90d9" },
+    { "id": 5, "name": "Drop", "startSec": 4.0, "endSec": 12.0, "startQn": 8.0, "endQn": 20.0, "color": "#e4573d" }
+  ],
+  "markers": [
+    { "id": 8, "name": "drop", "timeSec": 4.0, "qn": 8.0, "color": null }
+  ],
+  "tracks": [
+    {
+      "index": 0,
+      "id": "{FIXTURE-LEAD-A}",
+      "name": "Lead",
+      "color": "#e4573d",
+      "kind": "source",
+      "folderPath": ["Synths"],
+      "role": "lead",
+      "stem": {
+        "path": "stems/lead--a.wav",
+        "checksum": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSec": 14.0,
+        "renderMode": "post-track-fx-post-fader-pre-parent"
+      },
+      "midi": [
+        { "id": "{TAKE-A}:note:0", "itemId": "{ITEM-A}", "takeId": "{TAKE-A}", "pitch": 64, "velocity": 0.7874015748, "channel": 0, "startSec": 1.0, "durationSec": 0.5, "startQn": 2.0, "durationQn": 1.0, "muted": false }
+      ],
+      "automation": [
+        { "param": "viz:riser", "source": "Riser Amount", "curve": { "t0": 0.0, "dt": 0.02, "values": [0.0, 0.5, 1.0] } }
+      ]
+    },
+    {
+      "index": 1,
+      "id": "{FIXTURE-LEAD-B}",
+      "name": "Lead",
+      "color": null,
+      "kind": "source",
+      "folderPath": ["Synths"],
+      "role": "lead",
+      "stem": {
+        "path": "stems/lead--b.wav",
+        "checksum": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "sampleRate": 48000,
+        "channels": 1,
+        "durationSec": 14.0,
+        "renderMode": "post-track-fx-post-fader-pre-parent"
+      },
+      "midi": null,
+      "automation": []
+    }
+  ],
+  "master": {
+    "path": "master.wav",
+    "checksum": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "sampleRate": 48000,
+    "channels": 2,
+    "durationSec": 14.0
+  },
+  "reportPath": "export-report.json"
+}

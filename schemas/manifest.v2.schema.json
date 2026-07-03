@@ -1,0 +1,173 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://reaper-viz.local/schema/manifest.v2.schema.json",
+  "title": "reaper-viz export manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "extractor", "project", "tempo", "regions", "markers", "tracks", "master", "reportPath"],
+  "properties": {
+    "schemaVersion": { "const": 2 },
+    "extractor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "reaperVersion"],
+      "properties": {
+        "name": { "const": "reaper-viz-extractor" },
+        "version": { "type": "string", "minLength": 1 },
+        "reaperVersion": { "type": "string", "minLength": 1 }
+      }
+    },
+    "project": { "$ref": "#/definitions/project" },
+    "tempo": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/tempo" }
+    },
+    "regions": { "type": "array", "items": { "$ref": "#/definitions/region" } },
+    "markers": { "type": "array", "items": { "$ref": "#/definitions/marker" } },
+    "tracks": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/track" } },
+    "master": { "$ref": "#/definitions/audioFile" },
+    "reportPath": { "$ref": "#/definitions/relativePath" }
+  },
+  "definitions": {
+    "hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "not": { "pattern": "^(?:[A-Za-z]:|/|\\\\)" }
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "guid", "snapshotHash", "contentHash", "sampleRate", "contentDurationSec", "audioDurationSec", "exportRange"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "guid": { "type": "string", "minLength": 1 },
+        "snapshotHash": { "$ref": "#/definitions/hash" },
+        "contentHash": { "$ref": "#/definitions/hash" },
+        "sampleRate": { "type": "integer", "minimum": 8000, "maximum": 384000 },
+        "contentDurationSec": { "type": "number", "exclusiveMinimum": 0 },
+        "audioDurationSec": { "type": "number", "exclusiveMinimum": 0 },
+        "exportRange": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "projectStartSec", "projectEndSec", "tailSec"],
+          "properties": {
+            "source": { "enum": ["markers", "time-selection", "content-bounds"] },
+            "projectStartSec": { "type": "number" },
+            "projectEndSec": { "type": "number" },
+            "tailSec": { "type": "number", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "tempo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "timeSec", "qn", "bpm", "tsNum", "tsDen", "linearRamp"],
+      "properties": {
+        "id": { "type": "integer", "minimum": 0 },
+        "timeSec": { "type": "number", "minimum": 0 },
+        "qn": { "type": "number" },
+        "bpm": { "type": "number", "exclusiveMinimum": 0 },
+        "tsNum": { "type": "integer", "minimum": 1 },
+        "tsDen": { "type": "integer", "minimum": 1 },
+        "linearRamp": { "type": "boolean" }
+      }
+    },
+    "region": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "startSec", "endSec", "startQn", "endQn", "color"],
+      "properties": {
+        "id": { "type": "integer", "minimum": 0 },
+        "name": { "type": "string" },
+        "startSec": { "type": "number", "minimum": 0 },
+        "endSec": { "type": "number", "minimum": 0 },
+        "startQn": { "type": "number" },
+        "endQn": { "type": "number" },
+        "color": { "type": ["string", "null"], "pattern": "^#[0-9a-fA-F]{6}$" }
+      }
+    },
+    "marker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "timeSec", "qn", "color"],
+      "properties": {
+        "id": { "type": "integer", "minimum": 0 },
+        "name": { "type": "string" },
+        "timeSec": { "type": "number", "minimum": 0 },
+        "qn": { "type": "number" },
+        "color": { "type": ["string", "null"], "pattern": "^#[0-9a-fA-F]{6}$" }
+      }
+    },
+    "audioFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "checksum", "sampleRate", "channels", "durationSec"],
+      "properties": {
+        "path": { "$ref": "#/definitions/relativePath" },
+        "checksum": { "$ref": "#/definitions/hash" },
+        "sampleRate": { "type": "integer", "minimum": 8000, "maximum": 384000 },
+        "channels": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "durationSec": { "type": "number", "exclusiveMinimum": 0 },
+        "renderMode": { "type": "string", "minLength": 1 }
+      }
+    },
+    "midiNote": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "itemId", "takeId", "pitch", "velocity", "channel", "startSec", "durationSec", "startQn", "durationQn", "muted"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "itemId": { "type": "string", "minLength": 1 },
+        "takeId": { "type": "string", "minLength": 1 },
+        "pitch": { "type": "integer", "minimum": 0, "maximum": 127 },
+        "velocity": { "type": "number", "minimum": 0, "maximum": 1 },
+        "channel": { "type": "integer", "minimum": 0, "maximum": 15 },
+        "startSec": { "type": "number", "minimum": 0 },
+        "durationSec": { "type": "number", "minimum": 0 },
+        "startQn": { "type": "number" },
+        "durationQn": { "type": "number", "minimum": 0 },
+        "muted": { "type": "boolean" }
+      }
+    },
+    "timedCurve": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["t0", "dt", "values"],
+      "properties": {
+        "t0": { "type": "number", "minimum": 0 },
+        "dt": { "type": "number", "exclusiveMinimum": 0 },
+        "values": { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 1 } }
+      }
+    },
+    "automation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["param", "source", "curve"],
+      "properties": {
+        "param": { "type": "string", "pattern": "^viz:[a-z0-9-]+$" },
+        "source": { "type": "string", "minLength": 1 },
+        "curve": { "$ref": "#/definitions/timedCurve" }
+      }
+    },
+    "track": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "id", "name", "color", "kind", "folderPath", "role", "stem", "midi", "automation"],
+      "properties": {
+        "index": { "type": "integer", "minimum": 0 },
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "color": { "type": ["string", "null"], "pattern": "^#[0-9a-fA-F]{6}$" },
+        "kind": { "enum": ["source", "folder", "bus", "return", "utility"] },
+        "folderPath": { "type": "array", "items": { "type": "string" } },
+        "role": { "type": ["string", "null"], "enum": [null, "kick", "snare", "hats", "toms", "percussion", "bass", "lead", "keys", "pads", "fx", "vocals", "other"] },
+        "stem": { "$ref": "#/definitions/audioFile" },
+        "midi": { "type": ["array", "null"], "items": { "$ref": "#/definitions/midiNote" } },
+        "automation": { "type": "array", "items": { "$ref": "#/definitions/automation" } }
+      }
+    }
+  }
+}

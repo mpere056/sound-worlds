@@ -1,0 +1,20 @@
+[project]
+name = "reaper-viz-analyzer"
+version = "0.1.0"
+description = "Compile validated REAPER exports into deterministic song timelines"
+requires-python = ">=3.9"
+dependencies = [
+  "jsonschema>=4.0",
+  "numpy>=1.21",
+]
+
+[project.scripts]
+analyze = "analyzer.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["analyzer"]
+package-dir = { analyzer = "." }
