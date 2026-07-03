@@ -65,7 +65,7 @@ independently — debugging starts with the JSON and its validation report.
 | Dev server | Vite | Instant reload — the art-tuning loop |
 | Schemas | Zod (TS) + pydantic (Py), from one JSON-Schema source | Every stage boundary validated |
 | Param tuning | Tweakpane | Live sliders in dev mode; saved to `tuning.<concept>.json` |
-| Encoding | WebCodecs `VideoEncoder` + `mp4-muxer` | Fast in-browser H.264, no server needed |
+| Encoding | WebCodecs through Mediabunny | Maintained in-browser H.264/MP4 pipeline with explicit backpressure |
 | Mux / delivery | ffmpeg CLI | Attach master WAV, platform-spec output |
 | Workspace | pnpm workspaces monorepo | Shared `core`/`render` packages, per-concept packages |
 | No React | — | An offline renderer is one imperative loop; UI needs are met by Tweakpane |

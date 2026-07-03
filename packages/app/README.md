@@ -18,6 +18,7 @@ Then open `http://127.0.0.1:5173/`.
 - A deterministic 1080×1920 PixiJS test-pattern scene driven by real master
   energy, beats, bars, and sections.
 - Beat sync flash, platform safe-area overlay, and live Tweakpane controls.
+- Three-second deterministic silent MP4 previews and current-frame PNG stills.
 - Responsive desktop and narrow-screen layouts.
 
 The app deliberately reads only `song.json` and `master.wav`. It does not make

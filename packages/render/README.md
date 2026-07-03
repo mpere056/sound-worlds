@@ -13,6 +13,8 @@ The current foundation includes:
 - `sampleCamera`: deterministic camera-keyframe interpolation.
 - `PixiBackend`: fixed 1080×1920 WebGL drawing buffer, named layers, explicit
   frame rendering, and RGBA pixel extraction.
+- Deterministic frame schedules and a Mediabunny/WebCodecs H.264 MP4 export
+  harness, plus PNG canvas capture.
 
-ThreeBackend, accumulation checkpoints, and the encoded export harness are the
-next render phases.
+ThreeBackend, accumulation checkpoints, and full-length delivery are the next
+render phases.

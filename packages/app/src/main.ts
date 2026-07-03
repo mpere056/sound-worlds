@@ -1,5 +1,5 @@
 import { parseSong, type Song } from "@reaper-viz/core";
-import { PixiBackend } from "@reaper-viz/render";
+import { captureCanvasPng, exportCanvasMp4, PixiBackend, supportsCanvasMp4 } from "@reaper-viz/render";
 import { TestPatternScene } from "@reaper-viz/scene-testpattern";
 import { Pane } from "tweakpane";
 import "./styles.css";
@@ -21,6 +21,7 @@ root.innerHTML = `
       <section class="control-group"><div class="eyebrow">Transport</div><div class="transport"><button class="play" id="play" aria-label="Play">▶</button><span class="timecode" id="time">00:00.000 / 00:00.000</span></div><input id="scrub" aria-label="Timeline" type="range" min="0" max="1" value="0" step="0.001" /><audio id="audio" preload="auto"></audio></section>
       <section class="checks"><label class="check">Sync flash <input id="sync" type="checkbox" checked /></label><label class="check">9:16 safe area <input id="guides" type="checkbox" /></label></section>
       <section class="tuning"><div class="eyebrow">Scene tuning</div><div id="tweakpane"></div></section>
+      <section class="exports"><div class="eyebrow">Export</div><div class="export-actions"><button id="export-mp4" disabled>Render 3s MP4</button><button id="export-png">Save PNG</button></div><div class="export-progress" id="export-progress"><span></span></div><p>Preview MP4 is silent; the mastered WAV is attached in the delivery step.</p></section>
       <div class="status"><strong id="status-title">Waiting for project</strong><span id="status-detail">Analyzer output appears here automatically.</span></div>
     </aside>
     <section class="stage-wrap"><div class="stage-meta"><span>Test pattern · PixiJS</span><span>1080 × 1920 · 60 FPS</span></div><div class="frame" id="frame"><canvas id="canvas"></canvas><div class="guide" id="guide"></div><div class="sync-flash" id="flash"></div></div></section>
@@ -38,6 +39,9 @@ const canvas = document.querySelector<HTMLCanvasElement>("#canvas")!;
 const audioElement = document.querySelector<HTMLAudioElement>("#audio")!;
 const statusTitle = document.querySelector<HTMLElement>("#status-title")!;
 const statusDetail = document.querySelector<HTMLElement>("#status-detail")!;
+const exportMp4 = document.querySelector<HTMLButtonElement>("#export-mp4")!;
+const exportPng = document.querySelector<HTMLButtonElement>("#export-png")!;
+const exportProgress = document.querySelector<HTMLDivElement>("#export-progress")!;
 
 let backend: PixiBackend | undefined;
 let scene: TestPatternScene | undefined;
@@ -51,6 +55,19 @@ function formatTime(value: number): string {
   const minutes = Math.floor(value / 60);
   const seconds = value - minutes * 60;
   return `${String(minutes).padStart(2, "0")}:${seconds.toFixed(3).padStart(6, "0")}`;
+}
+
+function safeName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "sound-world";
+}
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 function renderAt(t: number): void {
@@ -115,6 +132,9 @@ async function loadProject(id: string): Promise<void> {
   renderAt(0);
   statusTitle.textContent = `${song.tracks.length} tracks · ${song.grid.bars.length} bars`;
   statusDetail.textContent = `${song.grid.beats.length} beats · ${song.meta.durationSec.toFixed(3)} seconds`;
+  const mp4Supported = await supportsCanvasMp4(canvas.width, canvas.height);
+  exportMp4.disabled = !mp4Supported;
+  exportMp4.title = mp4Supported ? "Render a deterministic three-second silent MP4" : "H.264 WebCodecs encoding is unavailable in this browser";
   audio.addEventListener("ended", () => { play.textContent = "▶"; play.setAttribute("aria-label", "Play"); });
   animationFrame = requestAnimationFrame(tick);
 }
@@ -141,6 +161,48 @@ scrub.addEventListener("input", () => {
 });
 select.addEventListener("change", () => void loadProject(select.value));
 guides.addEventListener("change", () => guide.classList.toggle("visible", guides.checked));
+exportPng.addEventListener("click", async () => {
+  if (!song || !scene) return;
+  const blob = await captureCanvasPng(canvas);
+  downloadBlob(blob, `${safeName(song.meta.name)}-${audio.currentTime.toFixed(3)}s.png`);
+});
+exportMp4.addEventListener("click", async () => {
+  if (!song || !scene || exportMp4.disabled) return;
+  const restoreTime = audio.currentTime;
+  const startSec = Math.min(restoreTime, Math.max(0, song.meta.durationSec - 0.5));
+  const durationSec = Math.min(3, song.meta.durationSec - startSec);
+  audio.pause();
+  exportMp4.disabled = true;
+  exportPng.disabled = true;
+  exportProgress.classList.add("active");
+  statusTitle.textContent = "Rendering deterministic frames";
+  try {
+    const blob = await exportCanvasMp4({
+      canvas,
+      renderFrame: (time) => scene?.renderFrame(time),
+      startSec,
+      durationSec,
+      fps: 60,
+      onProgress: (complete, total) => {
+        const ratio = total > 0 ? complete / total : 0;
+        exportProgress.style.setProperty("--progress", `${ratio * 100}%`);
+        statusDetail.textContent = `${complete} / ${total} frames`;
+      },
+    });
+    downloadBlob(blob, `${safeName(song.meta.name)}-${startSec.toFixed(3)}s-preview.mp4`);
+    statusTitle.textContent = "Preview MP4 ready";
+    statusDetail.textContent = `${(blob.size / 1024 / 1024).toFixed(2)} MiB · silent video`;
+  } catch (error) {
+    statusTitle.textContent = "MP4 render failed";
+    statusDetail.textContent = error instanceof Error ? error.message : "Unknown export error";
+  } finally {
+    exportProgress.classList.remove("active");
+    exportProgress.style.setProperty("--progress", "0%");
+    exportPng.disabled = false;
+    exportMp4.disabled = !(await supportsCanvasMp4(canvas.width, canvas.height));
+    renderAt(restoreTime);
+  }
+});
 
 async function start(): Promise<void> {
   const response = await fetch("/api/projects");

@@ -19,8 +19,10 @@ The real generated song passes through the built core loader and query layer.
 The renderer-neutral clock, seek-safe event runtime, and camera interpolation
 are implemented and tested. PixiBackend and the responsive Vite dev shell now
 load the first real export, stream its WAV, render the energy/beat-driven test
-pattern, expose tuning controls, and provide sync/safe-area overlays. The
-encoded export harness remains to be implemented.
+pattern, expose tuning controls, and provide sync/safe-area overlays. A first
+encoded export slice now produces deterministic three-second H.264 MP4 previews
+and PNG stills in supported browsers. Full-song render orchestration, direct
+project-output writing, and audio muxing remain.
 
 ## Goal
 
@@ -92,9 +94,10 @@ runtime + PixiBackend, dev app shell, export harness, mux script.
 - 9:16 safe-area guides toggle.
 
 ### 6. Export harness
-- Render mode: `setTimeout(0)` frame loop → `VideoFrame` → WebCodecs
-  `VideoEncoder` (avc1, 16 Mbps, backpressure via `encodeQueueSize`) →
-  `mp4-muxer` → File System Access write into `projects/<song>/out/`.
+- Render mode: frame-indexed loop → Mediabunny `CanvasSource` → WebCodecs H.264
+  with awaited backpressure → fast-start MP4. The implemented preview writes a
+  browser download; the full File System Access path into
+  `projects/<song>/out/` remains.
 - `scripts/mux.sh`: ffmpeg `-c:v copy` + AAC audio + duration sanity warning.
 - **Test-pattern scene** (`scenes/_testpattern`): beat-flash grid + moving
   gradient — exists purely to prove preview + export + sync.

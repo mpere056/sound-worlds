@@ -65,7 +65,8 @@ dispatch, span progress, and camera interpolation. Graphics backends and the
 preview application are the next layer. The initial PixiJS backend and
 [`packages/app`](packages/app) preview shell now load real analyzed exports,
 stream their master WAV, render a deterministic 9:16 test scene, scrub, flash
-beats, expose safe-area guides, and provide live tuning controls.
+beats, expose safe-area guides, provide live tuning controls, and export short
+H.264 MP4 previews or PNG stills.
 
 ### What the analyzer adds (for audio-only tracks)
 

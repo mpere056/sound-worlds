@@ -24,6 +24,14 @@ input[type='range'] { width: 100%; accent-color: #86d5ff; }
 .check { display: flex; align-items: center; justify-content: space-between; color: #aab5c5; font-size: 13px; }
 .check input { accent-color: #80cfff; }
 .tuning { padding-top: 22px; border-top: 1px solid #1c2533; }
+.exports { padding-top: 22px; border-top: 1px solid #1c2533; display: grid; gap: 11px; }
+.export-actions { display: grid; grid-template-columns: 1.25fr 1fr; gap: 8px; }
+.export-actions button { min-height: 38px; padding: 8px 10px; font-size: 12px; }
+.export-actions button:disabled { cursor: not-allowed; opacity: .42; }
+.exports p { margin: 0; color: #637087; font-size: 10px; line-height: 1.5; }
+.export-progress { --progress: 0%; height: 3px; overflow: hidden; border-radius: 2px; background: #182231; opacity: 0; transition: opacity .2s; }
+.export-progress.active { opacity: 1; }
+.export-progress span { display: block; width: var(--progress); height: 100%; background: #82d8ff; transition: width .08s linear; }
 .status { margin-top: auto; padding: 14px; border: 1px solid #1e2a3b; border-radius: 12px; background: #0b111b; }
 .status strong { display: block; font-size: 12px; margin-bottom: 4px; }
 .status span { color: #718097; font-size: 11px; }

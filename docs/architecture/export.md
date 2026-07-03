@@ -13,16 +13,19 @@ for frame = 0 .. N-1:                       (N = ceil(durationSec * fps))
   encoder.encode(videoFrame, { keyFrame: frame % 120 === 0 })
   videoFrame.close()
   await backpressure()                       (encoder.encodeQueueSize < 4)
-→ flush → mp4-muxer → out/<concept>.mp4 (video-only)
+→ flush → Mediabunny MP4 output → out/<concept>.mp4 (video-only)
 ```
 
 - **Encoder:** WebCodecs `VideoEncoder`, `avc1.640033` (H.264 High @ L5.1),
   `bitrate: 16_000_000`, `framerate: 60`, `latencyMode: 'quality'`. Hardware
   encode on Apple Silicon — typically **2–6× faster than realtime**, so a
   3-minute song exports in under 2 minutes.
-- **Muxing (video container):** [`mp4-muxer`](https://github.com/Vanilagy/mp4-muxer)
-  in-browser, writing through the File System Access API directly into
-  `projects/<song>/out/` — no server, no memory blow-up (chunks stream to disk).
+- **Muxing (video container):**
+  [`Mediabunny`](https://github.com/Vanilagy/mediabunny) captures the fixed
+  canvas through `CanvasSource`, applies WebCodecs backpressure, and writes a
+  fast-start MP4. It replaces the deprecated `mp4-muxer` package from the
+  original design. The first preview path buffers three seconds in memory;
+  full-song delivery will stream through the File System Access API.
 - **Progress UI** shows frame count, encode fps, ETA; the tab must stay
   focused (`requestAnimationFrame` throttling) — render mode uses a
   `setTimeout(0)` loop instead of rAF to be throttle-immune anyway.

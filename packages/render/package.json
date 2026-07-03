@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@reaper-viz/core": "workspace:*",
+    "mediabunny": "1.50.4",
     "pixi.js": "8.19.0"
   }
 }
