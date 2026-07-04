@@ -143,8 +143,9 @@ export class MetroScene {
       const point = this.#transform(station.pos, t);
       const scale = this.tuning.stationScale;
       if (station.kind === "interchange") {
-        this.#map.circle(point.x, point.y, 18 * scale).fill(0xf5f0df).stroke({ color: 0x06101a, width: 6 });
-        this.#map.circle(point.x, point.y, 7 * scale).fill(0x0b1b29);
+        const ringRadius = (18 + (station.lines.length - 1) * 3.5) * scale;
+        this.#map.circle(point.x, point.y, ringRadius).fill(0xf5f0df).stroke({ color: 0x06101a, width: 6 });
+        this.#map.circle(point.x, point.y, Math.max(7, ringRadius - 12 * scale)).fill(0x0b1b29);
       } else if (station.kind === "cluster" && station.span) {
         const a = this.#transform({ x: 90 + station.span[0] * 75, y: station.pos.y }, t);
         const b = this.#transform({ x: 90 + station.span[1] * 75, y: station.pos.y }, t);

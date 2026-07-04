@@ -15,7 +15,18 @@ export interface MetroStation {
   span?: [number, number];
   label?: { text: string; side: "L" | "R"; tier: 0 | 1 | 2 };
 }
-export interface MetroEdge { id: string; lineId: string; from: string; to: string; poly: MetroPoint[]; length: number; revealStartT: number; revealT: number; }
+export interface MetroEdge {
+  id: string;
+  lineId: string;
+  from: string;
+  to: string;
+  poly: MetroPoint[];
+  length: number;
+  revealStartT: number;
+  revealT: number;
+  corridorRank: number;
+  corridorOffset: number;
+}
 export interface MetroTrainStop { stationId: string; arriveT: number; departT: number; edgeToNext?: string; sprint?: boolean; }
 export interface MetroTrainSchedule { lineId: string; stops: MetroTrainStop[]; }
 export interface MetroStatics extends Record<string, unknown> {

@@ -52,6 +52,40 @@ describe("Metro Map M1 compiler", () => {
     }
   });
 
+  it("separates shared corridors in stable global line order", () => {
+    const song = buildFixtureSong({ bars: 1, patterns: [
+      { role: "lead", beats: [0, 1, 2, 3], pitch: 60, kind: "note" },
+      { role: "bass", beats: [0, 1, 2, 3], pitch: 48, kind: "note" },
+    ] });
+    const output = compileMetro(song);
+    const leadEdges = output.statics.edges.filter((edge) => edge.corridorRank === 0);
+    const bassEdges = output.statics.edges.filter((edge) => edge.corridorRank === 1);
+    expect(leadEdges).toHaveLength(3);
+    expect(bassEdges).toHaveLength(3);
+    expect(leadEdges[0]!.corridorOffset).toBeLessThan(bassEdges[0]!.corridorOffset);
+    expect(leadEdges.map((edge) => edge.poly)).not.toEqual(bassEdges.map((edge) => edge.poly));
+    for (const edge of [...leadEdges, ...bassEdges]) for (let index = 1; index < edge.poly.length; index += 1) {
+      const dx = Math.abs(edge.poly[index]!.x - edge.poly[index - 1]!.x);
+      const dy = Math.abs(edge.poly[index]!.y - edge.poly[index - 1]!.y);
+      expect(dx === 0 || dy === 0 || Math.abs(dx - dy) < 1e-6).toBe(true);
+    }
+  });
+
+  it("makes train schedules reference offset edge geometry", () => {
+    const output = compileMetro(buildFixtureSong({ bars: 1, patterns: [
+      { role: "lead", beats: [0, 1], pitch: 60, kind: "note" },
+      { role: "bass", beats: [0, 1], pitch: 48, kind: "note" },
+    ] }));
+    for (const schedule of output.statics.trains) {
+      const edge = output.statics.edges.find((candidate) => candidate.id === schedule.stops[0]!.edgeToNext);
+      expect(edge).toBeDefined();
+      expect(edge!.length).toBeGreaterThan(Math.hypot(
+        edge!.poly.at(-1)!.x - edge!.poly[0]!.x,
+        edge!.poly.at(-1)!.y - edge!.poly[0]!.y,
+      ));
+    }
+  });
+
   it("is byte-identical across recompiles", () => {
     const song = buildFixtureSong({ name: "metro-determinism" });
     expect(JSON.stringify(compileMetro(song))).toBe(JSON.stringify(compileMetro(song)));

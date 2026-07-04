@@ -99,6 +99,35 @@ function polyLength(points: MetroPoint[]): number {
   return total;
 }
 
+function samePoint(a: MetroPoint, b: MetroPoint): boolean {
+  return Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6;
+}
+
+/**
+ * Move a route onto its deterministic line corridor while preserving the
+ * canonical station positions. The short endpoint connectors use the same
+ * octilinear direction family as the route, so trains can ride this polyline
+ * directly without a separate visual-only displacement.
+ */
+function offsetRoute(points: MetroPoint[], offset: number): MetroPoint[] {
+  if (points.length < 2 || Math.abs(offset) < 1e-6) return points.map((point) => ({ ...point }));
+  let primary = { dx: 0, dy: 0, length: -1 };
+  for (let index = 1; index < points.length; index += 1) {
+    const dx = points[index]!.x - points[index - 1]!.x;
+    const dy = points[index]!.y - points[index - 1]!.y;
+    const length = Math.hypot(dx, dy);
+    if (length > primary.length) primary = { dx, dy, length };
+  }
+  const magnitude = Math.hypot(primary.dx, primary.dy) || 1;
+  const shift = {
+    x: (-primary.dy / magnitude) * offset,
+    y: (primary.dx / magnitude) * offset,
+  };
+  const shifted = points.map((point) => ({ x: point.x + shift.x, y: point.y + shift.y }));
+  const result = [points[0]!, ...shifted, points[points.length - 1]!];
+  return result.filter((point, index) => index === 0 || !samePoint(point, result[index - 1]!));
+}
+
 export function compileMetro(song: Song): MetroPerformance {
   const candidates = song.tracks.filter((track) => !DRUM_ROLES.has(track.role.toLowerCase()));
   const tracks = (candidates.length ? candidates : song.tracks).slice(0, 8);
@@ -183,14 +212,16 @@ export function compileMetro(song: Song): MetroPerformance {
     }
   }
   const edges: MetroEdge[] = [];
-  for (const line of lines) {
+  const corridorSpacing = 6;
+  for (const [lineIndex, line] of lines.entries()) {
     const ids = lineStationIds.get(line.id) ?? [];
     for (let index = 1; index < ids.length; index += 1) {
       if (ids[index] === ids[index - 1]) continue;
       const from = byId.get(ids[index - 1]!);
       const to = byId.get(ids[index]!);
       if (!from || !to) continue;
-      const poly = route(from.pos, to.pos);
+      const corridorOffset = (lineIndex - (lines.length - 1) / 2) * corridorSpacing;
+      const poly = offsetRoute(route(from.pos, to.pos), corridorOffset);
       edges.push({
         id: `${line.id}:e${index}`,
         lineId: line.id,
@@ -200,9 +231,12 @@ export function compileMetro(song: Song): MetroPerformance {
         length: polyLength(poly),
         revealStartT: from.revealT,
         revealT: to.revealT,
+        corridorRank: lineIndex,
+        corridorOffset,
       });
     }
   }
+  if (lines.length > 1) compileLog.push(`corridors: ${corridorSpacing}px spacing in global line order`);
   const trains = lines.map((line) => {
     const ids = lineStationIds.get(line.id) ?? [];
     return compileTrainSchedule(line.id, ids, byId, edges);
@@ -238,7 +272,7 @@ export function compileMetro(song: Song): MetroPerformance {
       lines, stations, edges, trains,
       bounds,
       compileLog,
-      compilerVersion: 3,
+      compilerVersion: 4,
     },
   };
   parsePerformance(performance);
