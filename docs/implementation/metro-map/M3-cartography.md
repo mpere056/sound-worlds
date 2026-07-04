@@ -86,6 +86,13 @@ one-time golden churn, do it consciously).
 
 ## Notes & risks
 
+Implementation status (2026-07-03): the compiler now marks and labels line
+termini, labels MIDI stations by pitch and audio-fallback downbeats by bar, and
+emits a monotone frontier camera that eases into a full-map final reveal. The
+scene applies the compiled camera to map geometry, trains, blooms, clusters,
+and labels while keeping the title and legend screen-pinned. Parallel corridor
+offsets, district bands, and full overlap optimization remain open M3 work.
+
 - **The offset pass is the most fiddly code in the whole game** (joint healing
   at corridor-membership changes). Time-box it: micro-jogs may look imperfect
   at extreme cases; M5's annealing can flip bend orientations to reduce them.

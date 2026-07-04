@@ -73,7 +73,8 @@ and airborne trajectory, exact musical landings, and camera keys; its Pixi
 scene renders that data as a runner jumping across a layered waveform
 landscape. Metro Map now compiles MIDI or honest
 audio-activity fallback lines into an octilinear network that draws itself,
-runs timestamped trains, and blooms stations on musical arrivals. The
+runs timestamped trains, labels key stops, follows the drawing frontier, and
+blooms stations on musical arrivals. The
 glowing orb is a pipeline diagnostic scene and is explicitly labeled as such
 in the app.
 

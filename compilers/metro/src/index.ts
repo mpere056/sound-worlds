@@ -155,9 +155,36 @@ export function compileMetro(song: Song): MetroPerformance {
   }
 
   const byId = new Map(stations.map((station) => [station.id, station]));
+  const lineStationIds = new Map(lines.map((line) => {
+    const ids = (perLine.get(line.id) ?? []).sort((a, b) => a.row - b.row || a.revealT - b.revealT)
+      .map((station) => canonical.get(station.id) ?? station.id)
+      .filter((id, index, all) => index === 0 || id !== all[index - 1]);
+    return [line.id, ids] as const;
+  }));
+  const terminalIds = new Set<string>();
+  for (const ids of lineStationIds.values()) {
+    if (ids[0]) terminalIds.add(ids[0]);
+    if (ids[ids.length - 1]) terminalIds.add(ids[ids.length - 1]!);
+  }
+  const pitchNames = ["F#", "G", "G#", "A", "A#", "B", "C", "C#", "D", "D#", "E", "F"];
+  for (const station of stations) {
+    if (terminalIds.has(station.id) && station.kind === "stop") station.kind = "terminal";
+    const onDownbeat = song.grid.downbeats.some((time) => Math.abs(time - station.revealT) < 0.04);
+    if (station.kind === "interchange" || station.kind === "terminal" || onDownbeat) {
+      const hasMidi = station.lines.some((lineId) => lines.find((line) => line.id === lineId)?.source === "midi");
+      const bar = song.grid.bars.find((candidate) => station.revealT >= candidate.startSec && station.revealT < candidate.endSec);
+      const terminalName = station.lines.map((lineId) => lines.find((line) => line.id === lineId)?.name ?? "LINE")
+        .map((name) => name.replace(/^VV_/i, "").replace(/^SAMPLE_/i, "").replace(/_VITAL$/i, "").replace(/_INPUT$/i, "").replace(/_/g, " ").toUpperCase()).join(" / ");
+      station.label = {
+        text: station.kind === "terminal" ? terminalName : hasMidi ? pitchNames[station.lane] ?? "STOP" : station.kind === "interchange" ? `XFER ${station.row + 1}` : `BAR ${(bar?.index ?? 0) + 1}`,
+        side: station.lane > 5 ? "L" : "R",
+        tier: station.kind === "interchange" || station.kind === "terminal" ? 0 : 1,
+      };
+    }
+  }
   const edges: MetroEdge[] = [];
   for (const line of lines) {
-    const ids = (perLine.get(line.id) ?? []).sort((a, b) => a.row - b.row || a.revealT - b.revealT).map((station) => canonical.get(station.id) ?? station.id);
+    const ids = lineStationIds.get(line.id) ?? [];
     for (let index = 1; index < ids.length; index += 1) {
       if (ids[index] === ids[index - 1]) continue;
       const from = byId.get(ids[index - 1]!);
@@ -177,13 +204,26 @@ export function compileMetro(song: Song): MetroPerformance {
     }
   }
   const trains = lines.map((line) => {
-    const ids = (perLine.get(line.id) ?? []).sort((a, b) => a.row - b.row || a.revealT - b.revealT)
-      .map((station) => canonical.get(station.id) ?? station.id)
-      .filter((id, index, all) => index === 0 || id !== all[index - 1]);
+    const ids = lineStationIds.get(line.id) ?? [];
     return compileTrainSchedule(line.id, ids, byId, edges);
   });
   const xs = stations.map((station) => station.pos.x);
   const ys = stations.map((station) => station.pos.y);
+  const bounds = { minX: Math.min(...xs, 90), minY: Math.min(...ys, 210), maxX: Math.max(...xs, 915), maxY: Math.max(...ys, 1650) };
+  const cameraTimes = [...new Set([0, ...song.grid.beats, Math.max(0, song.meta.durationSec - 2), song.meta.durationSec])].sort((a, b) => a - b);
+  let previousFrontier = bounds.minY;
+  const camera = cameraTimes.map((t) => {
+    const revealed = stations.filter((station) => station.revealT <= t + 1e-6);
+    const frontier = Math.max(previousFrontier, ...revealed.map((station) => station.pos.y));
+    previousFrontier = frontier;
+    const finalReveal = t >= song.meta.durationSec - 1e-6;
+    return {
+      t,
+      pos: [(bounds.minX + bounds.maxX) / 2, finalReveal ? (bounds.minY + bounds.maxY) / 2 : frontier, 10] as [number, number, number],
+      zoom: finalReveal ? 1 : 1.35,
+      ease: finalReveal ? "cubicInOut" : "smoothstep",
+    };
+  });
   const performance: MetroPerformance = {
     schemaVersion: 1,
     concept: "metro",
@@ -192,13 +232,13 @@ export function compileMetro(song: Song): MetroPerformance {
     fps: 60,
     resolution: { w: 1080, h: 1920 },
     palette: solvePalette(null, lines.map((line) => line.role)),
-    camera: [], curves: {}, events: metroEvents(stations, edges),
+    camera, curves: {}, events: metroEvents(stations, edges),
     statics: {
       lanes: { count: 12, laneX: Array.from({ length: 12 }, (_, index) => 90 + index * 75) },
       lines, stations, edges, trains,
-      bounds: { minX: Math.min(...xs, 90), minY: Math.min(...ys, 210), maxX: Math.max(...xs, 915), maxY: Math.max(...ys, 1650) },
+      bounds,
       compileLog,
-      compilerVersion: 1,
+      compilerVersion: 3,
     },
   };
   parsePerformance(performance);

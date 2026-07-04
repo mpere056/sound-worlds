@@ -32,6 +32,17 @@ describe("Metro Map M1 compiler", () => {
     expect(output.events.filter((event) => event.type === "station.bloom").map((event) => event.params.hitT)).toEqual(song.tracks[0]!.events.map((event) => event.t));
   });
 
+  it("labels terminals and keeps the frontier camera monotone", () => {
+    const output = compileMetro(buildFixtureSong({ patterns: [{ role: "keys", beats: [], kind: "note" }] }));
+    const terminals = output.statics.stations.filter((station) => station.kind === "terminal");
+    expect(terminals.length).toBeGreaterThanOrEqual(2);
+    expect(terminals.every((station) => station.label?.tier === 0)).toBe(true);
+    for (let index = 1; index < output.camera.length - 1; index += 1) {
+      expect(output.camera[index]!.pos[1]).toBeGreaterThanOrEqual(output.camera[index - 1]!.pos[1]);
+    }
+    expect(output.camera[output.camera.length - 1]!.zoom).toBe(1);
+  });
+
   it("routes every segment horizontally, vertically, or at 45 degrees", () => {
     const output = compileMetro(buildFixtureSong());
     for (const edge of output.statics.edges) for (let index = 1; index < edge.poly.length; index += 1) {

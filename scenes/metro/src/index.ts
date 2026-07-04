@@ -1,5 +1,5 @@
 import type { MetroPerformance, MetroPoint } from "@reaper-viz/compiler-metro";
-import { PixiBackend } from "@reaper-viz/render";
+import { PixiBackend, sampleCamera } from "@reaper-viz/render";
 import { Graphics, Text } from "pixi.js";
 
 export type { MetroPerformance } from "@reaper-viz/compiler-metro";
@@ -50,6 +50,7 @@ export class MetroScene {
   readonly #map = new Graphics();
   readonly #motion = new Graphics();
   readonly #labels: Text[] = [];
+  readonly #stationLabels: Array<{ stationId: string; text: Text }> = [];
   readonly tuning: MetroTuning = { lineWeight: 1, gridOpacity: 0.28, stationScale: 1 };
 
   constructor(backend: PixiBackend, performance: MetroPerformance) {
@@ -64,7 +65,7 @@ export class MetroScene {
     });
     title.position.set(62, 56);
     const subtitle = new Text({
-      text: "M2 LIVE NETWORK  /  TIME FLOWS SOUTH",
+      text: "M3 CARTOGRAPHY  /  FRONTIER CAMERA",
       style: { fontFamily: "ui-monospace, monospace", fontSize: 17, fill: 0x92a9bd, letterSpacing: 2 },
     });
     subtitle.position.set(65, 112);
@@ -79,15 +80,28 @@ export class MetroScene {
       backend.layer("metro-labels").addChild(label);
       this.#labels.push(label);
     });
+    performance.statics.stations.forEach((station) => {
+      if (!station.label) return;
+      const label = new Text({
+        text: station.label.text,
+        style: { fontFamily: "Inter, Arial, sans-serif", fontSize: station.label.tier === 0 ? 16 : 13, fontWeight: "600", fill: 0xdce8ed, letterSpacing: 1 },
+      });
+      backend.layer("metro-station-labels").addChild(label);
+      this.#stationLabels.push({ stationId: station.id, text: label });
+      this.#labels.push(label);
+    });
   }
 
-  #transform(point: MetroPoint): MetroPoint {
+  #transform(point: MetroPoint, t: number): MetroPoint {
     const bounds = this.#performance.statics.bounds;
     const sourceWidth = Math.max(1, bounds.maxX - bounds.minX);
     const sourceHeight = Math.max(1, bounds.maxY - bounds.minY);
-    const scale = Math.min(900 / sourceWidth, 1480 / sourceHeight);
-    const offsetX = (this.#backend.width - sourceWidth * scale) / 2 - bounds.minX * scale;
-    const offsetY = 220 - bounds.minY * scale;
+    const fullScale = Math.min(900 / sourceWidth, 1480 / sourceHeight);
+    const camera = sampleCamera(this.#performance.camera, t);
+    const scale = fullScale * camera.zoom;
+    const targetY = camera.zoom > 1.1 ? 1240 : 960;
+    const offsetX = this.#backend.width / 2 - camera.pos[0] * scale;
+    const offsetY = targetY - camera.pos[1] * scale;
     return { x: point.x * scale + offsetX, y: point.y * scale + offsetY };
   }
 
@@ -110,7 +124,7 @@ export class MetroScene {
       const revealDuration = edge.revealT - edge.revealStartT;
       const revealProgress = revealDuration <= 1e-6 ? (t >= edge.revealT ? 1 : 0) : Math.max(0, Math.min(1, (t - edge.revealStartT) / revealDuration));
       if (revealProgress <= 0) continue;
-      const fullPoints = edge.poly.map((point) => this.#transform(point));
+      const fullPoints = edge.poly.map((point) => this.#transform(point, t));
       const points = partialPolyline(fullPoints, revealProgress);
       this.#map.moveTo(points[0]!.x, points[0]!.y);
       for (const point of points.slice(1)) this.#map.lineTo(point.x, point.y);
@@ -126,14 +140,14 @@ export class MetroScene {
     }
     for (const station of this.#performance.statics.stations) {
       if (station.revealT > t) continue;
-      const point = this.#transform(station.pos);
+      const point = this.#transform(station.pos, t);
       const scale = this.tuning.stationScale;
       if (station.kind === "interchange") {
         this.#map.circle(point.x, point.y, 18 * scale).fill(0xf5f0df).stroke({ color: 0x06101a, width: 6 });
         this.#map.circle(point.x, point.y, 7 * scale).fill(0x0b1b29);
       } else if (station.kind === "cluster" && station.span) {
-        const a = this.#transform({ x: 90 + station.span[0] * 75, y: station.pos.y });
-        const b = this.#transform({ x: 90 + station.span[1] * 75, y: station.pos.y });
+        const a = this.#transform({ x: 90 + station.span[0] * 75, y: station.pos.y }, t);
+        const b = this.#transform({ x: 90 + station.span[1] * 75, y: station.pos.y }, t);
         this.#map.moveTo(a.x, a.y).lineTo(b.x, b.y).stroke({ color: 0xf5f0df, width: 13 * scale, cap: "round" });
       } else {
         const line = lineById.get(station.lines[0]!);
@@ -161,7 +175,7 @@ export class MetroScene {
       const stop = schedule.stops[stopIndex]!;
       const station = stationById.get(stop.stationId);
       if (!station) continue;
-      let point = this.#transform(station.pos);
+      let point = this.#transform(station.pos, t);
       if (stopIndex < schedule.stops.length - 1 && t > stop.departT && stop.edgeToNext) {
         const next = schedule.stops[stopIndex + 1]!;
         const edge = edgeById.get(stop.edgeToNext);
@@ -169,7 +183,7 @@ export class MetroScene {
           const duration = Math.max(1e-6, next.arriveT - stop.departT);
           const raw = Math.max(0, Math.min(1, (t - stop.departT) / duration));
           const eased = stop.sprint ? raw : raw < 0.5 ? 4 * raw ** 3 : 1 - (-2 * raw + 2) ** 3 / 2;
-          point = pointAt(edge.poly.map((source) => this.#transform(source)), eased);
+          point = pointAt(edge.poly.map((source) => this.#transform(source, t)), eased);
           if (stop.sprint) this.#motion.moveTo(point.x - 38, point.y).lineTo(point.x, point.y)
             .stroke({ color: colorNumber(line.color), width: 8, alpha: 0.35, cap: "round" });
         }
@@ -177,6 +191,17 @@ export class MetroScene {
       this.#motion.roundRect(point.x - 18, point.y - 10, 36, 20, 9)
         .fill(0xf5f0df).stroke({ color: colorNumber(line.color), width: 5 });
       this.#motion.circle(point.x + 8, point.y, 3).fill(colorNumber(line.color));
+    }
+    for (const entry of this.#stationLabels) {
+      const station = stationById.get(entry.stationId);
+      if (!station?.label) { entry.text.visible = false; continue; }
+      const camera = sampleCamera(this.#performance.camera, t);
+      entry.text.visible = station.revealT <= t && (station.label.tier === 0 || camera.zoom >= 1.3);
+      if (!entry.text.visible) continue;
+      const point = this.#transform(station.pos, t);
+      const left = station.label.side === "L";
+      entry.text.anchor.set(left ? 1 : 0, 0.5);
+      entry.text.position.set(Math.max(65, Math.min(this.#backend.width - 65, point.x + (left ? -18 : 18))), point.y);
     }
     this.#backend.render();
   }

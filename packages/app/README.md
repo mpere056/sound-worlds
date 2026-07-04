@@ -21,8 +21,9 @@ Then open `http://127.0.0.1:5173/`.
   performance is present and keeps unimplemented concepts visibly disabled.
 - Waveform Runner R2: deterministic motion, slope-limited waveform terrain,
   compiled musical jumps, parallax layers, and a humanoid runner.
-- Metro Map M2: a progressively drawn octilinear network with timestamped
-  trains and station blooms, plus MIDI and audio-activity line sources.
+- Metro Map M3: a progressively drawn octilinear network with timestamped
+  trains, station blooms, terminal/downbeat labels, and a frontier-follow
+  camera that pulls back for the complete map.
 - A separately labeled pipeline test pattern driven by master energy, beats,
   bars, and sections. It is not the Metro Map scene.
 - Beat sync flash, platform safe-area overlay, and live Tweakpane controls.
@@ -32,3 +33,14 @@ Then open `http://127.0.0.1:5173/`.
 The app reads `song.json`, `performance.runner.json`, and `master.wav` through
 its development-only API. It does not make ignored project exports part of the
 Vite bundle or Git repository.
+
+## Development server troubleshooting
+
+Only one preview server should own port 5173. If Vite reports that the port is
+already in use, use the existing preview or stop its terminal with `Ctrl+C`
+before running `corepack pnpm dev` again.
+
+If the page is blank and Vite reports an outdated or failed optimized
+dependency, stop the server, remove only `node_modules\.vite`, and restart the
+dev command. The dependency versions remain locked; this clears generated
+prebundle output, not project source.
