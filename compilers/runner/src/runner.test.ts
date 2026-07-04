@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { buildFixtureSong, sampleCurve } from "@reaper-viz/core";
-import { compileRunner, sampleTerrain } from "./index.js";
+import { airHeight, compileRunner, evaluateTrajectory, sampleTerrain, solveJump } from "./index.js";
 
-describe("Waveform Runner R1 compiler", () => {
+describe("Waveform Runner R2 compiler", () => {
   const song = buildFixtureSong({ name: "runner-fixture" });
   const performance = compileRunner(song);
 
@@ -32,11 +32,32 @@ describe("Waveform Runner R1 compiler", () => {
     expect(compileRunner(bassSong).statics.terrain.source).toBe("bass-midi");
   });
 
-  it("keeps the ground trajectory on the compiled terrain", () => {
+  it("solves a flat one-beat jump with the configured apex", () => {
+    const jump = solveJump(0, 0.5, 0.5, 0, 0);
+    expect(jump.vy0).toBeCloseTo(jump.gravity * 0.25);
+    expect(airHeight(jump, 0.25).y).toBeCloseTo(3.2);
+    expect(airHeight(jump, 0.5).y).toBeCloseTo(0);
+  });
+
+  it("keeps emitted trajectories continuous and above terrain", () => {
     for (let t = 0; t <= song.meta.durationSec; t += 1 / 120) {
       const x = sampleCurve(performance.curves.x!, t);
-      const y = sampleTerrain(performance.statics.terrain, x);
-      expect(y).toBeGreaterThanOrEqual(sampleTerrain(performance.statics.terrain, x) - 1e-4);
+      const pose = evaluateTrajectory(performance.statics.trajectory.segments, t, performance.curves.x!, performance.statics.terrain);
+      expect(pose.y).toBeGreaterThanOrEqual(sampleTerrain(performance.statics.terrain, x) - 1e-4);
+    }
+    for (const segment of performance.statics.trajectory.segments) {
+      const pose = evaluateTrajectory(performance.statics.trajectory.segments, segment.t1, performance.curves.x!, performance.statics.terrain);
+      if (segment.kind === "air") expect(pose.y).toBeCloseTo(segment.y1, 5);
+    }
+  });
+
+  it("lands exactly on hitT and falls back to downbeats without drums", () => {
+    const fallbackSong = buildFixtureSong({ patterns: [{ role: "keys", beats: [], kind: "note" }] });
+    const output = compileRunner(fallbackSong);
+    expect(output.statics.jumpSource).toBe("bar-downbeats");
+    expect(output.statics.jumpReport.length).toBeGreaterThan(0);
+    for (const event of output.events.filter((candidate) => candidate.type === "jump.land")) {
+      expect(event.t).toBe(event.params.hitT);
     }
   });
 

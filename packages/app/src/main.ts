@@ -154,9 +154,9 @@ async function loadConcept(concept: string): Promise<void> {
     addTuningBinding(bindingPane, runner.tuning, "terrainContrast", { min: 0.2, max: 1.4, step: 0.02, label: "Terrain" });
     addTuningBinding(bindingPane, runner.tuning, "trail", { min: 0, max: 1, step: 0.01, label: "Trail" });
     addTuningBinding(bindingPane, runner.tuning, "parallax", { min: 0.2, max: 1.5, step: 0.02, label: "Parallax" });
-    sceneLabel.textContent = "Waveform Runner · R1 World";
-    statusTitle.textContent = "Waveform Runner · ground world";
-    statusDetail.textContent = `${performance.statics.terrain.heights.length} terrain samples · ${performance.statics.terrain.source}`;
+    sceneLabel.textContent = "Waveform Runner · R2 Jumps";
+    statusTitle.textContent = "Waveform Runner · compiled jumps";
+    statusDetail.textContent = `${performance.statics.jumpReport.length} landings · ${performance.statics.jumpSource} · ${performance.statics.terrain.source}`;
   } else {
     const diagnostics = new TestPatternScene(backend, song);
     scene = diagnostics;
@@ -193,7 +193,7 @@ async function loadProject(id: string): Promise<void> {
   if (project?.concepts.includes("runner")) {
     const runner = document.createElement("option");
     runner.value = "runner";
-    runner.textContent = "Waveform Runner · R1 World";
+    runner.textContent = "Waveform Runner · R2 Jumps";
     options.push(runner);
   }
   if (project?.concepts.includes("metro")) {

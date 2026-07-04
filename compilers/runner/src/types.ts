@@ -9,10 +9,33 @@ export interface RunnerTerrain {
   maxSlope: number;
 }
 
+export interface RunnerGroundSegment { kind: "ground"; t0: number; t1: number; }
+export interface RunnerAirSegment {
+  kind: "air";
+  t0: number;
+  t1: number;
+  y0: number;
+  y1: number;
+  gravity: number;
+  vy0: number;
+  clearanceBoost: number;
+  landingT: number;
+}
+export type RunnerTrajectorySegment = RunnerGroundSegment | RunnerAirSegment;
+export interface RunnerJumpReport {
+  landingT: number;
+  takeoffT: number;
+  durationBeats: number;
+  clearanceBoost: number;
+  source: string;
+}
+
 export interface RunnerStatics extends Record<string, unknown> {
   worldLength: number;
   terrain: RunnerTerrain;
-  trajectory: { segments: Array<{ kind: "ground"; t0: number; t1: number }> };
+  trajectory: { segments: RunnerTrajectorySegment[] };
+  jumpSource: string;
+  jumpReport: RunnerJumpReport[];
   compilerVersion: number;
 }
 

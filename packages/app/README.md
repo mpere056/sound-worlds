@@ -19,8 +19,8 @@ Then open `http://127.0.0.1:5173/`.
 - Audio-clock-driven rendering and millisecond scrub control.
 - A world selector that defaults to Waveform Runner when its compiled
   performance is present and keeps unimplemented concepts visibly disabled.
-- Waveform Runner R1: deterministic motion, slope-limited waveform terrain,
-  parallax layers, and a humanoid ground runner.
+- Waveform Runner R2: deterministic motion, slope-limited waveform terrain,
+  compiled musical jumps, parallax layers, and a humanoid runner.
 - Metro Map M2: a progressively drawn octilinear network with timestamped
   trains and station blooms, plus MIDI and audio-activity line sources.
 - A separately labeled pipeline test pattern driven by master energy, beats,

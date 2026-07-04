@@ -94,6 +94,16 @@ fixture.
 
 ## Notes & risks
 
+Implementation status (2026-07-03): R2 now selects and budgets landing hits,
+falls back through the documented role chain, solves tempo-scaled parabolic
+arcs, validates clearance at 120 Hz, and assembles stateless ground/air
+segments with takeoff and landing events. If the duration escalation cannot
+clear a pathological crest, the current deterministic fallback increases the
+arc's closed-form parabolic lift and records that boost rather than mutating
+terrain. Double-jump mid-impulses and terrain concessions remain future
+escalation work. The real audio-only export uses bar downbeats and compiles four
+unboosted landings at 2, 4, 6, and 8 seconds.
+
 - The 1/16-grid snap on `Tk` can conflict with `minGround` after a previous
   landing — the spec resolves by snapping *earlier*; make the tie-break
   explicit in code and test it (this is the one place off-by-one-frame bugs

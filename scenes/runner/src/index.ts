@@ -1,4 +1,4 @@
-import { sampleTerrain, type RunnerPerformance } from "@reaper-viz/compiler-runner";
+import { evaluateTrajectory, sampleTerrain, type RunnerPerformance } from "@reaper-viz/compiler-runner";
 import { sampleCurve } from "@reaper-viz/core";
 import { PixiBackend } from "@reaper-viz/render";
 import { Graphics, Text } from "pixi.js";
@@ -77,7 +77,8 @@ export class RunnerScene {
     const speedCurve = this.#performance.curves.speed;
     const energyCurve = this.#performance.curves.energy;
     if (!xCurve || !speedCurve || !energyCurve) throw new Error("Runner performance is missing required curves");
-    const worldX = sampleCurve(xCurve, t);
+    const pose = evaluateTrajectory(this.#performance.statics.trajectory.segments, t, xCurve, this.#performance.statics.terrain);
+    const worldX = pose.x;
     const speed = sampleCurve(speedCurve, t);
     const energy = sampleCurve(energyCurve, t);
     const runnerHeight = sampleTerrain(this.#performance.statics.terrain, worldX);
@@ -140,12 +141,14 @@ export class RunnerScene {
         .stroke({ color: 0x71bfff, width: 2 + energy * 2, alpha: this.tuning.trail * (0.12 + energy * 0.25) });
     }
 
-    const groundY = baseline - 8;
+    const airborneOffset = Math.max(0, pose.y - runnerHeight) * scale * 0.56;
+    const groundY = baseline - 8 - airborneOffset;
     const gait = t * (8 + speed * 0.55);
     const legSwing = Math.sin(gait) * 24;
     const armSwing = Math.sin(gait + Math.PI) * 19;
-    const lean = Math.max(-0.28, Math.min(0.28,
-      (sampleTerrain(this.#performance.statics.terrain, worldX + 0.2) - sampleTerrain(this.#performance.statics.terrain, worldX - 0.2)) * 0.5));
+    const lean = pose.grounded
+      ? Math.max(-0.28, Math.min(0.28, (sampleTerrain(this.#performance.statics.terrain, worldX + 0.2) - sampleTerrain(this.#performance.statics.terrain, worldX - 0.2)) * 0.5))
+      : Math.max(-0.34, Math.min(0.34, pose.vy * 0.012));
     for (let ring = 4; ring >= 1; ring -= 1) {
       this.#runner.circle(runnerX, groundY - 94, 38 + ring * 18)
         .fill({ color: 0x4ec9ff, alpha: this.tuning.trail * ring * 0.016 });
@@ -158,7 +161,8 @@ export class RunnerScene {
       .stroke({ color: 0xc9f2ff, width: 13, cap: "round" });
     this.#runner.moveTo(runnerX + 8, groundY - 124).lineTo(runnerX + 38 - armSwing, groundY - 78)
       .stroke({ color: 0x8fddff, width: 13, cap: "round" });
-    this.#runner.roundRect(runnerX - 23, groundY - 143, 46, 84, 20)
+    const stretch = pose.grounded ? 1 : 1 + Math.max(-0.12, Math.min(0.2, pose.vy * 0.008));
+    this.#runner.roundRect(runnerX - 23, groundY - 143 - (stretch - 1) * 42, 46, 84 * stretch, 20)
       .fill({ color: 0xbdeeff, alpha: 0.95 });
     this.#runner.circle(runnerX + lean * 35, groundY - 170, 25)
       .fill(0xf0fbff);
@@ -167,7 +171,15 @@ export class RunnerScene {
         .lineTo(runnerX - 90 - trail * 26 - speed * 3, groundY - 105 + trail * 2)
         .stroke({ color: 0x54c7ff, width: Math.max(1, 7 - trail), alpha: this.tuning.trail * (0.33 - trail * 0.035) });
     }
-    this.#status.text = `R1 WORLD  ·  ${this.#performance.statics.terrain.source.toUpperCase()}  ·  ${worldX.toFixed(1)} / ${this.#performance.statics.worldLength.toFixed(1)} WU`;
+    for (const event of this.#performance.events) {
+      const age = t - event.t;
+      if (age < 0 || age > 0.42 || !["jump.takeoff", "jump.land", "ground.pulse"].includes(event.type)) continue;
+      const alpha = 1 - age / 0.42;
+      const radius = 18 + age * 150;
+      this.#runner.ellipse(runnerX, baseline, radius, radius * 0.24)
+        .stroke({ color: event.type === "jump.land" ? 0xf4fbff : 0x63d6ff, width: 6 * alpha, alpha });
+    }
+    this.#status.text = `R2 JUMPS  ·  ${this.#performance.statics.jumpSource.toUpperCase()}  ·  ${this.#performance.statics.jumpReport.length} LANDINGS`;
     this.#backend.render();
   }
 
