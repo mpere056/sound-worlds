@@ -21,7 +21,8 @@ Then open `http://127.0.0.1:5173/`.
   performance is present and keeps unimplemented concepts visibly disabled.
 - Waveform Runner R3 (in progress): deterministic motion, slope-limited
   waveform terrain, compiled musical jumps, parallax layers, a humanoid
-  runner, exact-time melody/activity glyph collection, palette-derived colors,
+  runner, exact-time melody/activity glyph collection, section gates, compiled
+  strata, beat-locked gait, section palette shifts, palette-derived colors,
   and additive glow layers with a live Glow tuning control.
 - Metro Map M3: a progressively drawn octilinear network with timestamped
   trains, station blooms, terminal/downbeat labels, separated parallel

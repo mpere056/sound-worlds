@@ -88,8 +88,8 @@ schema updated & versioned.
 ## S3 — Runner visual foundation *(2–4 days — biggest perceived-quality jump)*
 
 Execute the remaining [Visual Recovery Plan](visual-recovery-plan.md)
-V1.1–V1.7 items in this order: **V1.4 real strata → final V1.1 debug
-separation/golden-frame sweep.** V1.3 camera, V1.2 base palette wiring, V1.5
+V1.1–V1.7 items in this order: **final V1.1 debug separation/golden-frame
+sweep.** V1.3 camera, V1.2 base palette wiring, V1.4 real strata, V1.5
 compiled gait, and the first V1.6 trajectory-sampled trail pass are already
 implemented. V1.7's additive glow layer pass is implemented; the remaining
 V1.7 decision is whether to keep investing in the humanoid runner or pivot the
@@ -103,12 +103,11 @@ rebuild):
   additive-blended Pixi `Graphics` layers under the terrain, glyphs, and
   runner cores. Keep future polish in that cheap layer model unless profiling
   proves sprite glow textures are needed.
-- **Real strata:** compiler emits one polyline per stem stratum (edge =
-  `surface − depth_k − amp_k·stemWave_k(x)` per
-  [impl plan §1.2](waveform-runner-implementation.md));
-  scene replaces the `Math.sin` ripples with polyline sampling. Scene change
-  is ~10 lines; the work is the compiler emit + a "mute a stem → one stratum
-  changes" test.
+- **Real strata:** compiler now emits one edge heightfield per selected track
+  stratum (edge = `surface − depth_k − amp_k·trackRms_k(x)` per
+  [impl plan §1.2](waveform-runner-implementation.md)), and the scene samples
+  those edges directly. The remaining work is richer stem-export visual
+  acceptance, not the compiler/scene plumbing.
 - **Camera/palette/trail:** the scene now consumes compiled camera keyframes,
   derives base colors from `performance.palette`, and renders a
   trajectory-sampled trail. Keep future changes inside that model.
@@ -119,11 +118,11 @@ rebuild):
 ## S4 — Runner R3 completion *(2–3 days)*
 
 Spec: [R3 work order](waveform-runner/R3-music.md) —
-still accurate. Remaining items: **section gates, palette shifts, kick
-zoom/shake (lands with S3 camera), vocal halo, downlifter float segments.**
-Adaptation: gates are two `Graphics` arch pieces + label `Text`; palette
-shifts lerp the palette object (S3 made all colors palette-sourced, so this
-is now one global lerp).
+still accurate. Remaining items: **vocal halo, downlifter float segments, and
+authored-song visual acceptance for gates/palette shifts/kick zoom.**
+Adaptation: gates are now compiler-owned statics plus scene `Graphics` arches
+and `Text` labels; palette shifts are compiler-owned events that the scene
+samples into its palette-derived color pipeline.
 
 **Done when:** R3 acceptance checklist passes on the reference song — gates
 open on region downbeats, palettes differ per section kind, floats keep the

@@ -81,10 +81,10 @@ marked fixed should remain regression targets rather than active blockers.
 | Line(s) | Observed | Documented design | Impact |
 |---|---|---|---|
 | Original debug title/status | Fixed: in-canvas Runner debug labels removed | Overlays belong to the dev harness, toggleable, never in the export ([renderer.md](../architecture/renderer.md)) | Keep covered by visual review so export frames do not regress into debug UI |
-| Original hardcoded scene colors | Fixed for base scene: background, stars, terrain, strata, surface, speed lines, runner, trail, glyphs, and event ripples now derive from `performance.palette` / role colors | Colors come from `performance.palette` (solver: key/mode → palette, role → color) with tuning overrides | Remaining active task is section palette transitions and multi-song visual verification |
+| Original hardcoded scene colors | Fixed: background, stars, terrain, strata, surface, speed lines, runner, trail, glyphs, event ripples, and section transitions now derive from `performance.palette` / role colors | Colors come from `performance.palette` (solver: key/mode → palette, role → color) with tuning overrides | Remaining active task is multi-song visual verification |
 | Original runner-relative projection | Fixed: scene samples compiled camera keyframes and applies deterministic land/pulse zoom impulses | R1 spec: compiled `camY` (critically damped) + camera keyframes; R3: kick zoom impulses | Needs golden-frame/scrub verification on a richer reference song |
-| 121–131 | Strata = `Math.sin(x·0.018 + stratum·1.7)` decorative ripples | Strata edges = **per-stem waveform summaries** — "the world is a stratigraphy of the mix" ([waveform-runner-implementation.md §1.2](waveform-runner-implementation.md)) | The concept's core identity claim is currently *faked with a sine wave* — this is the clearest "not proper math" instance |
-| 175–177 | Gait = `Math.sin(t·(8 + speed·0.55))` free-running | Footfalls locked to kicks (or bar phase) — R2 spec | Legs visibly disagree with the beat; reads as cheap |
+| Original sine strata | Fixed first pass: compiler emits track-derived stratum edge heightfields and the scene renders those directly | Strata edges = **per-stem waveform summaries** — "the world is a stratigraphy of the mix" ([waveform-runner-implementation.md §1.2](waveform-runner-implementation.md)) | Needs richer stem-export visual acceptance, but no longer relies on fake sine geology |
+| Original free-running gait | Fixed first pass: compiler emits `runner.step` events from kick/percussion timing or beat-grid fallback; scene gait phase samples those events | Footfalls locked to kicks (or bar phase) — R2 spec | Needs visual acceptance on a drum-bearing reference song |
 | Original glyph merge offset | Fixed at compiler contract level: glyphs store exact trajectory merge positions; the scene applies only a character-core visual offset | Merge at `pose(mergeT)` exactly; visual centering belongs in character metrics, not compile math | Keep exact merge-position tests and visual centering separate |
 | Original static trail offsets | Fixed first pass: trail samples historical trajectory poses and curves through jumps | Trail = `pose(t − k·dt)` sampled history — curves through jumps, scrub-exact | Still needs glow/additive treatment |
 | whole file | Zero additive blending, zero glow/bloom | Concept: "luminous terrain edges… comet trail… white-hot runner" — additive glow is the look | Flat vector fills read as placeholder; Pixi `blendMode:'add'` + a bloom filter are the missing 80% of the look |
@@ -113,8 +113,8 @@ diverged. This is very recoverable.
 
 ## 4. Layer 3 — Unbuilt phases are most of the remaining "wow" gap
 
-- **Runner:** R3 incomplete (no section gates, no palette shifts, no kick
-  zoom/shake, no vocal halo, no floats) and R4 entirely absent — and R4 *is*
+- **Runner:** R3 incomplete (no vocal halo, no floats; gate/palette visuals
+  still need authored-song acceptance) and R4 entirely absent — and R4 *is*
   the identity (erasure front, crumbs, real strata, trail). The concept doc's
   hero moments live there.
 - **Metro:** M3 incomplete (no districts, label-overlap pass unfinished,

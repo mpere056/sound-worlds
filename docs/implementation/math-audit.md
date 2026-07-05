@@ -115,10 +115,12 @@ coverage lives in
 `compilers/metro/src/metro.test.ts::caps train dwell to half the gap for fast runs`.
 
 ### 2.5 Scene-math divergences (already catalogued)
-Fake sine strata, no camera in Runner, `mergeY−96`, `zoom>1.1` framing branch,
-per-frame arc-length recompute, free-running gait — see
-[Quality Gap Analysis](quality-gap-analysis.md) §3 with line numbers and
-[Visual Recovery Plan](visual-recovery-plan.md) V1/V2 for fix specs.
+The original audit found fake sine strata, no camera in Runner, `mergeY−96`,
+the Metro `zoom>1.1` framing branch, per-frame arc-length recompute, and
+free-running gait. The current implementation has fixed the camera/framing,
+arc-length, compiled gait, exact glyph merge contract, and first real-strata
+pass; see [Quality Gap Analysis](quality-gap-analysis.md) §3 and
+[Visual Recovery Plan](visual-recovery-plan.md) V1/V2 for current status.
 
 ### 2.6 Sections don't tile the song (LOW) — fixed 2026-07-04
 With partial region coverage, gaps between sections are unrepresented (L281–

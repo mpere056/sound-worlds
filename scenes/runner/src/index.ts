@@ -1,7 +1,7 @@
 import { evaluateTrajectory, sampleTerrain, type RunnerPerformance } from "@reaper-viz/compiler-runner";
 import { sampleCurve } from "@reaper-viz/core";
 import { PixiBackend, sampleCamera } from "@reaper-viz/render";
-import { Graphics } from "pixi.js";
+import { Graphics, Text } from "pixi.js";
 
 export type { RunnerPerformance } from "@reaper-viz/compiler-runner";
 
@@ -14,8 +14,17 @@ export interface RunnerTuning {
 
 const RUNNER_CORE_OFFSET = 96;
 
+interface RunnerPalette {
+  bg: string;
+  roles: Record<string, string>;
+}
+
 function colorNumber(value: string | undefined, fallback: number): number {
   return value?.startsWith("#") ? Number.parseInt(value.slice(1), 16) : fallback;
+}
+
+function colorHex(value: number): string {
+  return `#${value.toString(16).padStart(6, "0")}`;
 }
 
 function mixColor(a: number, b: number, amount: number): number {
@@ -27,18 +36,61 @@ function mixColor(a: number, b: number, amount: number): number {
   return (mix(16) << 16) | (mix(8) << 8) | mix(0);
 }
 
-function glyphColor(performance: RunnerPerformance, role: string, colorIndex: number): number {
-  const base = colorNumber(performance.palette.roles[role] ?? performance.palette.roles.lead, 0x70d9ff);
+function mixPalette(a: RunnerPalette, b: RunnerPalette, amount: number): RunnerPalette {
+  const roles: Record<string, string> = {};
+  for (const role of new Set([...Object.keys(a.roles), ...Object.keys(b.roles)])) {
+    roles[role] = colorHex(mixColor(colorNumber(a.roles[role], 0x70d9ff), colorNumber(b.roles[role] ?? a.roles[role], 0x70d9ff), amount));
+  }
+  return {
+    bg: colorHex(mixColor(colorNumber(a.bg, 0x07131f), colorNumber(b.bg, 0x07131f), amount)),
+    roles,
+  };
+}
+
+function paletteForKind(performance: RunnerPerformance, kind: string | undefined): RunnerPalette {
+  return performance.statics.sectionPalettes?.find((palette) => palette.kind === kind) ?? performance.palette;
+}
+
+function samplePalette(performance: RunnerPerformance, t: number): RunnerPalette {
+  let kind = performance.statics.sectionPalettes?.[0]?.kind;
+  for (const event of performance.events) {
+    if (event.type !== "palette.shift") continue;
+    const toKind = typeof event.params.toKind === "string" ? event.params.toKind : undefined;
+    const fromKind = typeof event.params.fromKind === "string" ? event.params.fromKind : kind;
+    const end = event.tEnd ?? event.t;
+    if (t < event.t) break;
+    if (t <= end) {
+      const raw = (t - event.t) / Math.max(1e-6, end - event.t);
+      const eased = raw * raw * (3 - 2 * raw);
+      return mixPalette(paletteForKind(performance, fromKind), paletteForKind(performance, toKind), eased);
+    }
+    kind = toKind ?? kind;
+  }
+  return paletteForKind(performance, kind);
+}
+
+function glyphColor(palette: RunnerPalette, role: string, colorIndex: number): number {
+  const base = colorNumber(palette.roles[role] ?? palette.roles.lead, 0x70d9ff);
   const tint = (colorIndex % 12) / 11;
   return mixColor(base, tint < 0.5 ? 0xffffff : 0x7ed8ff, 0.12 + Math.abs(tint - 0.5) * 0.18);
 }
 
-function roleColor(performance: RunnerPerformance, roles: readonly string[], fallback: number): number {
+function roleColor(palette: RunnerPalette, roles: readonly string[], fallback: number): number {
   for (const role of roles) {
-    const value = performance.palette.roles[role];
+    const value = palette.roles[role];
     if (value) return colorNumber(value, fallback);
   }
   return fallback;
+}
+
+function sampleHeightfield(dx: number, values: readonly number[], x: number): number {
+  const position = Math.max(0, x / dx);
+  const low = Math.min(values.length - 1, Math.floor(position));
+  const high = Math.min(values.length - 1, low + 1);
+  const alpha = position - Math.floor(position);
+  const a = values[low] ?? 0;
+  const b = values[high] ?? a;
+  return a + (b - a) * alpha;
 }
 
 function gaitPhase(stepTimes: readonly number[], t: number, speed: number): number {
@@ -59,6 +111,12 @@ function gaitPhase(stepTimes: readonly number[], t: number, speed: number): numb
   return stepTimes.length - 1 + (t - last) / Math.max(0.2, last - prev);
 }
 
+function gateProgress(openStartT: number, openEndT: number, t: number): number {
+  const raw = (t - openStartT) / Math.max(1e-6, openEndT - openStartT);
+  const clamped = Math.max(0, Math.min(1, raw));
+  return clamped * clamped * (3 - 2 * clamped);
+}
+
 export class RunnerScene {
   readonly #backend: PixiBackend;
   readonly #performance: RunnerPerformance;
@@ -70,6 +128,7 @@ export class RunnerScene {
   readonly #runner = new Graphics();
   readonly #glyphGlow = new Graphics();
   readonly #glyphs = new Graphics();
+  readonly #gateLabels: Array<{ gateId: string; text: Text }> = [];
   readonly tuning: RunnerTuning = { terrainContrast: 0.8, glow: 0.74, trail: 0.72, parallax: 1 };
 
   constructor(backend: PixiBackend, performance: RunnerPerformance) {
@@ -81,6 +140,16 @@ export class RunnerScene {
     this.#glyphGlow.blendMode = "add";
     backend.layer("runner-background").addChild(this.#background);
     backend.layer("runner-world").addChild(this.#worldGlow, this.#world);
+    for (const gate of performance.statics.gates ?? []) {
+      const label = new Text({
+        text: gate.section.toUpperCase(),
+        style: { fontFamily: "Inter, Arial, sans-serif", fontSize: 15, fontWeight: "700", fill: 0xdff5ff, letterSpacing: 2 },
+      });
+      label.anchor.set(0.5, 0.5);
+      label.visible = false;
+      backend.layer("runner-gate-labels").addChild(label);
+      this.#gateLabels.push({ gateId: gate.id, text: label });
+    }
     backend.layer("runner-character").addChild(this.#runnerGlow, this.#glyphGlow, this.#runner, this.#glyphs);
   }
 
@@ -136,12 +205,13 @@ export class RunnerScene {
     const scale = (width / 25) * Math.max(0.65, camera.zoom + pulseZoom);
     const cameraX = camera.pos[0];
     const cameraY = camera.pos[1];
-    const bgColor = colorNumber(this.#performance.palette.bg, 0x07131f);
-    const bassColor = roleColor(this.#performance, ["bass", "kick"], 0x1c456c);
-    const leadColor = roleColor(this.#performance, ["lead", "keys", "vocals"], 0x70d9ff);
-    const keysColor = roleColor(this.#performance, ["keys", "pads", "lead"], 0x9ecfff);
-    const kickColor = roleColor(this.#performance, ["kick", "percussion"], 0x63d6ff);
-    const snareColor = roleColor(this.#performance, ["snare", "clap", "percussion"], 0xf4fbff);
+    const palette = samplePalette(this.#performance, t);
+    const bgColor = colorNumber(palette.bg, 0x07131f);
+    const bassColor = roleColor(palette, ["bass", "kick"], 0x1c456c);
+    const leadColor = roleColor(palette, ["lead", "keys", "vocals"], 0x70d9ff);
+    const keysColor = roleColor(palette, ["keys", "pads", "lead"], 0x9ecfff);
+    const kickColor = roleColor(palette, ["kick", "percussion"], 0x63d6ff);
+    const snareColor = roleColor(palette, ["snare", "clap", "percussion"], 0xf4fbff);
     const terrainColor = mixColor(bgColor, bassColor, 0.58);
     const surfaceColor = mixColor(leadColor, 0xffffff, 0.18);
     const runnerBody = mixColor(leadColor, 0xffffff, 0.66);
@@ -178,15 +248,19 @@ export class RunnerScene {
     for (let x = leftWorld; x <= rightWorld + 0.25; x += 0.25) {
       surface.push({ x: (x - leftWorld) * scale, y: this.#screenY(sampleTerrain(this.#performance.statics.terrain, x), cameraY, baseline, scale) });
     }
-    for (let stratum = 5; stratum >= 1; stratum -= 1) {
+    const strata = (this.#performance.statics.strata ?? []).slice(0, 5);
+    for (let stratumIndex = strata.length - 1; stratumIndex >= 0; stratumIndex -= 1) {
+      const stratum = strata[stratumIndex]!;
       this.#world.moveTo(0, height);
-      for (const point of surface) {
-        const ripple = Math.sin(point.x * 0.018 + stratum * 1.7) * (5 + stratum * 2);
-        this.#world.lineTo(point.x, point.y + stratum * 48 + ripple);
+      for (let x = leftWorld; x <= rightWorld + 0.25; x += 0.25) {
+        this.#world.lineTo(
+          (x - leftWorld) * scale,
+          this.#screenY(sampleHeightfield(stratum.dx, stratum.edge, x), cameraY, baseline, scale),
+        );
       }
       this.#world.lineTo(width, height).closePath().fill({
-        color: mixColor(bgColor, terrainColor, 0.14 + stratum * 0.08),
-        alpha: 0.56 + stratum * 0.05 * this.tuning.terrainContrast,
+        color: mixColor(bgColor, roleColor(palette, [stratum.role, "bass", "keys"], terrainColor), 0.14 + (stratumIndex + 1) * 0.08),
+        alpha: 0.56 + (stratumIndex + 1) * 0.05 * this.tuning.terrainContrast,
       });
     }
     if (surface.length) {
@@ -213,13 +287,47 @@ export class RunnerScene {
         .stroke({ color: mixColor(leadColor, 0xffffff, 0.22), width: 2 + energy * 2, alpha: this.tuning.trail * (0.12 + energy * 0.25) });
     }
 
+    const gateColor = mixColor(leadColor, 0xffffff, 0.34);
+    for (const gate of this.#performance.statics.gates ?? []) {
+      const gateX = (gate.x - leftWorld) * scale;
+      if (gateX < -180 || gateX > width + 180) {
+        const label = this.#gateLabels.find((candidate) => candidate.gateId === gate.id)?.text;
+        if (label) label.visible = false;
+        continue;
+      }
+      const gateY = this.#screenY(gate.y, cameraY, baseline, scale);
+      const progress = gateProgress(gate.openStartT, gate.t, t);
+      const open = progress * 44;
+      const gateHeight = 4.5 * scale;
+      const gateWidth = 1.18 * scale;
+      const left = gateX - gateWidth * 0.5 - open;
+      const right = gateX + gateWidth * 0.5 + open;
+      const top = gateY - gateHeight;
+      const alpha = 0.32 + progress * 0.48;
+      this.#worldGlow.moveTo(left, gateY).lineTo(left, top).quadraticCurveTo(gateX, top - 0.72 * scale, right, top).lineTo(right, gateY)
+        .stroke({ color: gateColor, width: 24, alpha: glow * 0.08, cap: "round", join: "round" });
+      this.#world.moveTo(left, gateY).lineTo(left, top).quadraticCurveTo(gateX, top - 0.72 * scale, right, top).lineTo(right, gateY)
+        .stroke({ color: gateColor, width: 6, alpha, cap: "round", join: "round" });
+      this.#world.moveTo(gateX - 0.34 * scale - open * 0.55, gateY - 0.18 * scale).lineTo(gateX - open, top + 0.72 * scale)
+        .stroke({ color: mixColor(gateColor, bassColor, 0.36), width: 4, alpha: 0.62 * (1 - progress * 0.55), cap: "round" });
+      this.#world.moveTo(gateX + 0.34 * scale + open * 0.55, gateY - 0.18 * scale).lineTo(gateX + open, top + 0.72 * scale)
+        .stroke({ color: mixColor(gateColor, bassColor, 0.36), width: 4, alpha: 0.62 * (1 - progress * 0.55), cap: "round" });
+      const label = this.#gateLabels.find((candidate) => candidate.gateId === gate.id)?.text;
+      if (label) {
+        label.visible = true;
+        label.alpha = Math.min(1, 0.42 + progress * 0.58);
+        label.position.set(gateX, top - 0.98 * scale);
+        label.scale.set(Math.max(0.72, Math.min(1.18, scale / 48)));
+      }
+    }
+
     for (const glyph of this.#performance.statics.glyphs) {
       const mergeAge = t - glyph.mergeT;
       const spawnX = (glyph.spawnPos.x - leftWorld) * scale;
       const spawnY = this.#screenY(glyph.spawnPos.y, cameraY, baseline, scale);
       const mergeX = (glyph.mergePos.x - leftWorld) * scale;
       const mergeY = this.#screenY(glyph.mergePos.y, cameraY, baseline, scale) - RUNNER_CORE_OFFSET;
-      const color = glyphColor(this.#performance, glyph.role, glyph.colorIndex);
+      const color = glyphColor(palette, glyph.role, glyph.colorIndex);
       if (glyph.mode === "beam" && t >= glyph.beamStartT && t <= glyph.mergeT) {
         const raw = (t - glyph.beamStartT) / Math.max(1e-6, glyph.mergeT - glyph.beamStartT);
         const progress = raw * raw * (3 - 2 * raw);
@@ -318,5 +426,6 @@ export class RunnerScene {
     this.#runner.destroy();
     this.#glyphGlow.destroy();
     this.#glyphs.destroy();
+    for (const label of this.#gateLabels) label.text.destroy();
   }
 }

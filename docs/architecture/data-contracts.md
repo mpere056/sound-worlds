@@ -299,6 +299,22 @@ Rules:
   scene frames `camera.pos` at that viewport anchor instead of deriving framing
   from zoom thresholds or other scene-local branches.
 
+Runner `statics` currently includes:
+
+- `terrain`: slope-limited surface heightfield.
+- `strata`: up to five compiler-owned track stratum heightfields. Each stratum
+  carries `trackId`, `role`, `dx`, `depth`, `amplitude`, and `edge[]`; scenes
+  render these directly instead of generating decorative geology.
+- `gates`: section-boundary arches. Each gate carries `section`, `kind`, `t`,
+  `openStartT`, `x`, and `y`. The matching `gate.open` event spans
+  `openStartT..t` and carries `params.hitT === t`.
+- `sectionPalettes`: palette variants keyed by section `kind`. Matching
+  `palette.shift` events span the boundary and interpolate the scene palette.
+- `trajectory`: ground/air segments for exact pose sampling.
+- `glyphs`: exact-pose merge targets and beam/sparkle mode.
+- `glyphSource`, `jumpSource`, and `jumpReport`: provenance/reporting fields
+  that keep fallback visuals honest.
+
 ---
 
 ## `tuning.<concept>.json`

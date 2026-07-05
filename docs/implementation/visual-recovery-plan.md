@@ -55,9 +55,9 @@ and Runner glyph beams/ripples use that role's `performance.palette.roles`
 color with a small pitch-class tint. The scene also now derives its background
 gradient, star field, parallax terrain, strata fills, surface strokes, speed
 lines, runner glow/body/trail, and jump/ground ripples from `palette.bg` and
-`palette.roles.*`. Remaining palette work is section-to-section palette
-transitions and visual verification on at least two intentionally different
-reference songs.
+`palette.roles.*`. Section-to-section palette transitions are now compiler
+events sampled by the scene; remaining palette work is visual verification on
+at least two intentionally different reference songs.
 
 ### V1.3 Camera adoption (the biggest single read-improvement)
 Stop projecting relative to the runner's own terrain height (L46–48). Consume
@@ -80,6 +80,13 @@ waveform stratum edges already specified in statics
 the compiler doesn't emit them yet, that's the compiler half of this item.
 **Accept:** muting a stem in Reaper and re-exporting visibly changes exactly
 one stratum; no trig-generated geology remains.
+
+**Progress 2026-07-04:** the Runner compiler now emits up to five
+track-derived stratum edge heightfields in `statics.strata`, sampled from track
+RMS over world x. The scene renders those edges directly; the old
+`Math.sin(...)` geology is gone. Compiler tests cover edge length/depth and
+the "one changed track changes one stratum" contract. Browser/golden-frame
+acceptance on a richer stem export remains.
 
 ### V1.5 Beat-locked gait
 Replace the free-running sine gait (L175–177) with phase from the beat grid
@@ -195,7 +202,7 @@ The original order finishes breadth (R3 extras, M3 polish) before identity
 2. **Metro: M4 chorus rings** next after V2 — rings are the topology signature
    and the reference song (3× chorus) is built to show them
    ([M4 work order](metro-map/M4-topology.md)).
-3. Then return for R3 leftovers (gates/palette shifts/halo/floats) and M3
+3. Then return for R3 leftovers (halo/floats plus gate/palette acceptance) and M3
    leftovers (joint healing) — they land better on top of the identity.
 
 Rationale: every demo until identity ships will keep producing the "this
@@ -221,7 +228,7 @@ doesn't look right" reaction regardless of correctness underneath.
 
 ## Suggested execution order (one line)
 
-**V0 → V2.2 → demo checkpoint → V1.4 → V2.5 →
+**V0 → V2.2 → demo checkpoint → V2.5 →
 V3 (R4, then M4) → V4 → everything else.**
 
 The demo checkpoint is deliberate: the remaining early items (real song,

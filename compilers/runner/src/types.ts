@@ -44,9 +44,38 @@ export interface RunnerGlyph {
   colorIndex: number;
 }
 
+export interface RunnerStratum {
+  id: string;
+  trackId: string;
+  role: string;
+  dx: number;
+  depth: number;
+  amplitude: number;
+  edge: number[];
+}
+
+export interface RunnerGate {
+  id: string;
+  section: string;
+  kind: string;
+  t: number;
+  openStartT: number;
+  x: number;
+  y: number;
+}
+
+export interface RunnerSectionPalette {
+  kind: string;
+  bg: string;
+  roles: Record<string, string>;
+}
+
 export interface RunnerStatics extends Record<string, unknown> {
   worldLength: number;
   terrain: RunnerTerrain;
+  strata: RunnerStratum[];
+  gates: RunnerGate[];
+  sectionPalettes: RunnerSectionPalette[];
   trajectory: { segments: RunnerTrajectorySegment[] };
   jumpSource: string;
   jumpReport: RunnerJumpReport[];

@@ -23,6 +23,73 @@ describe("Waveform Runner R3 compiler", () => {
     }
   });
 
+  it("compiles deterministic track strata below the terrain surface", () => {
+    expect(performance.statics.strata.length).toBeGreaterThan(0);
+    expect(performance.statics.strata.length).toBeLessThanOrEqual(5);
+    for (const stratum of performance.statics.strata) {
+      expect(stratum.edge).toHaveLength(performance.statics.terrain.heights.length);
+      for (let index = 0; index < stratum.edge.length; index += 1) {
+        expect(stratum.edge[index]!).toBeLessThanOrEqual(performance.statics.terrain.heights[index]! - stratum.depth + 1e-6);
+      }
+    }
+  });
+
+  it("changes one compiled stratum when that track RMS changes", () => {
+    const strataSong = buildFixtureSong({
+      bars: 2,
+      patterns: [
+        { role: "kick", beats: [0, 2], kind: "onset" },
+        { role: "bass", beats: [0], pitch: 40, kind: "note" },
+        { role: "lead", beats: [1, 3], pitch: 72, kind: "note" },
+      ],
+    });
+    strataSong.tracks.forEach((track, index) => {
+      track.gain = { peakRms: 1 - index * 0.1, meanRms: 1 - index * 0.1 };
+    });
+    const baseline = compileRunner(strataSong).statics.strata;
+    const leadTrack = strataSong.tracks.find((track) => track.role === "lead")!;
+    leadTrack.curves.rms.values = leadTrack.curves.rms.values.map((_, index) => index % 2 === 0 ? 0.05 : 0.95);
+    const changed = compileRunner(strataSong).statics.strata;
+    const changedIds = baseline
+      .filter((stratum) => {
+        const next = changed.find((candidate) => candidate.trackId === stratum.trackId);
+        return next && JSON.stringify(next.edge) !== JSON.stringify(stratum.edge);
+      })
+      .map((stratum) => stratum.trackId);
+    expect(changedIds).toEqual([leadTrack.id]);
+  });
+
+  it("compiles section gates that open on section downbeats", () => {
+    const output = compileRunner(buildFixtureSong());
+    expect(output.statics.gates.map((gate) => gate.section)).toEqual(["Chorus 1", "Verse 2", "Chorus 2"]);
+    expect(output.statics.gates.map((gate) => gate.t)).toEqual([4, 8, 12]);
+    expect(output.statics.gates.map((gate) => gate.openStartT)).toEqual([2, 6, 10]);
+    for (const gate of output.statics.gates) {
+      expect(gate.x).toBeCloseTo(sampleCurve(output.curves.x!, gate.t), 5);
+      expect(gate.y).toBeCloseTo(sampleTerrain(output.statics.terrain, gate.x), 5);
+      const event = output.events.find((candidate) => candidate.type === "gate.open" && candidate.params.gateId === gate.id);
+      expect(event?.t).toBe(gate.openStartT);
+      expect(event?.tEnd).toBe(gate.t);
+      expect(event?.params.hitT).toBe(gate.t);
+    }
+  });
+
+  it("compiles palette shifts around section boundaries", () => {
+    const output = compileRunner(buildFixtureSong());
+    expect(output.statics.sectionPalettes.map((palette) => palette.kind)).toEqual(["verse", "chorus"]);
+    const shifts = output.events.filter((event) => event.type === "palette.shift");
+    expect(shifts).toHaveLength(3);
+    expect(shifts.map((shift) => [shift.t, shift.tEnd, shift.params.hitT, shift.params.toKind])).toEqual([
+      [3.75, 4.25, 4, "chorus"],
+      [7.75, 8.25, 8, "verse"],
+      [11.75, 12.25, 12, "chorus"],
+    ]);
+    const verse = output.statics.sectionPalettes.find((palette) => palette.kind === "verse")!;
+    const chorus = output.statics.sectionPalettes.find((palette) => palette.kind === "chorus")!;
+    expect(verse.bg).not.toBe(chorus.bg);
+    expect(verse.roles.lead).not.toBe(chorus.roles.lead);
+  });
+
   it("prefers bass MIDI over the master-envelope fallback", () => {
     const bassSong = buildFixtureSong({
       name: "bass-staircase",

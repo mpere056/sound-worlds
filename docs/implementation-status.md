@@ -42,7 +42,7 @@ named section structure beyond the analyzer's default whole-song section.
 | Preview/export shell | Implemented foundation | engineering-preview | Project/world discovery, WAV streaming, audio-clock playback, scrub, overlays, tuning, PNG and short H.264 preview export | Full-song orchestration, direct project-output writing, audio mux |
 | Waveform Runner R1 | Implemented | engineering-preview | Monotone `x(t)`, inverse `t(x)`, energy speed, slope-limited terrain, camera keys, stateless Pixi world | Richer bass-derived results need a MIDI/pitch-bearing export and the visual recovery pass |
 | Waveform Runner R2 | Implemented | engineering-preview | Budgeted musical landings, tempo-scaled closed-form jumps, clearance validation, deterministic boost fallback, takeoff/landing events | Double-jump mid-impulses, terrain-concession fallback, and beat/character polish |
-| Waveform Runner R3 | In progress | engineering-preview | MIDI melody glyphs, honest beat/activity fallback, role-colored exact-pose merge targets, 300 ms beams, six-beam cap, overflow sparkles, merge ripples, compiled step events for beat-locked gait, compiled-camera scene framing, trajectory-sampled trail, palette-sourced background/terrain/runner/ripples, additive glow layers, no in-canvas debug title/status | Section gates, section palette transitions, vocal halo, downlifter floats, golden-frame visual verification |
+| Waveform Runner R3 | In progress | engineering-preview | MIDI melody glyphs, honest beat/activity fallback, role-colored exact-pose merge targets, 300 ms beams, six-beam cap, overflow sparkles, merge ripples, section gates with `gate.open` spans, section palette shifts, compiled step events for beat-locked gait, compiled track strata, compiled-camera scene framing, trajectory-sampled trail, palette-sourced background/terrain/runner/ripples, additive glow layers, no in-canvas debug title/status | Vocal halo, downlifter floats, authored-song gate/palette acceptance, golden-frame visual verification |
 | Waveform Runner R4–R5 | Planned | planned | Design and work orders | Erasure/crumbs/identity, rail, ghost, cadence gate, final export polish |
 | Metro M1 | Implemented | engineering-preview | Deterministic MIDI stations, clusters, interchanges, octilinear edges, honest audio-activity fallback | More varied MIDI-bearing real-project validation and map-field presentation polish |
 | Metro M2 | Implemented | engineering-preview | Timestamped trains, progressive edge reveal, station blooms, stateless seeking | Extended human sync pass on a longer real project |
@@ -128,10 +128,10 @@ tier-0 label-overlap pass.
 The current Runner R3 slice was verified on 2026-07-04:
 
 - `corepack pnpm check` passed, including the determinism guard, production
-  build, and 52 TypeScript tests across 12 files.
-- `corepack pnpm --filter @reaper-viz/compiler-runner test` passed 13 Runner
-  compiler tests after the jump, motion, and terrain numeric-audit vectors were
-  added.
+  build, and 58 TypeScript tests across 12 files.
+- `corepack pnpm --filter @reaper-viz/compiler-runner test` passed 19 Runner
+  compiler tests after the jump, motion, terrain, glyph, step, strata, and gate
+  contracts plus section palette timing were added.
 - `corepack pnpm --filter @reaper-viz/compiler-metro test` passed 11 Metro
   compiler tests after the documented 7 px corridor-spacing contract was wired
   into the compiler.
@@ -140,7 +140,9 @@ The current Runner R3 slice was verified on 2026-07-04:
 - `projects/untitled-project-6d2e04f7` analyzed successfully to a 4-track,
   5-bar, 11.056-second `song.json`.
 - That export compiled successfully to Runner performance version 3: 48 MIDI
-  glyphs, 48 merge events, 4 bar-downbeat jumps, and `master-envelope` terrain.
+  glyphs, 48 merge events, 4 bar-downbeat jumps, `master-envelope` terrain,
+  track strata, section palettes, and an empty `gates` array because the export
+  has no authored region boundaries.
 - That export compiled successfully to Metro performance version 4: 4 MIDI
   lines, 40 stations, and 42 edges.
 - Browser verification at `http://127.0.0.1:5173/` showed the approach glyph,
@@ -183,14 +185,22 @@ S0 math hygiene progress:
   pitch-class tint instead of the previous hardcoded 12-color wheel.
 - Extended Runner palette sourcing across the scene background, stars,
   parallax terrain, strata, surface glow, speed lines, runner body/trail, and
-  jump/ground event ripples. The remaining R3 palette task is section-boundary
-  palette transitions rather than base-scene color wiring.
+  jump/ground event ripples.
 - Added additive Runner glow layers for terrain edges, speed lines, glyph
   beams/ripples, the runner halo/trail, and jump/ground pulses, plus a live
   `Glow` tuning control in the preview app.
 - Added compiled `runner.step` events from kick/percussion timing with
   beat-grid fallback, and changed the Runner scene gait phase to use those
   events instead of a free-running sine clock.
+- Added compiler-owned Runner strata from track RMS curves and changed the
+  scene to render those stratum edge heightfields instead of decorative sine
+  ripples. Compiler tests now assert one changed track changes its stratum.
+- Added Runner section gates: compiler-owned gate statics at section
+  boundaries, `gate.open` spans over the previous bar with `hitT` at the
+  boundary, and scene-rendered glowing arch/door graphics with section labels.
+- Added section palette variants and `palette.shift` events spanning ±0.5 beat
+  around section boundaries; Runner scene color sampling now interpolates all
+  palette-derived layers through those shifts.
 
 Generated performance files are intentionally not committed. The compiler,
 tests, scene, app labels, and documentation are the durable source changes.
@@ -222,6 +232,6 @@ before starting another server.
 3. Keep extending the [Math Audit](implementation/math-audit.md) test battery
    as future-only systems land, especially double-jump, clearance rejection
    vectors, and camera impulse/follow behavior.
-4. Complete Runner R3 section gates, palette transitions, kick impulses, vocal
-   halo, and floats.
+4. Complete Runner R3 vocal halo and floats, then verify gates/palettes on an
+   authored-region reference song.
 5. Complete Metro M3 joint healing, districts, and label overlap handling.

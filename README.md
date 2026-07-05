@@ -77,8 +77,10 @@ expose safe-area guides, and export short H.264 MP4 previews or PNG stills.
 Waveform Runner R3 is the first animated compiled world. Its compiler turns master
 energy and waveform data into monotone motion, slope-limited terrain, a ground
 and airborne trajectory, exact musical landings, camera keys, and synchronized
-melody glyphs (with a beat-driven audio fallback); its Pixi scene renders that
-data as a runner collecting light across a layered waveform landscape. Metro
+melody glyphs (with a beat-driven audio fallback), section gates, beat-locked
+steps, section palette shifts, and track-derived strata; its Pixi scene renders
+that data as a runner collecting light across a layered waveform landscape.
+Metro
 Map now compiles MIDI or honest
 audio-activity fallback lines into an octilinear network that draws itself,
 runs timestamped trains, labels key stops, follows the drawing frontier, and

@@ -39,9 +39,9 @@ what works today, what was verified, and what should be built next.
 - [R5 — Ship](implementation/waveform-runner/R5-ship.md)
 
 R1 and R2 are implemented. R3 is in progress: melody/activity glyph
-collection and base scene palette wiring are implemented, while gates,
-section palette transitions, kick impulses, vocal halo, and float segments
-remain.
+collection, section gates, base scene palette wiring, camera/trail/glow, gait,
+real strata, and section palette transitions are implemented, while vocal halo
+and float segments remain.
 
 ### Metro Map
 
