@@ -128,11 +128,12 @@ tier-0 label-overlap pass.
 The current Runner R3 slice was verified on 2026-07-04:
 
 - `corepack pnpm check` passed, including the determinism guard, production
-  build, and 63 TypeScript tests across 12 files.
-- `corepack pnpm --filter @reaper-viz/compiler-runner test` passed 24 Runner
+  build, and 65 TypeScript tests across 12 files.
+- `corepack pnpm --filter @reaper-viz/compiler-runner test` passed 26 Runner
   compiler tests after the jump, motion, terrain, glyph, step, strata, gate,
   section palette, vocal-halo, float-segment, MIDI-contour terrain, and
-  MIDI-note landing contracts were added.
+  MIDI-note landing contracts were added, including energetic audio-tail
+  terrain coverage.
 - `corepack pnpm --filter @reaper-viz/compiler-metro test` passed 11 Metro
   compiler tests after the documented 7 px corridor-spacing contract was wired
   into the compiler.
@@ -141,11 +142,13 @@ The current Runner R3 slice was verified on 2026-07-04:
 - `projects/untitled-project-6d2e04f7` analyzed successfully to a 4-track,
   5-bar, 11.056-second `song.json`.
 - That export compiled successfully to Runner performance version 3: 48 MIDI
-  glyphs, 48 merge events, 9 MIDI-note jumps plus 1 ground pulse,
+  glyphs, 48 merge events, 16 MIDI-note jumps plus 9 ground pulses,
   `midi-contour` terrain, track strata, section palettes, a silent vocal halo
   fallback, no float segments because the export has no sustained
   downlifter-like role, and an empty `gates` array because the export has no
-  authored region boundaries.
+  authored region boundaries. The route tail no longer flattens: the last 40
+  terrain samples retain about 3.57 world units of height motion from the
+  exported audio energy.
 - That export compiled successfully to Metro performance version 4: 4 MIDI
   lines, 40 stations, and 42 edges.
 - Browser verification at `http://127.0.0.1:5173/` showed the approach glyph,
@@ -210,9 +213,9 @@ S0 math hygiene progress:
   downlifter-like events, with continuity/no-penetration test coverage and
   scene-rendered FX drift rings/streaks.
 - Changed Runner's drumless MIDI fallback so the big visible motion is no
-  longer generic: MIDI-rich songs now drive terrain from a MIDI pitch contour
-  and land jumps/pulses on budgeted MIDI note starts before falling back to bar
-  downbeats.
+  longer generic: MIDI-rich songs now drive terrain from a MIDI pitch/onset
+  contour plus audio-tail energy, and land jumps/pulses on budgeted MIDI note
+  starts before falling back to bar downbeats.
 
 Generated performance files are intentionally not committed. The compiler,
 tests, scene, app labels, and documentation are the durable source changes.

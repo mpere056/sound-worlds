@@ -25,6 +25,9 @@ compiler records the chosen source in `statics.terrain.source` so the preview
 never implies richer musical input than it actually received. This matters for
 keys-only REAPER exports: if MIDI note data exists, the large hills follow that
 pitch contour instead of hiding the music inside a smoothed loudness fallback.
+The MIDI contour also carries note-onset pulses and master-energy motion so the
+route does not become a dead-flat runway while the exported audio tail is still
+audibly moving.
 
 Strata use the loudest available track RMS curves, resampled over the runner's
 world x-axis, normalized per track, and stored as precomputed `edge`

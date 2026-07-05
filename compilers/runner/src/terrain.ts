@@ -43,14 +43,29 @@ function preferredMidiTracks(song: Song): SongTrack[] {
   return pitched.sort((a, b) => b.events.length - a.events.length || a.id.localeCompare(b.id));
 }
 
-function aggregateMidiSignal(tracks: readonly SongTrack[], t: number): number {
+function midiOnsetPulse(tracks: readonly SongTrack[], t: number): number {
+  let pulse = 0;
+  for (const track of tracks) {
+    for (const event of track.events) {
+      if (event.kind !== "note" || event.pitch === null) continue;
+      const distance = Math.abs(t - event.t);
+      if (distance > 0.28) continue;
+      pulse = Math.max(pulse, event.vel * Math.exp(-distance / 0.09));
+    }
+  }
+  return pulse;
+}
+
+function aggregateMidiSignal(song: Song, tracks: readonly SongTrack[], t: number): number {
   const notes = tracks.flatMap((track) => track.events)
     .filter((event) => event.kind === "note" && event.pitch !== null && event.dur > 0)
     .sort((a, b) => a.t - b.t || (a.pitch ?? 0) - (b.pitch ?? 0));
+  const energyMotion = 18 * (sampleCurve(song.master.energy, t) - 0.5);
+  const onsetMotion = 10 * midiOnsetPulse(tracks, t);
   const active = notes.filter((event) => t >= event.t && t <= event.t + event.dur);
   if (active.length) {
     const weight = active.reduce((total, event) => total + Math.max(0.05, event.vel), 0);
-    return active.reduce((total, event) => total + (event.pitch ?? 0) * Math.max(0.05, event.vel), 0) / weight;
+    return active.reduce((total, event) => total + (event.pitch ?? 0) * Math.max(0.05, event.vel), 0) / weight + energyMotion + onsetMotion;
   }
   let previous = notes[0];
   let next = notes[notes.length - 1];
@@ -58,13 +73,13 @@ function aggregateMidiSignal(tracks: readonly SongTrack[], t: number): number {
     if (note.t + note.dur <= t) previous = note;
     if (note.t >= t) { next = note; break; }
   }
-  if (previous?.pitch === null || previous?.pitch === undefined) return next?.pitch ?? 0;
-  if (next?.pitch === null || next?.pitch === undefined) return previous.pitch;
+  if (previous?.pitch === null || previous?.pitch === undefined) return (next?.pitch ?? 0) + energyMotion + onsetMotion;
+  if (next?.pitch === null || next?.pitch === undefined) return previous.pitch + energyMotion + onsetMotion;
   const gapStart = previous.t + previous.dur;
   const gapLength = Math.max(1e-6, next.t - gapStart);
   const alpha = Math.max(0, Math.min(1, (t - gapStart) / gapLength));
   const eased = (1 - Math.cos(Math.PI * alpha)) / 2;
-  return previous.pitch * (1 - eased) + next.pitch * eased;
+  return previous.pitch * (1 - eased) + next.pitch * eased + energyMotion + onsetMotion;
 }
 
 function selectTerrainSignal(song: Song): { source: RunnerTerrain["source"]; sample(t: number): number } {
@@ -73,7 +88,7 @@ function selectTerrainSignal(song: Song): { source: RunnerTerrain["source"]; sam
   if (bass && notes.length) return { source: "bass-midi", sample: (t) => midiSignal(bass, t) };
   if (bass?.curves.pitch?.values.length) return { source: "bass-pitch", sample: (t) => sampleCurve(bass.curves.pitch!, t) };
   const midiTracks = preferredMidiTracks(song);
-  if (midiTracks.length) return { source: "midi-contour", sample: (t) => aggregateMidiSignal(midiTracks, t) };
+  if (midiTracks.length) return { source: "midi-contour", sample: (t) => aggregateMidiSignal(song, midiTracks, t) };
   return { source: "master-envelope", sample: (t) => masterSignal(song, t) };
 }
 

@@ -42,9 +42,10 @@ export function selectRunnerLandings(song: Song): { landings: Landing[]; source:
   }
   if (!selected.length) selected = song.grid.downbeats.map((t) => ({ t, velocity: 1, source }));
   const budgeted: Landing[] = [];
+  const perBarCap = source === "midi-notes" ? 5 : 2;
   for (const bar of song.grid.bars) {
     const candidates = selected.filter((hit) => hit.t >= bar.startSec && hit.t < bar.endSec)
-      .sort((a, b) => b.velocity - a.velocity || a.t - b.t).slice(0, 2).sort((a, b) => a.t - b.t);
+      .sort((a, b) => b.velocity - a.velocity || a.t - b.t).slice(0, perBarCap).sort((a, b) => a.t - b.t);
     budgeted.push(...candidates);
   }
   return { landings: budgeted.sort((a, b) => a.t - b.t), source };

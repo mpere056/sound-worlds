@@ -19,7 +19,8 @@ The bad look has **three stacked causes**, in order of impact:
    snare-timed jumps, melody glyphs, section arcs, multi-line maps with
    transfers, chorus rings — is keyed to information this project does not
    contain. The compilers correctly fall back to their "honest" modes
-   (MIDI-note landings, MIDI-contour terrain, MIDI glyphs, bar-position
+   (MIDI-note landings/pulses, MIDI-contour terrain with audio-tail energy,
+   MIDI glyphs, bar-position
    labels), and honest fallbacks are bland *by design*.
 2. **The scenes diverge from the documented visual design.** Both scene files
    hardcode debug-tier presentation (titles/status text burned into the

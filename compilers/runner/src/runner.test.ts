@@ -134,6 +134,19 @@ describe("Waveform Runner R3 compiler", () => {
     expect(secondHalf).toBeGreaterThan(firstHalf + 4);
   });
 
+  it("keeps MIDI terrain moving through an energetic audio tail", () => {
+    const tailSong = buildFixtureSong({
+      bars: 2,
+      patterns: [{ role: "keys", beats: [0], pitch: 60, kind: "note" }],
+    });
+    tailSong.tracks[0]!.events = [{ t: 0, dur: 0.25, pitch: 60, vel: 0.8, kind: "note" }];
+    tailSong.master.energy.values = tailSong.master.energy.values.map((_, index) => index < tailSong.master.energy.values.length * 0.72 ? 0.12 : index % 12 < 6 ? 0.95 : 0.2);
+    const output = compileRunner(tailSong);
+    expect(output.statics.terrain.source).toBe("midi-contour");
+    const tail = output.statics.terrain.heights.slice(-24);
+    expect(Math.max(...tail) - Math.min(...tail)).toBeGreaterThan(1.5);
+  });
+
   it("solves a flat one-beat jump with the configured apex", () => {
     const jump = solveJump(0, 0.5, 0.5, 0, 0);
     expect(jump.vy0).toBeCloseTo(jump.gravity * 0.25);
@@ -249,6 +262,16 @@ describe("Waveform Runner R3 compiler", () => {
     const output = compileRunner(midiSong);
     expect(output.statics.jumpSource).toBe("midi-notes");
     expect(output.events.filter((candidate) => candidate.type === "jump.land").map((event) => event.t)).toEqual([0.5, 1, 2.5, 3]);
+  });
+
+  it("keeps dense MIDI tail notes visible as landings or pulses", () => {
+    const midiSong = buildFixtureSong({
+      bars: 1,
+      patterns: [{ role: "keys", beats: [0, 1, 2, 3], pitch: 60, kind: "note" }],
+    });
+    const output = compileRunner(midiSong);
+    const hits = output.events.filter((candidate) => candidate.type === "jump.land" || candidate.type === "ground.pulse").map((event) => event.t);
+    expect(hits).toEqual([0.5, 1, 1.5]);
   });
 
   it("is byte-identical across recompiles", () => {
