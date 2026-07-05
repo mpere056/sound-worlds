@@ -7,6 +7,7 @@ import { compileSteps } from "./steps.js";
 import { compileStrata } from "./strata.js";
 import { compileGates } from "./gates.js";
 import { compileSectionPalettes } from "./section-palettes.js";
+import { compileVocalHalo } from "./halo.js";
 import type { RunnerPerformance } from "./types.js";
 
 export * from "./motion.js";
@@ -17,6 +18,7 @@ export * from "./steps.js";
 export * from "./strata.js";
 export * from "./gates.js";
 export * from "./section-palettes.js";
+export * from "./halo.js";
 export * from "./types.js";
 
 export function compileRunner(song: Song): RunnerPerformance {
@@ -29,6 +31,7 @@ export function compileRunner(song: Song): RunnerPerformance {
   const gates = compileGates(song, motion.x, terrain);
   const palette = solvePalette(null, song.tracks.map((track) => track.role));
   const sectionPalettes = compileSectionPalettes(song, palette);
+  const vocalHalo = compileVocalHalo(song);
   const camera: CameraKeyframe[] = [];
   for (let t = 0; t <= song.meta.durationSec + 1e-9; t += 0.5) {
     const x = sampleCurve(motion.x, t);
@@ -44,7 +47,7 @@ export function compileRunner(song: Song): RunnerPerformance {
     resolution: { w: 1080, h: 1920 },
     palette,
     camera,
-    curves: { x: motion.x, speed: motion.speed, tAtX: motion.tAtX, energy: song.master.energy },
+    curves: { x: motion.x, speed: motion.speed, tAtX: motion.tAtX, energy: song.master.energy, vocalHalo: vocalHalo.curve },
     events: [...jumps.events, ...glyphs.events, ...steps, ...gates.events, ...sectionPalettes.events].sort((a, b) => a.t - b.t || a.type.localeCompare(b.type)),
     statics: {
       worldLength: motion.worldLength,
@@ -57,6 +60,7 @@ export function compileRunner(song: Song): RunnerPerformance {
       jumpReport: jumps.reports,
       glyphs: glyphs.glyphs,
       glyphSource: glyphs.source,
+      vocalHaloSource: vocalHalo.source,
       compilerVersion: 3,
     },
   };

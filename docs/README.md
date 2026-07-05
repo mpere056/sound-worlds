@@ -40,8 +40,9 @@ what works today, what was verified, and what should be built next.
 
 R1 and R2 are implemented. R3 is in progress: melody/activity glyph
 collection, section gates, base scene palette wiring, camera/trail/glow, gait,
-real strata, and section palette transitions are implemented, while vocal halo
-and float segments remain.
+real strata, section palette transitions, and vocal halo plumbing are
+implemented, while downlifter float segments and authored-song visual
+acceptance remain.
 
 ### Metro Map
 

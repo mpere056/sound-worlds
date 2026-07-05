@@ -13,7 +13,9 @@ track-derived stratum edge heightfields, closed-form ground/air trajectories,
 musical landing events, and camera keys. R3 output also includes deterministic
 melody glyphs, exact trajectory merge positions, `glyph.merge` events, and
 `runner.step` footfall events. Section boundaries compile to `statics.gates`
-and `gate.open` spans.
+and `gate.open` spans. Vocal-like tracks compile to a normalized
+`curves.vocalHalo` RMS envelope, with `statics.vocalHaloSource` recording
+whether the curve came from vocal RMS or an explicit silent fallback.
 
 Terrain uses the first available source in this order: bass MIDI, bass pitch,
 then the master waveform and energy envelope. The compiler records the chosen
@@ -50,3 +52,8 @@ Section palette variants are stored in `statics.sectionPalettes`.
 `palette.shift` events span half a beat before to half a beat after each
 section boundary and carry `hitT` at the boundary. The scene samples those
 events so every palette-derived layer transitions together.
+
+Vocal halo uses the loudest vocal-like track RMS at each frame, normalized
+against the vocal performance, then lightly smoothed. Exports with no vocal
+role still include a zero-valued halo curve so the scene contract is stable
+without pretending the song contains a singer.

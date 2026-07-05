@@ -81,6 +81,7 @@ export interface RunnerStatics extends Record<string, unknown> {
   jumpReport: RunnerJumpReport[];
   glyphs: RunnerGlyph[];
   glyphSource: "midi" | "audio-activity" | "none";
+  vocalHaloSource: "vocal-rms" | "none";
   compilerVersion: number;
 }
 

@@ -19,7 +19,7 @@ As of 2026-07-04:
   slope-limited terrain, track-derived stratum edges, closed-form ground/air
   trajectory, musical jump events, camera keys, exact-pose melody/activity
   glyph merges, compiled `runner.step` gait events, and section gate open
-  spans.
+  spans, plus a vocal-RMS halo curve with an honest silent fallback.
 - **Metro Map, M3 in progress:** MIDI or explicitly tagged audio-activity
   lines, stations/clusters/interchanges, octilinear edges, trains, reveals,
   blooms, labels, legend data, frontier/final-fit camera, and deterministic

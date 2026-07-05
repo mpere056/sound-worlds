@@ -270,7 +270,8 @@ renderer executes without consulting `song.json`.
   ],
 
   "curves": {                     // named TimedCurves the scene may sample
-    "energy": { "t0": 0, "dt": 0.02, "values": [...] }
+    "energy": { "t0": 0, "dt": 0.02, "values": [...] },
+    "vocalHalo": { "t0": 0, "dt": 0.02, "values": [...] } // Runner
   },
 
   "events": [                     // the heart of the file — typed, sorted by t
@@ -310,6 +311,9 @@ Runner `statics` currently includes:
   `openStartT..t` and carries `params.hitT === t`.
 - `sectionPalettes`: palette variants keyed by section `kind`. Matching
   `palette.shift` events span the boundary and interpolate the scene palette.
+- `vocalHaloSource`: `vocal-rms` when `curves.vocalHalo` was compiled from
+  vocal-like track RMS, or `none` when the exported song has no vocal role and
+  the curve is intentionally silent.
 - `trajectory`: ground/air segments for exact pose sampling.
 - `glyphs`: exact-pose merge targets and beam/sparkle mode.
 - `glyphSource`, `jumpSource`, and `jumpReport`: provenance/reporting fields

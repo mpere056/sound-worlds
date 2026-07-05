@@ -84,14 +84,18 @@ kick zoom impulses, vocal halo, downlifter float segments (simple version).
 - [ ] Kick zoom visible but subtle (human check: play with sync overlay,
       confirm impulses coincide with kick flashes).
 - [x] Implemented glyph beams, merge ripples, and gate opening progress are
-      pure in `t` and remain scrub-safe. LUT/halo still need the same
-      verification when added.
+      pure in `t` and remain scrub-safe. Palette LUT and vocal halo sampling
+      are also direct functions of `t`; authored-song visual verification still
+      needs a richer export.
+- [x] Vocal halo curve is compiler-owned, normalized from vocal-like track RMS,
+      records `statics.vocalHaloSource`, and stays silent when no vocal role is
+      exported. Visual acceptance on a vocal-bearing reference song remains.
 
 ## Tests added
 
 Glyph merge-position exactness; beam-cap overflow behavior; gate/palette
-timing units; float-segment continuity fixtures; updated golden frames
-(gate moment, glyph merge, float drift).
+timing units; vocal-halo source/fallback behavior; float-segment continuity
+fixtures; updated golden frames (gate moment, glyph merge, float drift).
 
 ## Notes & risks
 
@@ -100,17 +104,19 @@ glyphs after the final R2 trajectory is known, caps collection beams at six,
 and preserves overflow notes as merge sparkles. Audio-only REAPER exports use
 beat-synchronous activity glyphs, so the feature remains visible without MIDI.
 The scene renders stateless 300 ms collection beams and exact-time merge
-ripples. The real export compiles 18 activity glyphs and 18 merge events.
-Runner output is now compiler version 3. Nineteen Runner tests cover the
+ripples. The current `untitled-project-6d2e04f7` reference compiles 48 MIDI
+glyphs and 48 merge events from keyboard tracks.
+Runner output is now compiler version 3. Twenty-one Runner tests cover the
 trajectory, exact merge position, audio fallback, role preservation, density
-cap, event preservation, compiled step events, track-derived stratum edges, and
-section gate/palette timing. Base scene colors now consume `performance.palette`
+cap, event preservation, compiled step events, track-derived stratum edges,
+section gate/palette timing, and vocal-halo source/fallback behavior. Base
+scene colors now consume `performance.palette`
 and role colors for glyphs, background, terrain, runner, trail, speed lines,
 and event ripples. The scene also consumes compiled `runner.step` events for
 beat-locked gait, compiled `statics.strata` edges for geological layers,
 compiled `statics.gates` for opening section arches, and `palette.shift` spans
-for section palette transitions. Vocal halo and float segments remain open R3
-work.
+for section palette transitions. Vocal halo now comes from `curves.vocalHalo`
+and renders as an additive runner aura; float segments remain open R3 work.
 
 - **Compile-order dependency is now real:** glyphs depend on the final
   trajectory; trajectory depends on floats; floats depend on FX spans. The

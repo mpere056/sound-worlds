@@ -189,6 +189,7 @@ export class RunnerScene {
     const xCurve = this.#performance.curves.x;
     const speedCurve = this.#performance.curves.speed;
     const energyCurve = this.#performance.curves.energy;
+    const vocalHaloCurve = this.#performance.curves.vocalHalo;
     if (!xCurve || !speedCurve || !energyCurve) throw new Error("Runner performance is missing required curves");
     const pose = evaluateTrajectory(this.#performance.statics.trajectory.segments, t, xCurve, this.#performance.statics.terrain);
     const camera = sampleCamera(this.#performance.camera, t);
@@ -200,6 +201,7 @@ export class RunnerScene {
     const worldX = pose.x;
     const speed = sampleCurve(speedCurve, t);
     const energy = sampleCurve(energyCurve, t);
+    const vocalHalo = vocalHaloCurve ? sampleCurve(vocalHaloCurve, t) : 0;
     const runnerX = width * 0.36;
     const baseline = height * 0.62;
     const scale = (width / 25) * Math.max(0.65, camera.zoom + pulseZoom);
@@ -212,6 +214,7 @@ export class RunnerScene {
     const keysColor = roleColor(palette, ["keys", "pads", "lead"], 0x9ecfff);
     const kickColor = roleColor(palette, ["kick", "percussion"], 0x63d6ff);
     const snareColor = roleColor(palette, ["snare", "clap", "percussion"], 0xf4fbff);
+    const vocalColor = roleColor(palette, ["vocals", "vocal", "voice", "lead"], 0xffb8f1);
     const terrainColor = mixColor(bgColor, bassColor, 0.58);
     const surfaceColor = mixColor(leadColor, 0xffffff, 0.18);
     const runnerBody = mixColor(leadColor, 0xffffff, 0.66);
@@ -389,6 +392,12 @@ export class RunnerScene {
     }
     this.#runnerGlow.ellipse(runnerX, groundY - 94, 86 + energy * 18, 126 + energy * 26)
       .fill({ color: leadColor, alpha: glow * 0.07 });
+    if (vocalHalo > 0.01) {
+      this.#runnerGlow.ellipse(runnerX + lean * 18, groundY - 136, 76 + vocalHalo * 54, 122 + vocalHalo * 88)
+        .fill({ color: vocalColor, alpha: glow * (0.04 + vocalHalo * 0.13) });
+      this.#runnerGlow.ellipse(runnerX + lean * 18, groundY - 136, 52 + vocalHalo * 32, 86 + vocalHalo * 62)
+        .stroke({ color: mixColor(vocalColor, 0xffffff, 0.28), width: 8 + vocalHalo * 10, alpha: glow * vocalHalo * 0.18 });
+    }
     this.#runnerGlow.circle(runnerX + lean * 35, groundY - 170, 48)
       .fill({ color: runnerBody, alpha: glow * 0.13 });
     this.#runner.moveTo(runnerX - 18, groundY - 63).lineTo(runnerX - 28 + legSwing, groundY)

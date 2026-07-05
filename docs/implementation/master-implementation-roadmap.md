@@ -12,7 +12,8 @@ roadmap tells you **what order, what's already done, what changed, and what
 **Where you are today** (per this repo and
 [`docs/implementation-status.md`](../implementation-status.md)):
 Runner R1–R2 built, R3 partial (glyphs, base scene palette, camera/trail
-recovery); Metro M1–M2 built, M3 partial (labels/camera/corridors, no
+recovery, gates, palette shifts, strata, gait, vocal halo plumbing); Metro
+M1–M2 built, M3 partial (labels/camera/corridors, no
 districts/joint-healing/label-pass); analyzer MVP built with the math findings
 in the audit; preview shell renders short clips only; R4–R5, M4–M5, full
 export: not started.
@@ -118,11 +119,12 @@ rebuild):
 ## S4 — Runner R3 completion *(2–3 days)*
 
 Spec: [R3 work order](waveform-runner/R3-music.md) —
-still accurate. Remaining items: **vocal halo, downlifter float segments, and
-authored-song visual acceptance for gates/palette shifts/kick zoom.**
+still accurate. Remaining items: **downlifter float segments and authored-song
+visual acceptance for gates/palette shifts/vocal halo/kick zoom.**
 Adaptation: gates are now compiler-owned statics plus scene `Graphics` arches
 and `Text` labels; palette shifts are compiler-owned events that the scene
-samples into its palette-derived color pipeline.
+samples into its palette-derived color pipeline; vocal halo is a compiler-owned
+curve sampled by the scene with a silent fallback when no vocal role exists.
 
 **Done when:** R3 acceptance checklist passes on the reference song — gates
 open on region downbeats, palettes differ per section kind, floats keep the

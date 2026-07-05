@@ -90,6 +90,28 @@ describe("Waveform Runner R3 compiler", () => {
     expect(verse.roles.lead).not.toBe(chorus.roles.lead);
   });
 
+  it("compiles a vocal halo curve from vocal RMS", () => {
+    const vocalSong = buildFixtureSong({
+      bars: 1,
+      patterns: [
+        { role: "vocals", beats: [0, 1, 2, 3], pitch: 67, kind: "note" },
+        { role: "keys", beats: [0], pitch: 60, kind: "note" },
+      ],
+    });
+    const vocalTrack = vocalSong.tracks.find((track) => track.role === "vocals")!;
+    vocalTrack.curves.rms.values = vocalTrack.curves.rms.values.map((_, index) => index < vocalTrack.curves.rms.values.length / 2 ? 0.05 : 0.95);
+    const output = compileRunner(vocalSong);
+    expect(output.statics.vocalHaloSource).toBe("vocal-rms");
+    expect(output.curves.vocalHalo!.values.some((value) => value > 0.6)).toBe(true);
+    expect(output.curves.vocalHalo!.values.every((value) => value >= 0 && value <= 1)).toBe(true);
+  });
+
+  it("keeps vocal halo silent without vocal tracks", () => {
+    const output = compileRunner(buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [0], pitch: 60, kind: "note" }] }));
+    expect(output.statics.vocalHaloSource).toBe("none");
+    expect(output.curves.vocalHalo!.values.every((value) => value === 0)).toBe(true);
+  });
+
   it("prefers bass MIDI over the master-envelope fallback", () => {
     const bassSong = buildFixtureSong({
       name: "bass-staircase",

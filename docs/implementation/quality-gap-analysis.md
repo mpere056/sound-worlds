@@ -85,6 +85,7 @@ marked fixed should remain regression targets rather than active blockers.
 | Original runner-relative projection | Fixed: scene samples compiled camera keyframes and applies deterministic land/pulse zoom impulses | R1 spec: compiled `camY` (critically damped) + camera keyframes; R3: kick zoom impulses | Needs golden-frame/scrub verification on a richer reference song |
 | Original sine strata | Fixed first pass: compiler emits track-derived stratum edge heightfields and the scene renders those directly | Strata edges = **per-stem waveform summaries** — "the world is a stratigraphy of the mix" ([waveform-runner-implementation.md §1.2](waveform-runner-implementation.md)) | Needs richer stem-export visual acceptance, but no longer relies on fake sine geology |
 | Original free-running gait | Fixed first pass: compiler emits `runner.step` events from kick/percussion timing or beat-grid fallback; scene gait phase samples those events | Footfalls locked to kicks (or bar phase) — R2 spec | Needs visual acceptance on a drum-bearing reference song |
+| Original missing vocal halo | Fixed plumbing: compiler emits `curves.vocalHalo` from vocal-like track RMS or a zero fallback, and the scene samples it for an additive runner aura | Vocals brighten the runner halo from the vocal RMS curve | Needs visual acceptance on a vocal-bearing reference song |
 | Original glyph merge offset | Fixed at compiler contract level: glyphs store exact trajectory merge positions; the scene applies only a character-core visual offset | Merge at `pose(mergeT)` exactly; visual centering belongs in character metrics, not compile math | Keep exact merge-position tests and visual centering separate |
 | Original static trail offsets | Fixed first pass: trail samples historical trajectory poses and curves through jumps | Trail = `pose(t − k·dt)` sampled history — curves through jumps, scrub-exact | Still needs glow/additive treatment |
 | whole file | Zero additive blending, zero glow/bloom | Concept: "luminous terrain edges… comet trail… white-hot runner" — additive glow is the look | Flat vector fills read as placeholder; Pixi `blendMode:'add'` + a bloom filter are the missing 80% of the look |
@@ -113,8 +114,8 @@ diverged. This is very recoverable.
 
 ## 4. Layer 3 — Unbuilt phases are most of the remaining "wow" gap
 
-- **Runner:** R3 incomplete (no vocal halo, no floats; gate/palette visuals
-  still need authored-song acceptance) and R4 entirely absent — and R4 *is*
+- **Runner:** R3 incomplete (no floats; gate/palette/vocal visuals still need
+  authored-song acceptance) and R4 entirely absent — and R4 *is*
   the identity (erasure front, crumbs, real strata, trail). The concept doc's
   hero moments live there.
 - **Metro:** M3 incomplete (no districts, label-overlap pass unfinished,
