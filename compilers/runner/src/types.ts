@@ -3,7 +3,7 @@ import type { Performance } from "@reaper-viz/core";
 export interface RunnerTerrain {
   dx: number;
   heights: number[];
-  source: "bass-midi" | "bass-pitch" | "master-envelope";
+  source: "bass-midi" | "bass-pitch" | "midi-contour" | "master-envelope";
   hMin: number;
   hMax: number;
   maxSlope: number;

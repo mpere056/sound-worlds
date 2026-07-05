@@ -121,6 +121,19 @@ describe("Waveform Runner R3 compiler", () => {
     expect(compileRunner(bassSong).statics.terrain.source).toBe("bass-midi");
   });
 
+  it("uses MIDI pitch contour for terrain when no bass is authored", () => {
+    const keysSong = buildFixtureSong({
+      bars: 1,
+      patterns: [{ role: "keys", beats: [0, 1, 2, 3], pitch: 60, kind: "note" }],
+    });
+    keysSong.tracks[0]!.events.forEach((event, index) => { event.pitch = index < 2 ? 48 : 72; });
+    const output = compileRunner(keysSong);
+    expect(output.statics.terrain.source).toBe("midi-contour");
+    const firstHalf = sampleTerrain(output.statics.terrain, sampleCurve(output.curves.x!, 0.25));
+    const secondHalf = sampleTerrain(output.statics.terrain, sampleCurve(output.curves.x!, 1.25));
+    expect(secondHalf).toBeGreaterThan(firstHalf + 4);
+  });
+
   it("solves a flat one-beat jump with the configured apex", () => {
     const jump = solveJump(0, 0.5, 0.5, 0, 0);
     expect(jump.vy0).toBeCloseTo(jump.gravity * 0.25);
@@ -226,6 +239,16 @@ describe("Waveform Runner R3 compiler", () => {
     for (const event of output.events.filter((candidate) => candidate.type === "jump.land")) {
       expect(event.t).toBe(event.params.hitT);
     }
+  });
+
+  it("uses MIDI note starts as musical landings when drums are absent", () => {
+    const midiSong = buildFixtureSong({
+      bars: 2,
+      patterns: [{ role: "keys", beats: [1, 2], pitch: 60, kind: "note" }],
+    });
+    const output = compileRunner(midiSong);
+    expect(output.statics.jumpSource).toBe("midi-notes");
+    expect(output.events.filter((candidate) => candidate.type === "jump.land").map((event) => event.t)).toEqual([0.5, 1, 2.5, 3]);
   });
 
   it("is byte-identical across recompiles", () => {

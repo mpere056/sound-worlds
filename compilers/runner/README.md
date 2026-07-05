@@ -20,19 +20,21 @@ Sustained downlifter-like events compile to `float` trajectory spans and
 `runner.float` events when they do not collide with jump arcs.
 
 Terrain uses the first available source in this order: bass MIDI, bass pitch,
-then the master waveform and energy envelope. The compiler records the chosen
-source in `statics.terrain.source` so the preview never implies richer musical
-input than it actually received.
+general MIDI pitch contour, then the master waveform and energy envelope. The
+compiler records the chosen source in `statics.terrain.source` so the preview
+never implies richer musical input than it actually received. This matters for
+keys-only REAPER exports: if MIDI note data exists, the large hills follow that
+pitch contour instead of hiding the music inside a smoothed loudness fallback.
 
 Strata use the loudest available track RMS curves, resampled over the runner's
 world x-axis, normalized per track, and stored as precomputed `edge`
 heightfields under `statics.strata`. The scene renders those edges directly;
 it does not invent decorative sine geology.
 
-Jump landings use snare, clap, percussion, kick, then bar downbeats. Gravity is
-tempo-scaled and each parabola is solved from its takeoff and landing heights.
-The compiler validates terrain clearance at 120 Hz and records any deterministic
-clearance boost in `statics.jumpReport`.
+Jump landings use snare, clap, percussion, kick, budgeted MIDI note starts,
+then bar downbeats. Gravity is tempo-scaled and each parabola is solved from
+its takeoff and landing heights. The compiler validates terrain clearance at
+120 Hz and records any deterministic clearance boost in `statics.jumpReport`.
 
 Glyphs prefer MIDI from lead/melody/keys/piano/synth/vocal-like tracks. When
 the analyzed export has no usable MIDI, the compiler creates beat-synchronous

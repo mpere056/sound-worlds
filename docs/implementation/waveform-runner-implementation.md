@@ -129,7 +129,8 @@ both endpoints (where clearance is 0 by definition), requiring
 - Snare selection when dense: prefer backbeats (beat 2/4), then loudest
   velocity.
 - No snare track: fallback chain `snare → clap → percussion → kick →
-  bar downbeats`, chosen once at compile with the choice logged.
+  MIDI note starts → bar downbeats`, chosen once at compile with the choice
+  logged.
 
 ## 3. The trajectory: one piecewise function
 

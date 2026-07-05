@@ -36,11 +36,44 @@ function midiSignal(track: SongTrack, t: number): number {
   return previous.pitch * (1 - eased) + next.pitch * eased;
 }
 
+function preferredMidiTracks(song: Song): SongTrack[] {
+  const preferred = song.tracks.filter((track) => /lead|melody|keys|piano|synth|vocal/i.test(`${track.role} ${track.name}`));
+  const pitched = (preferred.length ? preferred : song.tracks)
+    .filter((track) => track.events.some((event) => event.kind === "note" && event.pitch !== null && event.dur > 0));
+  return pitched.sort((a, b) => b.events.length - a.events.length || a.id.localeCompare(b.id));
+}
+
+function aggregateMidiSignal(tracks: readonly SongTrack[], t: number): number {
+  const notes = tracks.flatMap((track) => track.events)
+    .filter((event) => event.kind === "note" && event.pitch !== null && event.dur > 0)
+    .sort((a, b) => a.t - b.t || (a.pitch ?? 0) - (b.pitch ?? 0));
+  const active = notes.filter((event) => t >= event.t && t <= event.t + event.dur);
+  if (active.length) {
+    const weight = active.reduce((total, event) => total + Math.max(0.05, event.vel), 0);
+    return active.reduce((total, event) => total + (event.pitch ?? 0) * Math.max(0.05, event.vel), 0) / weight;
+  }
+  let previous = notes[0];
+  let next = notes[notes.length - 1];
+  for (const note of notes) {
+    if (note.t + note.dur <= t) previous = note;
+    if (note.t >= t) { next = note; break; }
+  }
+  if (previous?.pitch === null || previous?.pitch === undefined) return next?.pitch ?? 0;
+  if (next?.pitch === null || next?.pitch === undefined) return previous.pitch;
+  const gapStart = previous.t + previous.dur;
+  const gapLength = Math.max(1e-6, next.t - gapStart);
+  const alpha = Math.max(0, Math.min(1, (t - gapStart) / gapLength));
+  const eased = (1 - Math.cos(Math.PI * alpha)) / 2;
+  return previous.pitch * (1 - eased) + next.pitch * eased;
+}
+
 function selectTerrainSignal(song: Song): { source: RunnerTerrain["source"]; sample(t: number): number } {
   const bass = song.tracks.find((track) => track.role.toLowerCase() === "bass");
   const notes = bass?.events.filter((event) => event.kind === "note" && event.pitch !== null && event.dur > 0) ?? [];
   if (bass && notes.length) return { source: "bass-midi", sample: (t) => midiSignal(bass, t) };
   if (bass?.curves.pitch?.values.length) return { source: "bass-pitch", sample: (t) => sampleCurve(bass.curves.pitch!, t) };
+  const midiTracks = preferredMidiTracks(song);
+  if (midiTracks.length) return { source: "midi-contour", sample: (t) => aggregateMidiSignal(midiTracks, t) };
   return { source: "master-envelope", sample: (t) => masterSignal(song, t) };
 }
 

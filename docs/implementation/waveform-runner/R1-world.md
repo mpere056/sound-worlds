@@ -90,13 +90,15 @@ continuity harness — ready for R2); fixture: `bass-staircase`, `bass-drone`,
 
 ## Implementation status
 
-As of 2026-07-03, the real REAPER export has no bass MIDI, pitch, or onset
-events, so the source cascade correctly selects `master-envelope`. Motion,
-slope bounds, ground clearance, stateless scrubbing, and byte determinism are
-covered by automated tests. The bass plateau/staircase human check remains open
-until a bass-bearing fixture or export is available. R1 renders foreground
-strata and a humanoid runner earlier than the original art staging described
-above; jumps remain R2 work.
+As of 2026-07-04, the current REAPER export still has no bass role, but it does
+have keyboard MIDI. The source cascade now selects `midi-contour` before
+falling back to `master-envelope`, so keys-only projects produce hills tied to
+note contour instead of generic loudness. Motion, slope bounds, ground
+clearance, stateless scrubbing, and byte determinism are covered by automated
+tests. The bass plateau/staircase human check remains open until a
+bass-bearing fixture or export is available. R1 renders foreground strata and a
+humanoid runner earlier than the original art staging described above; jumps
+remain R2 work.
 
 ## Notes & risks
 

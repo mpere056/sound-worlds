@@ -31,6 +31,15 @@ export function selectRunnerLandings(song: Song): { landings: Landing[]; source:
       break;
     }
   }
+  if (!selected.length) {
+    const preferred = song.tracks.filter((track) => /lead|melody|keys|piano|synth|vocal|bass/i.test(`${track.role} ${track.name}`));
+    const pitchedTracks = (preferred.length ? preferred : song.tracks)
+      .filter((track) => track.events.some((event) => event.kind === "note" && event.pitch !== null));
+    selected = pitchedTracks.flatMap((track) => track.events
+      .filter((event) => event.kind === "note" && event.pitch !== null)
+      .map((event) => ({ t: event.t, velocity: event.vel, source: "midi-notes" })));
+    if (selected.length) source = "midi-notes";
+  }
   if (!selected.length) selected = song.grid.downbeats.map((t) => ({ t, velocity: 1, source }));
   const budgeted: Landing[] = [];
   for (const bar of song.grid.bars) {

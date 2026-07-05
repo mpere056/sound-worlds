@@ -29,7 +29,7 @@ trajectory assembly with continuity asserts, ground pulses, airborne rendering.
 - Duration preference table `D ∈ {1, 0.5, 1.5, 2}` beats.
 
 ### 2. Landing selection (`jumps/select.ts`)
-- Role fallback chain `snare → clap → percussion → kick → bar downbeats`
+- Role fallback chain `snare → clap → percussion → kick → MIDI note starts → bar downbeats`
   (chosen once, logged).
 - Budget: max 2 jumps/bar; preference backbeats then velocity. Rejected hits →
   `ground.pulse` events (still carry `hitT`).
@@ -102,7 +102,9 @@ clear a pathological crest, the current deterministic fallback increases the
 arc's closed-form parabolic lift and records that boost rather than mutating
 terrain. Double-jump mid-impulses and terrain concessions remain future
 escalation work. The real audio-only export uses bar downbeats and compiles four
-unboosted landings at 2, 4, 6, and 8 seconds.
+unboosted landings at 2, 4, 6, and 8 seconds. Current MIDI-bearing exports use
+budgeted MIDI note starts before falling back to bar downbeats, so keys-only
+projects no longer have generic bar-only body motion.
 
 - The 1/16-grid snap on `Tk` can conflict with `minGround` after a previous
   landing — the spec resolves by snapping *earlier*; make the tie-break

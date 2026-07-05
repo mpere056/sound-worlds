@@ -19,7 +19,7 @@ The bad look has **three stacked causes**, in order of impact:
    snare-timed jumps, melody glyphs, section arcs, multi-line maps with
    transfers, chorus rings — is keyed to information this project does not
    contain. The compilers correctly fall back to their "honest" modes
-   (downbeat landings, energy terrain, audio-activity glyphs, bar-position
+   (MIDI-note landings, MIDI-contour terrain, MIDI glyphs, bar-position
    labels), and honest fallbacks are bland *by design*.
 2. **The scenes diverge from the documented visual design.** Both scene files
    hardcode debug-tier presentation (titles/status text burned into the
@@ -59,7 +59,7 @@ numbers rather than confidence.
 |---|---|---|
 | Duration | ~11 s | No structure, no arc, no journey — every concept is designed around 2–4 min |
 | Tracks | 4 × `VV_Piano_Vital`, all `role: keys` | Metro: 4 near-identical lines, no meaningful transfers. Runner: no role variety at all |
-| Drums | none | Runner landings fall back to **bar downbeats** → metronomic, mechanical jumps; no kick pulses/zoom |
+| Drums | none | Runner landings now fall back to budgeted MIDI note starts before bar downbeats, but there are still no kick pulses/zoom |
 | Bass | none | Terrain falls back to master-energy envelope → low-contrast mush instead of melodic skyline |
 | Lead/vocals | none | Glyphs fall back to `audio-activity` mode → beat-synchronous blobs, no melody drawn in the world |
 | Regions/markers | none | No sections → no gates, no palette arcs, no biome changes; Metro rings (M4) will never trigger |
