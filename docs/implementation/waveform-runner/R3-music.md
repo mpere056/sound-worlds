@@ -56,6 +56,11 @@ kick zoom impulses, vocal halo, downlifter float segments (simple version).
   compiler snaps to the nearest downbeat).
 - Continuity asserts extend automatically (same evaluator).
 
+Implementation note: until the extractor carries richer FX labels, this is
+conservative. Sustained events on downlifter/falling-like tracks become float
+spans only when they do not overlap jump arcs; unrelated FX hits and risers
+stay on the ground trajectory.
+
 ### 5. Scene work
 - Glyphs: instanced quads; beam path evaluated **in the vertex shader** as
   `mix(spawnPos, mergePos, ease(u))`, `u = (t − t0)/0.3` — zero per-frame CPU.
@@ -79,8 +84,9 @@ kick zoom impulses, vocal halo, downlifter float segments (simple version).
       statics. Visual acceptance on a region-authored reference song remains.
 - [x] Palette shifts span ±0.5 beat around section boundaries; the scene
       samples/interpolates those palettes for all palette-derived layers.
-- [ ] Float segments: continuity + no-penetration properties still green;
-      re-entry lands on a downbeat.
+- [x] Float segments: continuity + no-penetration properties still green;
+      re-entry lands on a downbeat/end. Visual acceptance on an FX-authored
+      reference song remains.
 - [ ] Kick zoom visible but subtle (human check: play with sync overlay,
       confirm impulses coincide with kick flashes).
 - [x] Implemented glyph beams, merge ripples, and gate opening progress are
@@ -95,7 +101,7 @@ kick zoom impulses, vocal halo, downlifter float segments (simple version).
 
 Glyph merge-position exactness; beam-cap overflow behavior; gate/palette
 timing units; vocal-halo source/fallback behavior; float-segment continuity
-fixtures; updated golden frames (gate moment, glyph merge, float drift).
+fixture; updated golden frames (gate moment, glyph merge, float drift).
 
 ## Notes & risks
 
@@ -106,17 +112,19 @@ beat-synchronous activity glyphs, so the feature remains visible without MIDI.
 The scene renders stateless 300 ms collection beams and exact-time merge
 ripples. The current `untitled-project-6d2e04f7` reference compiles 48 MIDI
 glyphs and 48 merge events from keyboard tracks.
-Runner output is now compiler version 3. Twenty-one Runner tests cover the
+Runner output is now compiler version 3. Twenty-two Runner tests cover the
 trajectory, exact merge position, audio fallback, role preservation, density
 cap, event preservation, compiled step events, track-derived stratum edges,
-section gate/palette timing, and vocal-halo source/fallback behavior. Base
-scene colors now consume `performance.palette`
+section gate/palette timing, vocal-halo source/fallback behavior, and
+float-segment continuity. Base scene colors now consume `performance.palette`
 and role colors for glyphs, background, terrain, runner, trail, speed lines,
 and event ripples. The scene also consumes compiled `runner.step` events for
 beat-locked gait, compiled `statics.strata` edges for geological layers,
 compiled `statics.gates` for opening section arches, and `palette.shift` spans
 for section palette transitions. Vocal halo now comes from `curves.vocalHalo`
-and renders as an additive runner aura; float segments remain open R3 work.
+and renders as an additive runner aura; conservative float segments now lift
+the runner from sustained downlifter-like events with scene-rendered FX drift
+rings/streaks. Authored-song visual acceptance remains open R3 work.
 
 - **Compile-order dependency is now real:** glyphs depend on the final
   trajectory; trajectory depends on floats; floats depend on FX spans. The

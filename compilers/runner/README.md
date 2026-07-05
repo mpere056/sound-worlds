@@ -16,6 +16,8 @@ melody glyphs, exact trajectory merge positions, `glyph.merge` events, and
 and `gate.open` spans. Vocal-like tracks compile to a normalized
 `curves.vocalHalo` RMS envelope, with `statics.vocalHaloSource` recording
 whether the curve came from vocal RMS or an explicit silent fallback.
+Sustained downlifter-like events compile to `float` trajectory spans and
+`runner.float` events when they do not collide with jump arcs.
 
 Terrain uses the first available source in this order: bass MIDI, bass pitch,
 then the master waveform and energy envelope. The compiler records the chosen
@@ -57,3 +59,9 @@ Vocal halo uses the loudest vocal-like track RMS at each frame, normalized
 against the vocal performance, then lightly smoothed. Exports with no vocal
 role still include a zero-valued halo curve so the scene contract is stable
 without pretending the song contains a singer.
+
+Float spans are intentionally conservative until the extractor carries richer
+FX labels: the compiler looks for sustained events on downlifter/falling-like
+tracks, snaps the span end to the nearest downbeat/end, skips spans that
+overlap jumps, and evaluates the lift as a pure function of time. That keeps
+slow-motion drift scrub-safe without inventing downlifters in unrelated audio.

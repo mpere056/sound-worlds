@@ -114,8 +114,8 @@ diverged. This is very recoverable.
 
 ## 4. Layer 3 — Unbuilt phases are most of the remaining "wow" gap
 
-- **Runner:** R3 incomplete (no floats; gate/palette/vocal visuals still need
-  authored-song acceptance) and R4 entirely absent — and R4 *is*
+- **Runner:** R3 still needs authored-song acceptance for gate/palette/vocal/
+  float visuals and R4 is entirely absent — and R4 *is*
   the identity (erasure front, crumbs, real strata, trail). The concept doc's
   hero moments live there.
 - **Metro:** M3 incomplete (no districts, label-overlap pass unfinished,

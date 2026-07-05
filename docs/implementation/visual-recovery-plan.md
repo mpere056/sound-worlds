@@ -202,7 +202,7 @@ The original order finishes breadth (R3 extras, M3 polish) before identity
 2. **Metro: M4 chorus rings** next after V2 — rings are the topology signature
    and the reference song (3× chorus) is built to show them
    ([M4 work order](metro-map/M4-topology.md)).
-3. Then return for R3 leftovers (floats plus gate/palette/vocal acceptance) and
+3. Then return for R3 authored-song acceptance (gate/palette/vocal/float) and
    M3 leftovers (joint healing) — they land better on top of the identity.
 
 Rationale: every demo until identity ships will keep producing the "this

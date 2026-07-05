@@ -214,6 +214,7 @@ export class RunnerScene {
     const keysColor = roleColor(palette, ["keys", "pads", "lead"], 0x9ecfff);
     const kickColor = roleColor(palette, ["kick", "percussion"], 0x63d6ff);
     const snareColor = roleColor(palette, ["snare", "clap", "percussion"], 0xf4fbff);
+    const fxColor = roleColor(palette, ["fx"], 0x7affd7);
     const vocalColor = roleColor(palette, ["vocals", "vocal", "voice", "lead"], 0xffb8f1);
     const terrainColor = mixColor(bgColor, bassColor, 0.58);
     const surfaceColor = mixColor(leadColor, 0xffffff, 0.18);
@@ -355,6 +356,7 @@ export class RunnerScene {
     }
 
     const groundY = this.#screenY(pose.y, cameraY, baseline, scale) - 8;
+    const activeFloat = this.#performance.statics.trajectory.segments.find((segment) => segment.kind === "float" && t >= segment.t0 && t <= segment.t1);
     const gait = gaitPhase(this.#stepTimes, t, speed);
     const legSwing = Math.sin(gait * Math.PI) * 24;
     const armSwing = -Math.sin(gait * Math.PI) * 19;
@@ -392,6 +394,18 @@ export class RunnerScene {
     }
     this.#runnerGlow.ellipse(runnerX, groundY - 94, 86 + energy * 18, 126 + energy * 26)
       .fill({ color: leadColor, alpha: glow * 0.07 });
+    if (activeFloat?.kind === "float") {
+      const progress = (t - activeFloat.t0) / Math.max(1e-6, activeFloat.t1 - activeFloat.t0);
+      const floatAlpha = Math.sin(Math.PI * Math.max(0, Math.min(1, progress)));
+      this.#runnerGlow.ellipse(runnerX - 8, groundY - 82, 132 + floatAlpha * 54, 46 + floatAlpha * 22)
+        .stroke({ color: fxColor, width: 10 + floatAlpha * 8, alpha: glow * floatAlpha * 0.16 });
+      for (let i = 0; i < 5; i += 1) {
+        const phase = (progress * 2 + i / 5) % 1;
+        this.#runnerGlow.moveTo(runnerX - 140 + i * 62, groundY - 38 - phase * 76)
+          .lineTo(runnerX - 92 + i * 62, groundY - 58 - phase * 76)
+          .stroke({ color: fxColor, width: 2 + floatAlpha * 4, alpha: glow * floatAlpha * (0.05 + phase * 0.05), cap: "round" });
+      }
+    }
     if (vocalHalo > 0.01) {
       this.#runnerGlow.ellipse(runnerX + lean * 18, groundY - 136, 76 + vocalHalo * 54, 122 + vocalHalo * 88)
         .fill({ color: vocalColor, alpha: glow * (0.04 + vocalHalo * 0.13) });
@@ -416,13 +430,14 @@ export class RunnerScene {
       .fill(mixColor(runnerBody, 0xffffff, 0.4));
     for (const event of this.#performance.events) {
       const age = t - event.t;
-      if (age < 0 || age > 0.42 || !["jump.takeoff", "jump.land", "ground.pulse"].includes(event.type)) continue;
+      if (age < 0 || age > 0.42 || !["jump.takeoff", "jump.land", "ground.pulse", "runner.float"].includes(event.type)) continue;
       const alpha = 1 - age / 0.42;
       const radius = 18 + age * 150;
+      const eventColor = event.type === "runner.float" ? fxColor : event.type === "jump.land" ? snareColor : kickColor;
       this.#runnerGlow.ellipse(runnerX, baseline, radius + 14, radius * 0.3)
-        .stroke({ color: event.type === "jump.land" ? snareColor : kickColor, width: 18 * alpha, alpha: glow * alpha * 0.2 });
+        .stroke({ color: eventColor, width: 18 * alpha, alpha: glow * alpha * 0.2 });
       this.#runner.ellipse(runnerX, baseline, radius, radius * 0.24)
-        .stroke({ color: event.type === "jump.land" ? snareColor : kickColor, width: 6 * alpha, alpha });
+        .stroke({ color: eventColor, width: 6 * alpha, alpha });
     }
     this.#backend.render();
   }

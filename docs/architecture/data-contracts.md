@@ -314,7 +314,9 @@ Runner `statics` currently includes:
 - `vocalHaloSource`: `vocal-rms` when `curves.vocalHalo` was compiled from
   vocal-like track RMS, or `none` when the exported song has no vocal role and
   the curve is intentionally silent.
-- `trajectory`: ground/air segments for exact pose sampling.
+- `trajectory`: ground, air, and optional float segments for exact pose
+  sampling. Float segments are compiler-owned sustained downlifter-like spans,
+  not scene-local animation state.
 - `glyphs`: exact-pose merge targets and beam/sparkle mode.
 - `glyphSource`, `jumpSource`, and `jumpReport`: provenance/reporting fields
   that keep fallback visuals honest.

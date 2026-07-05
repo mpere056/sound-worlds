@@ -194,6 +194,30 @@ describe("Waveform Runner R3 compiler", () => {
     }
   });
 
+  it("compiles sustained FX downlifters as continuous float segments", () => {
+    const floatSong = buildFixtureSong({
+      bars: 1,
+      patterns: [{ role: "fx-downlifter", beats: [0.5], pitch: 48, kind: "note" }],
+    });
+    floatSong.tracks[0]!.events[0]!.dur = 1;
+    const output = compileRunner(floatSong);
+    const float = output.statics.trajectory.segments.find((segment) => segment.kind === "float");
+    expect(float?.kind).toBe("float");
+    if (float?.kind !== "float") throw new Error("Expected a float segment");
+    expect(float.t0).toBe(0.25);
+    expect(float.t1).toBe(floatSong.meta.durationSec);
+    const event = output.events.find((candidate) => candidate.type === "runner.float");
+    expect(event?.t).toBe(float.t0);
+    expect(event?.tEnd).toBe(float.t1);
+    expect(event?.params.hitT).toBe(float.t1);
+    const startPose = evaluateTrajectory(output.statics.trajectory.segments, float.t0, output.curves.x!, output.statics.terrain);
+    const midPose = evaluateTrajectory(output.statics.trajectory.segments, (float.t0 + float.t1) / 2, output.curves.x!, output.statics.terrain);
+    const endPose = evaluateTrajectory(output.statics.trajectory.segments, float.t1, output.curves.x!, output.statics.terrain);
+    expect(startPose.y).toBeCloseTo(sampleTerrain(output.statics.terrain, startPose.x), 5);
+    expect(midPose.y).toBeGreaterThan(sampleTerrain(output.statics.terrain, midPose.x) + 1);
+    expect(endPose.y).toBeCloseTo(sampleTerrain(output.statics.terrain, endPose.x), 5);
+  });
+
   it("lands exactly on hitT and falls back to downbeats without drums", () => {
     const fallbackSong = buildFixtureSong({ patterns: [{ role: "keys", beats: [], kind: "note" }] });
     const output = compileRunner(fallbackSong);

@@ -16,8 +16,8 @@ the final trajectory, stores exact runner-pose merge targets, limits concurrent
 beams to six, and preserves overflow events as sparkles. The scene renders
 stateless 300 ms approaches and merge ripples. Gates, palette transitions,
 kick camera impulses, beat gait, track strata, and vocal halo plumbing are now
-implemented. Downlifter float segments and richer authored-song acceptance
-remain. See
+implemented. Conservative sustained-downlifter float spans are also
+implemented. Richer authored-song acceptance remains. See
 [Current implementation status](../implementation-status.md) and
 [R3 — The Music](waveform-runner/R3-music.md).
 

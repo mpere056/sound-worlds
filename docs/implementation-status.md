@@ -42,7 +42,7 @@ named section structure beyond the analyzer's default whole-song section.
 | Preview/export shell | Implemented foundation | engineering-preview | Project/world discovery, WAV streaming, audio-clock playback, scrub, overlays, tuning, PNG and short H.264 preview export | Full-song orchestration, direct project-output writing, audio mux |
 | Waveform Runner R1 | Implemented | engineering-preview | Monotone `x(t)`, inverse `t(x)`, energy speed, slope-limited terrain, camera keys, stateless Pixi world | Richer bass-derived results need a MIDI/pitch-bearing export and the visual recovery pass |
 | Waveform Runner R2 | Implemented | engineering-preview | Budgeted musical landings, tempo-scaled closed-form jumps, clearance validation, deterministic boost fallback, takeoff/landing events | Double-jump mid-impulses, terrain-concession fallback, and beat/character polish |
-| Waveform Runner R3 | In progress | engineering-preview | MIDI melody glyphs, honest beat/activity fallback, role-colored exact-pose merge targets, 300 ms beams, six-beam cap, overflow sparkles, merge ripples, section gates with `gate.open` spans, section palette shifts, compiled vocal-halo curve with silent fallback, compiled step events for beat-locked gait, compiled track strata, compiled-camera scene framing, trajectory-sampled trail, palette-sourced background/terrain/runner/ripples, additive glow layers, no in-canvas debug title/status | Downlifter floats, authored-song gate/palette/vocal acceptance, golden-frame visual verification |
+| Waveform Runner R3 | In progress | engineering-preview | MIDI melody glyphs, honest beat/activity fallback, role-colored exact-pose merge targets, 300 ms beams, six-beam cap, overflow sparkles, merge ripples, section gates with `gate.open` spans, section palette shifts, compiled vocal-halo curve with silent fallback, conservative sustained-downlifter float spans, compiled step events for beat-locked gait, compiled track strata, compiled-camera scene framing, trajectory-sampled trail, palette-sourced background/terrain/runner/ripples, additive glow layers, no in-canvas debug title/status | Authored-song gate/palette/vocal/float acceptance, golden-frame visual verification |
 | Waveform Runner R4–R5 | Planned | planned | Design and work orders | Erasure/crumbs/identity, rail, ghost, cadence gate, final export polish |
 | Metro M1 | Implemented | engineering-preview | Deterministic MIDI stations, clusters, interchanges, octilinear edges, honest audio-activity fallback | More varied MIDI-bearing real-project validation and map-field presentation polish |
 | Metro M2 | Implemented | engineering-preview | Timestamped trains, progressive edge reveal, station blooms, stateless seeking | Extended human sync pass on a longer real project |
@@ -128,10 +128,10 @@ tier-0 label-overlap pass.
 The current Runner R3 slice was verified on 2026-07-04:
 
 - `corepack pnpm check` passed, including the determinism guard, production
-  build, and 60 TypeScript tests across 12 files.
-- `corepack pnpm --filter @reaper-viz/compiler-runner test` passed 21 Runner
+  build, and 61 TypeScript tests across 12 files.
+- `corepack pnpm --filter @reaper-viz/compiler-runner test` passed 22 Runner
   compiler tests after the jump, motion, terrain, glyph, step, strata, gate,
-  section palette, and vocal-halo contracts were added.
+  section palette, vocal-halo, and float-segment contracts were added.
 - `corepack pnpm --filter @reaper-viz/compiler-metro test` passed 11 Metro
   compiler tests after the documented 7 px corridor-spacing contract was wired
   into the compiler.
@@ -141,8 +141,9 @@ The current Runner R3 slice was verified on 2026-07-04:
   5-bar, 11.056-second `song.json`.
 - That export compiled successfully to Runner performance version 3: 48 MIDI
   glyphs, 48 merge events, 4 bar-downbeat jumps, `master-envelope` terrain,
-  track strata, section palettes, a silent vocal halo fallback, and an empty
-  `gates` array because the export has no authored region boundaries.
+  track strata, section palettes, a silent vocal halo fallback, no float
+  segments because the export has no sustained downlifter-like role, and an
+  empty `gates` array because the export has no authored region boundaries.
 - That export compiled successfully to Metro performance version 4: 4 MIDI
   lines, 40 stations, and 42 edges.
 - Browser verification at `http://127.0.0.1:5173/` showed the approach glyph,
@@ -203,6 +204,9 @@ S0 math hygiene progress:
   palette-derived layers through those shifts.
 - Added a compiler-owned Runner vocal halo curve from vocal-like track RMS with
   an explicit silent fallback; the scene samples it as an additive runner aura.
+- Added conservative Runner float trajectory spans for sustained
+  downlifter-like events, with continuity/no-penetration test coverage and
+  scene-rendered FX drift rings/streaks.
 
 Generated performance files are intentionally not committed. The compiler,
 tests, scene, app labels, and documentation are the durable source changes.
@@ -234,6 +238,6 @@ before starting another server.
 3. Keep extending the [Math Audit](implementation/math-audit.md) test battery
    as future-only systems land, especially double-jump, clearance rejection
    vectors, and camera impulse/follow behavior.
-4. Complete Runner R3 float segments, then verify gates/palettes/vocals on an
-   authored-region and vocal-bearing reference song.
+4. Verify Runner R3 gates/palettes/vocals/floats on an authored-region,
+   vocal-bearing, FX-bearing reference song.
 5. Complete Metro M3 joint healing, districts, and label overlap handling.

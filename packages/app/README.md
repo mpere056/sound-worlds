@@ -23,8 +23,8 @@ Then open `http://127.0.0.1:5173/`.
   waveform terrain, compiled musical jumps, parallax layers, a humanoid
   runner, exact-time melody/activity glyph collection, section gates, compiled
   strata, beat-locked gait, section palette shifts, palette-derived colors,
-  vocal halo rendering, and additive glow layers with a live Glow tuning
-  control.
+  vocal halo rendering, conservative downlifter float rendering, and additive
+  glow layers with a live Glow tuning control.
 - Metro Map M3: a progressively drawn octilinear network with timestamped
   trains, station blooms, terminal/downbeat labels, separated parallel
   corridors, and a frontier-follow camera that pulls back for the complete

@@ -1,9 +1,10 @@
 import { sampleCurve, type PerformanceEvent, type Song, type TimedCurve } from "@reaper-viz/core";
 import { sampleTerrain } from "./terrain.js";
-import type { RunnerAirSegment, RunnerJumpReport, RunnerTerrain, RunnerTrajectorySegment } from "./types.js";
+import type { RunnerAirSegment, RunnerFloatSegment, RunnerJumpReport, RunnerTerrain, RunnerTrajectorySegment } from "./types.js";
 
 interface Landing { t: number; velocity: number; source: string; }
 interface JumpCompilation { segments: RunnerTrajectorySegment[]; events: PerformanceEvent[]; reports: RunnerJumpReport[]; source: string; }
+interface FloatSpan { t0: number; t1: number; source: string; }
 
 function localBeatDuration(song: Song, t: number): number {
   const beats = song.grid.beats;
@@ -40,6 +41,35 @@ export function selectRunnerLandings(song: Song): { landings: Landing[]; source:
   return { landings: budgeted.sort((a, b) => a.t - b.t), source };
 }
 
+function nearestDownbeatAtOrAfter(song: Song, t: number, minT: number): number {
+  const candidates = [...song.grid.downbeats, song.meta.durationSec].filter((candidate) => candidate >= minT && candidate <= song.meta.durationSec);
+  if (!candidates.length) return Math.min(song.meta.durationSec, Math.max(minT, t));
+  return candidates.reduce((best, candidate) => Math.abs(candidate - t) < Math.abs(best - t) ? candidate : best, candidates[0]!);
+}
+
+function isFxFloatTrack(role: string, name: string): boolean {
+  const normalized = `${role} ${name}`.toLowerCase();
+  return /(downlifter|downlift|down-lifter|fall|faller|reverse|drop)/.test(normalized);
+}
+
+function selectFloatSpans(song: Song): FloatSpan[] {
+  const beat = localBeatDuration(song, 0);
+  const minDuration = beat * 0.75;
+  const spans: FloatSpan[] = [];
+  for (const track of song.tracks) {
+    if (!isFxFloatTrack(track.role, track.name)) continue;
+    for (const event of track.events) {
+      if (event.dur < minDuration) continue;
+      const t0 = Math.max(0, event.t);
+      const rawEnd = Math.min(song.meta.durationSec, event.t + event.dur);
+      const t1 = nearestDownbeatAtOrAfter(song, rawEnd, t0 + minDuration);
+      if (t1 - t0 < minDuration) continue;
+      spans.push({ t0, t1, source: track.role || track.name || "fx" });
+    }
+  }
+  return spans.sort((a, b) => a.t0 - b.t0 || a.t1 - b.t1);
+}
+
 export function solveJump(
   takeoffT: number,
   landingT: number,
@@ -64,6 +94,17 @@ export function airHeight(segment: RunnerAirSegment, t: number): { y: number; vy
     y: segment.y0 + segment.vy0 * tau - 0.5 * segment.gravity * tau * tau + boost,
     vy: segment.vy0 - segment.gravity * tau + boostVelocity,
   };
+}
+
+export function floatOffset(segment: RunnerFloatSegment, t: number): { offset: number; vy: number } {
+  const duration = segment.t1 - segment.t0;
+  const tau = Math.max(0, Math.min(duration, t - segment.t0));
+  const u = duration > 0 ? tau / duration : 0;
+  const lift = segment.offset * Math.sin(Math.PI * u);
+  const drift = segment.drift * Math.sin(2 * Math.PI * u);
+  const liftVy = duration > 0 ? segment.offset * Math.PI * Math.cos(Math.PI * u) / duration : 0;
+  const driftVy = duration > 0 ? segment.drift * 2 * Math.PI * Math.cos(2 * Math.PI * u) / duration : 0;
+  return { offset: Math.max(0, lift + drift), vy: liftVy + driftVy };
 }
 
 function clearanceDeficit(segment: RunnerAirSegment, xCurve: TimedCurve, terrain: RunnerTerrain): number {
@@ -126,9 +167,21 @@ export function compileJumps(song: Song, xCurve: TimedCurve, terrain: RunnerTerr
       { t: landing.t, type: "jump.land", layer: "runner", params: { hitT: landing.t } },
     );
   }
+  const floats: RunnerFloatSegment[] = [];
+  for (const span of selectFloatSpans(song)) {
+    const overlapsJump = air.some((segment) => span.t0 < segment.t1 - 1e-6 && span.t1 > segment.t0 + 1e-6);
+    const overlapsFloat = floats.some((segment) => span.t0 < segment.t1 - 1e-6 && span.t1 > segment.t0 + 1e-6);
+    if (overlapsJump || overlapsFloat) continue;
+    const segment: RunnerFloatSegment = { kind: "float", t0: span.t0, t1: span.t1, offset: 1.5, drift: 0.22, source: span.source };
+    floats.push(segment);
+    events.push(
+      { t: segment.t0, tEnd: segment.t1, type: "runner.float", layer: "runner", params: { hitT: segment.t1, source: segment.source } },
+    );
+  }
+  const actionSegments = [...air, ...floats].sort((a, b) => a.t0 - b.t0 || a.t1 - b.t1);
   const segments: RunnerTrajectorySegment[] = [];
   let cursor = 0;
-  for (const segment of air) {
+  for (const segment of actionSegments) {
     if (segment.t0 > cursor) segments.push({ kind: "ground", t0: cursor, t1: segment.t0 });
     segments.push(segment);
     cursor = segment.t1;
@@ -148,6 +201,12 @@ export function evaluateTrajectory(
   if (airborne?.kind === "air") {
     const pose = airHeight(airborne, t);
     return { x, y: pose.y, vy: pose.vy, grounded: false };
+  }
+  const floating = segments.find((candidate) => candidate.kind === "float" && t >= candidate.t0 - 1e-9 && t < candidate.t1 - 1e-9);
+  if (floating?.kind === "float") {
+    const terrainY = sampleTerrain(terrain, x);
+    const pose = floatOffset(floating, t);
+    return { x, y: terrainY + pose.offset, vy: pose.vy, grounded: false };
   }
   return { x, y: sampleTerrain(terrain, x), vy: 0, grounded: true };
 }

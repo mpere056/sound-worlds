@@ -10,6 +10,14 @@ export interface RunnerTerrain {
 }
 
 export interface RunnerGroundSegment { kind: "ground"; t0: number; t1: number; }
+export interface RunnerFloatSegment {
+  kind: "float";
+  t0: number;
+  t1: number;
+  offset: number;
+  drift: number;
+  source: string;
+}
 export interface RunnerAirSegment {
   kind: "air";
   t0: number;
@@ -21,7 +29,7 @@ export interface RunnerAirSegment {
   clearanceBoost: number;
   landingT: number;
 }
-export type RunnerTrajectorySegment = RunnerGroundSegment | RunnerAirSegment;
+export type RunnerTrajectorySegment = RunnerGroundSegment | RunnerAirSegment | RunnerFloatSegment;
 export interface RunnerJumpReport {
   landingT: number;
   takeoffT: number;
