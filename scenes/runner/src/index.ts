@@ -281,6 +281,25 @@ export class RunnerScene {
       for (const point of surface.slice(1)) this.#world.lineTo(point.x, point.y + 17);
       this.#world.stroke({ color: mixColor(surfaceColor, bassColor, 0.48), width: 2, alpha: 0.8 });
     }
+    for (const platform of this.#performance.statics.notePlatforms ?? []) {
+      const platformX = (platform.x - leftWorld) * scale;
+      if (platformX < -120 || platformX > width + 120) continue;
+      const platformY = this.#screenY(platform.y, cameraY, baseline, scale);
+      const platformWidth = Math.max(34, platform.width * scale);
+      const age = Math.abs(t - platform.t);
+      const hit = Math.exp(-age / 0.16);
+      const color = glyphColor(palette, platform.role, platform.colorIndex);
+      const left = platformX - platformWidth * 0.5;
+      const right = platformX + platformWidth * 0.5;
+      this.#worldGlow.moveTo(left, platformY).lineTo(right, platformY)
+        .stroke({ color, width: 24 + hit * 24, alpha: glow * (0.1 + hit * 0.28), cap: "round" });
+      this.#world.moveTo(left, platformY).lineTo(right, platformY)
+        .stroke({ color: mixColor(color, 0xffffff, 0.22), width: 6 + hit * 5, alpha: 0.5 + hit * 0.4, cap: "round" });
+      if (hit > 0.08) {
+        this.#worldGlow.circle(platformX, platformY, 18 + hit * 34)
+          .stroke({ color, width: 10 * hit, alpha: glow * hit * 0.22 });
+      }
+    }
     for (let index = 0; index < 20; index += 1) {
       const length = 38 + (index % 6) * 24 + speed * 4;
       const y = 200 + ((index * 83) % 1180);
@@ -433,10 +452,11 @@ export class RunnerScene {
       if (age < 0 || age > 0.42 || !["jump.takeoff", "jump.land", "ground.pulse", "runner.float"].includes(event.type)) continue;
       const alpha = 1 - age / 0.42;
       const radius = 18 + age * 150;
-      const eventColor = event.type === "runner.float" ? fxColor : event.type === "jump.land" ? snareColor : kickColor;
-      this.#runnerGlow.ellipse(runnerX, baseline, radius + 14, radius * 0.3)
+      const isMidi = event.params.source === "midi-notes";
+      const eventColor = event.type === "runner.float" ? fxColor : isMidi ? keysColor : event.type === "jump.land" ? snareColor : kickColor;
+      this.#runnerGlow.ellipse(runnerX, groundY, radius + 14, radius * 0.3)
         .stroke({ color: eventColor, width: 18 * alpha, alpha: glow * alpha * 0.2 });
-      this.#runner.ellipse(runnerX, baseline, radius, radius * 0.24)
+      this.#runner.ellipse(runnerX, groundY, radius, radius * 0.24)
         .stroke({ color: eventColor, width: 6 * alpha, alpha });
     }
     this.#backend.render();

@@ -318,6 +318,10 @@ Runner `statics` currently includes:
   sampling. Float segments are compiler-owned sustained downlifter-like spans,
   not scene-local animation state.
 - `glyphs`: exact-pose merge targets and beam/sparkle mode.
+- `notePlatforms`: explicit route pads derived one-to-one from glyph/note
+  timings. Scenes render these as visible landing/collection platforms so MIDI
+  note timing remains inspectable instead of hidden inside a smooth terrain
+  contour.
 - `glyphSource`, `jumpSource`, and `jumpReport`: provenance/reporting fields
   that keep fallback visuals honest.
 

@@ -264,6 +264,22 @@ describe("Waveform Runner R3 compiler", () => {
     expect(output.events.filter((candidate) => candidate.type === "jump.land").map((event) => event.t)).toEqual([0.5, 1, 2.5, 3]);
   });
 
+  it("emits visible note platforms for MIDI glyph timings", () => {
+    const midiSong = buildFixtureSong({
+      bars: 1,
+      patterns: [{ role: "keys", beats: [0, 1, 2, 3], pitch: 60, kind: "note" }],
+    });
+    const output = compileRunner(midiSong);
+    expect(output.statics.notePlatforms).toHaveLength(output.statics.glyphs.length);
+    for (const [index, glyph] of output.statics.glyphs.entries()) {
+      const platform = output.statics.notePlatforms[index]!;
+      expect(platform.t).toBe(glyph.mergeT);
+      expect(platform.x).toBeCloseTo(glyph.mergePos.x, 6);
+      expect(platform.y).toBeCloseTo(sampleTerrain(output.statics.terrain, platform.x), 6);
+      expect(platform.role).toBe(glyph.role);
+    }
+  });
+
   it("keeps dense MIDI tail notes visible as landings or pulses", () => {
     const midiSong = buildFixtureSong({
       bars: 1,

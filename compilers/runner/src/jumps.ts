@@ -173,8 +173,8 @@ export function compileJumps(song: Song, xCurve: TimedCurve, terrain: RunnerTerr
     previousLanding = landing.t;
     reports.push({ landingT: landing.t, takeoffT: chosen.segment.t0, durationBeats: chosen.durationBeats, clearanceBoost: chosen.segment.clearanceBoost, source: landing.source });
     events.push(
-      { t: chosen.segment.t0, type: "jump.takeoff", layer: "runner", params: { hitT: landing.t } },
-      { t: landing.t, type: "jump.land", layer: "runner", params: { hitT: landing.t } },
+      { t: chosen.segment.t0, type: "jump.takeoff", layer: "runner", params: { hitT: landing.t, source: landing.source } },
+      { t: landing.t, type: "jump.land", layer: "runner", params: { hitT: landing.t, source: landing.source } },
     );
   }
   const floats: RunnerFloatSegment[] = [];

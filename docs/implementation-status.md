@@ -42,7 +42,7 @@ named section structure beyond the analyzer's default whole-song section.
 | Preview/export shell | Implemented foundation | engineering-preview | Project/world discovery, WAV streaming, audio-clock playback, scrub, overlays, tuning, PNG and short H.264 preview export | Full-song orchestration, direct project-output writing, audio mux |
 | Waveform Runner R1 | Implemented | engineering-preview | Monotone `x(t)`, inverse `t(x)`, energy speed, slope-limited terrain, camera keys, stateless Pixi world | Richer bass-derived results need a MIDI/pitch-bearing export and the visual recovery pass |
 | Waveform Runner R2 | Implemented | engineering-preview | Budgeted musical landings, tempo-scaled closed-form jumps, clearance validation, deterministic boost fallback, takeoff/landing events | Double-jump mid-impulses, terrain-concession fallback, and beat/character polish |
-| Waveform Runner R3 | In progress | engineering-preview | MIDI melody glyphs, honest beat/activity fallback, role-colored exact-pose merge targets, 300 ms beams, six-beam cap, overflow sparkles, merge ripples, section gates with `gate.open` spans, section palette shifts, compiled vocal-halo curve with silent fallback, conservative sustained-downlifter float spans, compiled step events for beat-locked gait, compiled track strata, compiled-camera scene framing, trajectory-sampled trail, palette-sourced background/terrain/runner/ripples, additive glow layers, no in-canvas debug title/status | Authored-song gate/palette/vocal/float acceptance, golden-frame visual verification |
+| Waveform Runner R3 | In progress | engineering-preview | MIDI melody glyphs, honest beat/activity fallback, role-colored exact-pose merge targets, note-timed route platforms, 300 ms beams, six-beam cap, overflow sparkles, merge ripples, section gates with `gate.open` spans, section palette shifts, compiled vocal-halo curve with silent fallback, conservative sustained-downlifter float spans, compiled step events for beat-locked gait, compiled track strata, compiled-camera scene framing, trajectory-sampled trail, palette-sourced background/terrain/runner/ripples, additive glow layers, no in-canvas debug title/status | Authored-song gate/palette/vocal/float acceptance, golden-frame visual verification |
 | Waveform Runner R4–R5 | Planned | planned | Design and work orders | Erasure/crumbs/identity, rail, ghost, cadence gate, final export polish |
 | Metro M1 | Implemented | engineering-preview | Deterministic MIDI stations, clusters, interchanges, octilinear edges, honest audio-activity fallback | More varied MIDI-bearing real-project validation and map-field presentation polish |
 | Metro M2 | Implemented | engineering-preview | Timestamped trains, progressive edge reveal, station blooms, stateless seeking | Extended human sync pass on a longer real project |
@@ -128,12 +128,12 @@ tier-0 label-overlap pass.
 The current Runner R3 slice was verified on 2026-07-04:
 
 - `corepack pnpm check` passed, including the determinism guard, production
-  build, and 65 TypeScript tests across 12 files.
-- `corepack pnpm --filter @reaper-viz/compiler-runner test` passed 26 Runner
+  build, and 66 TypeScript tests across 12 files.
+- `corepack pnpm --filter @reaper-viz/compiler-runner test` passed 27 Runner
   compiler tests after the jump, motion, terrain, glyph, step, strata, gate,
   section palette, vocal-halo, float-segment, MIDI-contour terrain, and
   MIDI-note landing contracts were added, including energetic audio-tail
-  terrain coverage.
+  terrain coverage and note-platform coverage.
 - `corepack pnpm --filter @reaper-viz/compiler-metro test` passed 11 Metro
   compiler tests after the documented 7 px corridor-spacing contract was wired
   into the compiler.
@@ -142,9 +142,9 @@ The current Runner R3 slice was verified on 2026-07-04:
 - `projects/untitled-project-6d2e04f7` analyzed successfully to a 4-track,
   5-bar, 11.056-second `song.json`.
 - That export compiled successfully to Runner performance version 3: 48 MIDI
-  glyphs, 48 merge events, 16 MIDI-note jumps plus 9 ground pulses,
-  `midi-contour` terrain, track strata, section palettes, a silent vocal halo
-  fallback, no float segments because the export has no sustained
+  glyphs, 48 merge events, 48 route note platforms, 16 MIDI-note jumps plus 9
+  ground pulses, `midi-contour` terrain, track strata, section palettes, a
+  silent vocal halo fallback, no float segments because the export has no sustained
   downlifter-like role, and an empty `gates` array because the export has no
   authored region boundaries. The route tail no longer flattens: the last 40
   terrain samples retain about 3.57 world units of height motion from the
@@ -216,6 +216,9 @@ S0 math hygiene progress:
   longer generic: MIDI-rich songs now drive terrain from a MIDI pitch/onset
   contour plus audio-tail energy, and land jumps/pulses on budgeted MIDI note
   starts before falling back to bar downbeats.
+- Added explicit Runner note-platform statics and scene rendering so every
+  glyph/note timing produces a visible route pad on the terrain, with foot-level
+  MIDI impact rings.
 
 Generated performance files are intentionally not committed. The compiler,
 tests, scene, app labels, and documentation are the durable source changes.

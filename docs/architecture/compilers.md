@@ -18,9 +18,9 @@ As of 2026-07-04:
 - **Waveform Runner, compiler version 3:** monotone motion and inverse curves,
   slope-limited terrain, track-derived stratum edges, closed-form ground/air
   trajectory, musical jump events, camera keys, exact-pose melody/activity
-  glyph merges, compiled `runner.step` gait events, and section gate open
-  spans, plus a vocal-RMS halo curve with an honest silent fallback and
-  conservative sustained-downlifter float trajectory spans.
+  glyph merges, note-timed route platforms, compiled `runner.step` gait events,
+  and section gate open spans, plus a vocal-RMS halo curve with an honest silent
+  fallback and conservative sustained-downlifter float trajectory spans.
 - **Metro Map, M3 in progress:** MIDI or explicitly tagged audio-activity
   lines, stations/clusters/interchanges, octilinear edges, trains, reveals,
   blooms, labels, legend data, frontier/final-fit camera, and deterministic

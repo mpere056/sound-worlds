@@ -45,6 +45,9 @@ the analyzed export has no usable MIDI, the compiler creates beat-synchronous
 `statics.glyphSource` records the selected path. Each beam begins 300 ms before
 its merge and targets the exact compiled runner pose; at most six collection
 beams overlap, with excess notes preserved as synchronized sparkles.
+Every glyph also emits a matching `statics.notePlatforms` entry at the terrain
+height under its note time, so MIDI-rich exports show explicit route pads
+instead of relying on an abstract continuous hill contour.
 
 Footfalls prefer compacted kick/percussion events and fall back to the beat
 grid when no percussion exists. The scene consumes those `runner.step` events

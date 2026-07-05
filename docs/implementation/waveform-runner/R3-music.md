@@ -23,7 +23,7 @@ kick zoom impulses, vocal halo, downlifter float segments (simple version).
 ## Work breakdown
 
 ### 1. Glyph system (`compilers/runner/src/glyphs.ts`)
-- Placement: for each lead note, glyph at
+- Placement: for each lead note, glyph and matching route platform at
   `(x(t_note), h(x(t_note)) + map(pitch → 1.5..5 wu))` (per-song pitch
   percentile calibration, same pattern as terrain).
 - **Collection beam** (the decoupling trick from
@@ -96,12 +96,16 @@ stay on the ground trajectory.
 - [x] Vocal halo curve is compiler-owned, normalized from vocal-like track RMS,
       records `statics.vocalHaloSource`, and stays silent when no vocal role is
       exported. Visual acceptance on a vocal-bearing reference song remains.
+- [x] MIDI/activity glyph timings also emit explicit `notePlatforms`, rendered
+      as route pads at the terrain surface so note timing is visibly inspectable
+      instead of only implied by the terrain contour.
 
 ## Tests added
 
-Glyph merge-position exactness; beam-cap overflow behavior; gate/palette
-timing units; vocal-halo source/fallback behavior; float-segment continuity
-fixture; updated golden frames (gate moment, glyph merge, float drift).
+Glyph merge-position exactness; route platform/glyph timing parity; beam-cap
+overflow behavior; gate/palette timing units; vocal-halo source/fallback
+behavior; float-segment continuity fixture; updated golden frames (gate moment,
+glyph merge, float drift).
 
 ## Notes & risks
 
@@ -112,11 +116,12 @@ beat-synchronous activity glyphs, so the feature remains visible without MIDI.
 The scene renders stateless 300 ms collection beams and exact-time merge
 ripples. The current `untitled-project-6d2e04f7` reference compiles 48 MIDI
 glyphs and 48 merge events from keyboard tracks.
-Runner output is now compiler version 3. Twenty-two Runner tests cover the
+Runner output is now compiler version 3. Twenty-seven Runner tests cover the
 trajectory, exact merge position, audio fallback, role preservation, density
 cap, event preservation, compiled step events, track-derived stratum edges,
-section gate/palette timing, vocal-halo source/fallback behavior, and
-float-segment continuity. Base scene colors now consume `performance.palette`
+section gate/palette timing, vocal-halo source/fallback behavior,
+float-segment continuity, MIDI terrain/landing fallback, and note-platform
+parity. Base scene colors now consume `performance.palette`
 and role colors for glyphs, background, terrain, runner, trail, speed lines,
 and event ripples. The scene also consumes compiled `runner.step` events for
 beat-locked gait, compiled `statics.strata` edges for geological layers,

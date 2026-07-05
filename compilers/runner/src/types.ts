@@ -52,6 +52,18 @@ export interface RunnerGlyph {
   colorIndex: number;
 }
 
+export interface RunnerNotePlatform {
+  id: string;
+  t: number;
+  x: number;
+  y: number;
+  role: string;
+  source: "midi" | "audio-activity";
+  pitch: number | null;
+  colorIndex: number;
+  width: number;
+}
+
 export interface RunnerStratum {
   id: string;
   trackId: string;
@@ -88,6 +100,7 @@ export interface RunnerStatics extends Record<string, unknown> {
   jumpSource: string;
   jumpReport: RunnerJumpReport[];
   glyphs: RunnerGlyph[];
+  notePlatforms: RunnerNotePlatform[];
   glyphSource: "midi" | "audio-activity" | "none";
   vocalHaloSource: "vocal-rms" | "none";
   compilerVersion: number;

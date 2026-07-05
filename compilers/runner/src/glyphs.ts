@@ -1,7 +1,7 @@
 import { sampleCurve, type PerformanceEvent, type Song, type SongEvent, type TimedCurve } from "@reaper-viz/core";
 import { evaluateTrajectory } from "./jumps.js";
 import { sampleTerrain } from "./terrain.js";
-import type { RunnerGlyph, RunnerTerrain, RunnerTrajectorySegment } from "./types.js";
+import type { RunnerGlyph, RunnerNotePlatform, RunnerTerrain, RunnerTrajectorySegment } from "./types.js";
 
 interface GlyphCandidate { event: SongEvent; source: "midi" | "audio-activity"; role: string; }
 
@@ -72,4 +72,18 @@ export function compileGlyphs(
     });
   }
   return { glyphs, events, source: glyphs[0]!.source };
+}
+
+export function compileNotePlatforms(glyphs: readonly RunnerGlyph[], terrain: RunnerTerrain): RunnerNotePlatform[] {
+  return glyphs.map((glyph) => ({
+    id: `platform:${glyph.id}`,
+    t: glyph.mergeT,
+    x: glyph.mergePos.x,
+    y: sampleTerrain(terrain, glyph.mergePos.x),
+    role: glyph.role,
+    source: glyph.source,
+    pitch: glyph.pitch,
+    colorIndex: glyph.colorIndex,
+    width: glyph.source === "midi" ? 1.18 : 0.92,
+  }));
 }

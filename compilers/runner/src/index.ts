@@ -2,7 +2,7 @@ import { parsePerformance, sampleCurve, solvePalette, type CameraKeyframe, type 
 import { compileMotion } from "./motion.js";
 import { compileTerrain, sampleTerrain } from "./terrain.js";
 import { compileJumps } from "./jumps.js";
-import { compileGlyphs } from "./glyphs.js";
+import { compileGlyphs, compileNotePlatforms } from "./glyphs.js";
 import { compileSteps } from "./steps.js";
 import { compileStrata } from "./strata.js";
 import { compileGates } from "./gates.js";
@@ -27,6 +27,7 @@ export function compileRunner(song: Song): RunnerPerformance {
   const strata = compileStrata(song, terrain, motion.tAtX, motion.worldLength);
   const jumps = compileJumps(song, motion.x, terrain);
   const glyphs = compileGlyphs(song, motion.x, terrain, jumps.segments);
+  const notePlatforms = compileNotePlatforms(glyphs.glyphs, terrain);
   const steps = compileSteps(song);
   const gates = compileGates(song, motion.x, terrain);
   const palette = solvePalette(null, song.tracks.map((track) => track.role));
@@ -59,6 +60,7 @@ export function compileRunner(song: Song): RunnerPerformance {
       jumpSource: jumps.source,
       jumpReport: jumps.reports,
       glyphs: glyphs.glyphs,
+      notePlatforms,
       glyphSource: glyphs.source,
       vocalHaloSource: vocalHalo.source,
       compilerVersion: 3,
