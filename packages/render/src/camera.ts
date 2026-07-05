@@ -1,6 +1,6 @@
 import type { CameraKeyframe } from "@reaper-viz/core";
 
-export interface CameraState { pos: [number, number, number]; zoom: number; }
+export interface CameraState { pos: [number, number, number]; zoom: number; anchor?: [number, number]; }
 
 function easing(name: string | undefined, t: number): number {
   if (name === "cubicInOut") return t < 0.5 ? 4 * t * t * t : 1 - ((-2 * t + 2) ** 3) / 2;
@@ -22,8 +22,14 @@ export function sampleCamera(keyframes: readonly CameraKeyframe[], t: number): C
   const raw = (t - start.t) / (end.t - start.t);
   const alpha = easing(end.ease ?? start.ease, raw);
   const lerp = (a: number, b: number): number => a + (b - a) * alpha;
-  return {
+  const state: CameraState = {
     pos: [lerp(start.pos[0], end.pos[0]), lerp(start.pos[1], end.pos[1]), lerp(start.pos[2], end.pos[2])],
     zoom: lerp(start.zoom, end.zoom),
   };
+  if (start.anchor || end.anchor) {
+    const startAnchor = start.anchor ?? end.anchor ?? [0.5, 0.5];
+    const endAnchor = end.anchor ?? startAnchor;
+    state.anchor = [lerp(startAnchor[0], endAnchor[0]), lerp(startAnchor[1], endAnchor[1])];
+  }
+  return state;
 }

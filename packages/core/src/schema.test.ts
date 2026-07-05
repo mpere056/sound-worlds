@@ -7,6 +7,12 @@ describe("stage schemas", () => {
     expect(parseSong(buildFixtureSong()).schemaVersion).toBe(1);
   });
 
+  it("accepts optional per-track gain metadata", () => {
+    const song = buildFixtureSong();
+    song.tracks[0]!.gain = { peakRms: 0.42, meanRms: 0.12 };
+    expect(parseSong(song).tracks[0]!.gain?.peakRms).toBe(0.42);
+  });
+
   it("rejects unsorted performance events", () => {
     const performance = {
       schemaVersion: 1, concept: "fixture", seed: "fixture", durationSec: 2, fps: 60,
@@ -26,6 +32,16 @@ describe("stage schemas", () => {
       curves: { x: { t0: 0, dt: 1, values: [0, 24, 48] } }, events: [], statics: {},
     };
     expect(parsePerformance(performance).curves.x?.values[2]).toBe(48);
+  });
+
+  it("accepts optional normalized camera anchors", () => {
+    const performance = {
+      schemaVersion: 1, concept: "metro", seed: "fixture", durationSec: 2, fps: 60,
+      resolution: { w: 1080, h: 1920 }, palette: { bg: "#000000", roles: {} },
+      camera: [{ t: 0, pos: [0, 0, 10], zoom: 1, anchor: [0.5, 0.65] }],
+      curves: {}, events: [], statics: {},
+    };
+    expect(parsePerformance(performance).camera[0]?.anchor).toEqual([0.5, 0.65]);
   });
 
   it("accepts flat aesthetic tuning values", () => {

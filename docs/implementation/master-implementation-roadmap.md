@@ -1,0 +1,273 @@
+# Master Implementation Roadmap — current state → fully shipped Runner & Metro
+
+**Date:** 2026-07-04. This is the single document to follow from today's code
+to "fully, properly implemented" Waveform Runner and Metro Map. It absorbs and
+sequences: [Math Audit](math-audit.md) fixes,
+[Visual Recovery Plan](visual-recovery-plan.md),
+[Song Authoring Guide](song-authoring-guide.md), and the original phase
+work orders in this directory — which remain the detailed specs; this
+roadmap tells you **what order, what's already done, what changed, and what
+"done" means** at every step.
+
+**Where you are today** (per this repo and
+[`docs/implementation-status.md`](../implementation-status.md)):
+Runner R1–R2 built, R3 partial (glyphs, base scene palette, camera/trail
+recovery); Metro M1–M2 built, M3 partial (labels/camera/corridors, no
+districts/joint-healing/label-pass); analyzer MVP built with the math findings
+in the audit; preview shell renders short clips only; R4–R5, M4–M5, full
+export: not started.
+
+The current local reference export is
+`projects/untitled-project-6d2e04f7`. It is useful for fallback validation, but
+it is intentionally not a visual-quality benchmark because it has no drums,
+bass, lead/vocal MIDI, or section regions.
+
+```
+S0  Repo & math hygiene            S6  Metro M3 completion
+S1  Reference song + re-baseline   S7  Metro M4 — rings & laps
+S2  Analyzer corrections           S8  Runner R5 — set pieces & end card
+S3  Runner visual foundation       S9  Metro M5 — polish & artifacts
+S4  Runner R3 completion           S10 Full-song export pipeline
+S5  Runner R4 — the identity       S11 Ship gate
+```
+
+Dependency rule: S0–S2 first (everything downstream is judged against them);
+after S3, Runner (S4–S5, S8) and Metro (S6–S7, S9) are independent tracks you
+can interleave; S10 needs one finished game; S11 needs everything.
+
+---
+
+## S0 — Repo & math hygiene *(½–1 day)*
+
+1. **One canonical repo.** The Windows working copy is canonical. Keep this
+   planning/audit set under `docs/implementation/`, and avoid committing
+   scratch transfer snapshots or generated project media. Confirm analyzer
+   prerequisites include the package validator used by the CLI.
+2. **Wire the §3 math battery** from [Math Audit](math-audit.md) as unit
+   tests against the real compilers. Implemented-system coverage now includes
+   gravity, jump solves, x(t), terrain calibration/slope, Metro geometry,
+   dwell, and determinism. Future-only vectors such as double jump, rectangular
+   clearance rejection, and camera impulse/follow behavior should be added when
+   those systems exist in code. *Any failure is a bug to fix before proceeding
+   — this answers "is the math right" definitively.*
+3. **Fix the audited analyzer/logic defects** ([Math Audit](math-audit.md) §2):
+   onset timing (2.1), bar restarts at pure tempo points (2.2), per-stem gain
+   metadata (2.3), train dwell ≤ ½·gap (2.4), and section gap filling (2.6)
+   are fixed as of 2026-07-04.
+4. Status-doc honesty: add the **Visual quality** column
+   (`engineering-preview | styled | concept-parity`) and correct stale claims
+   (gap analysis §5).
+
+**Done when:** implemented-system numeric vectors are in automated tests;
+future-only vectors are tracked; status doc updated.
+
+## S1 — Reference song + re-baseline *(½ day of Reaper work)*
+
+Author the song per [Song Authoring Guide §3](song-authoring-guide.md)
+(~2:30, Kick/Snare/Hats/Bass-MIDI/Lead-MIDI/Keys/FX, regions with 3× Chorus).
+Export → analyze → compile both games → render previews. Archive these as the
+"before" baselines. **All visual judgments from here on use this project.**
+
+**Done when:** authoring checklist §4 passes; both games render it end-to-end.
+
+## S2 — Analyzer completion *(1–2 days)*
+
+Beyond the S0 fixes, complete what these two games actually consume (defer
+chords/HTML-report/auto-segmentation — they serve other concepts):
+
+1. **Key estimate** (chroma → Krumhansl) — feeds the palette solver. MIDI-only
+   shortcut acceptable: histogram of pitch classes weighted by duration.
+2. **Pitch tracking for audio-only leads** — *optional if you commit to
+   MIDI-first authoring (recommended)*. If skipped, document that audio-only
+   melodic tracks degrade to activity mode, permanently.
+3. Per-onset spectra: already implemented ✅ — just keep it exposed per drum stem.
+
+**Done when:** `song.json` for the reference song contains key + all curves;
+schema updated & versioned.
+
+## S3 — Runner visual foundation *(2–4 days — biggest perceived-quality jump)*
+
+Execute the remaining [Visual Recovery Plan](visual-recovery-plan.md)
+V1.1–V1.7 items in this order: **V1.4 real strata → final V1.1 debug
+separation/golden-frame sweep.** V1.3 camera, V1.2 base palette wiring, V1.5
+compiled gait, and the first V1.6 trajectory-sampled trail pass are already
+implemented. V1.7's additive glow layer pass is implemented; the remaining
+V1.7 decision is whether to keep investing in the humanoid runner or pivot the
+character to the concept's abstract spark/comet.
+
+Renderer-reality adaptations (the scenes are immediate-mode Pixi `Graphics`,
+not the meshes/shaders the original plans assumed — that's fine, adapt, don't
+rebuild):
+
+- **Glow without shaders:** current implementation uses separate
+  additive-blended Pixi `Graphics` layers under the terrain, glyphs, and
+  runner cores. Keep future polish in that cheap layer model unless profiling
+  proves sprite glow textures are needed.
+- **Real strata:** compiler emits one polyline per stem stratum (edge =
+  `surface − depth_k − amp_k·stemWave_k(x)` per
+  [impl plan §1.2](waveform-runner-implementation.md));
+  scene replaces the `Math.sin` ripples with polyline sampling. Scene change
+  is ~10 lines; the work is the compiler emit + a "mute a stem → one stratum
+  changes" test.
+- **Camera/palette/trail:** the scene now consumes compiled camera keyframes,
+  derives base colors from `performance.palette`, and renders a
+  trajectory-sampled trail. Keep future changes inside that model.
+
+**Done when:** V-plan acceptance criteria per item; the "demo checkpoint"
+(V-plan bottom) side-by-side against the S1 baseline is night-and-day.
+
+## S4 — Runner R3 completion *(2–3 days)*
+
+Spec: [R3 work order](waveform-runner/R3-music.md) —
+still accurate. Remaining items: **section gates, palette shifts, kick
+zoom/shake (lands with S3 camera), vocal halo, downlifter float segments.**
+Adaptation: gates are two `Graphics` arch pieces + label `Text`; palette
+shifts lerp the palette object (S3 made all colors palette-sourced, so this
+is now one global lerp).
+
+**Done when:** R3 acceptance checklist passes on the reference song — gates
+open on region downbeats, palettes differ per section kind, floats keep the
+continuity property green.
+
+## S5 — Runner R4 — the identity *(3–4 days)*
+
+Spec: [R4 work order](waveform-runner/R4-identity.md).
+Immediate-mode adaptations (simpler than the original shader plan):
+
+- **Erasure front:** compiler emits `xE(t)` as a shifted copy of the x-curve
+  (freeze at outro). Scene: when building the per-frame surface/strata point
+  arrays, drop points with `x < xE(t)` and insert the glow-band points near
+  the cut — no shaders needed in immediate mode.
+- **Crumbs:** compiler precomputes per-cell `tCross[]`; scene draws particles
+  as pure `f(age)` circles for cells with `age ∈ [0, 1.5 s]` (binary-search
+  the active window). Budget 120 concurrent bursts, deterministic stride-skip.
+- **Ghost windows:** compile now (trivial), render in S8.
+- Keep the scrub-exactness frame-hash test as the phase gate — it's what
+  keeps all of this honest.
+
+**Done when:** R4 acceptance checklist passes; erasure lag exactly 2 beats at
+any tempo (tempo-change fixture); premise reads in the first 10 s
+(human check).
+
+## S6 — Metro M3 completion *(2–3 days)*
+
+First execute V2.1–V2.6 (field-not-panel, compiled framing, geometry
+single-source, typography, arc-length precompute) — then finish
+[M3](metro-map/M3-cartography.md) remainders:
+**corridor joint healing** (45° micro-jogs at membership changes),
+**district tint bands** (key changes), **the tier-0 label-overlap pass**
+(spatial-hash AABB; the current "clamp x to margins" is not overlap
+avoidance).
+
+**Done when:** M3 acceptance checklist + V2 criteria pass on the reference
+song; zero overlapping tier-0 labels; a paused final frame passes the
+"plausible next to a real transit diagram" test.
+
+## S7 — Metro M4 — rings & laps *(3–4 days)*
+
+Spec: [M4 work order](metro-map/M4-topology.md) — fully
+valid. Adaptation notes:
+
+- Emit ring geometry as **dense polylines** (rounded-rect sampled at ~4 px) —
+  the scene already draws arbitrary polylines and needs zero new primitives.
+- Portal edges are ordinary edges → corridors/reveal/trains work unchanged.
+- The reference song's 3× chorus is the acceptance fixture: **one ring, three
+  laps, zero new geometry on repeats** (statics-diff test).
+- Audit M3 code for "later time = lower y" assumptions first (M4 doc's
+  warning) — the frontier camera is the likely offender; phase-2 camera
+  keyframes legitimately move up-map.
+
+**Done when:** M4 acceptance checklist passes; chorus 2 visibly reads as
+"everyone rides downtown again."
+
+## S8 — Runner R5 — set pieces & ship *(3–4 days)*
+
+Spec: [R5 work order](waveform-runner/R5-ship.md) — valid.
+Sequence within: **rail grind → ghost déjà-vu (one-day item now that R4
+compiled windows exist) → cadence gate → route-silhouette end card**
+(gravity-flip stays config-gated off). Watch the drop-starts-on-downbeat
+entry-jump fixture called out in the work order.
+
+**Done when:** R5 checklist passes; full-song watch-through with audio feels
+locked; end card exports as PNG.
+
+## S9 — Metro M5 — polish & artifacts *(2–3 days)*
+
+Spec: [M5 work order](metro-map/M5-ship.md) — valid, minus
+the ribbon-shader item (immediate-mode is fine **if** the arc-length
+precompute from V2.6 landed; keep the <8 ms/frame budget test as the gate,
+optimize only if it fails). Annealing polish (bend flips + label sides),
+night mode (palette-only switch), **poster PNG + true SVG export**
+(serialize statics — this stays trivially valid since geometry is vector
+data).
+
+**Done when:** M5 checklist passes; SVG round-trips; poster renders at 4×.
+
+## S10 — Full-song export pipeline *(2–3 days)*
+
+Spec: [export.md](../architecture/export.md). Current state renders only
+short previews; complete:
+
+1. Full-length frame-stepped render (frame-indexed loop, backpressure,
+   `contentDurationSec` + end-card hold as the duration — **never**
+   `audioDurationSec`, the 2 s tail is reverb, not video).
+2. Write into `projects/<song>/out/` directly.
+3. `mux.sh`: ffmpeg `-c:v copy` + master WAV → AAC, duration sanity warning,
+   optional loudnorm variant.
+4. Determinism `--hash` double-render check; render-faster-than-realtime
+   budget on the reference song.
+
+**Done when:** one command chain per game: project → `final.mp4` (1080×1920@60,
+audio attached) + artifact PNG/SVG, zero manual steps.
+
+## S11 — Ship gate *(1 day)*
+
+The final checklist — **"fully properly implemented" means every box below:**
+
+- [ ] Math Audit §3 battery green in CI; §2 fixes verified by their acceptance
+      tests (incl. ±5 ms onsets)
+- [ ] All phase acceptance checklists green: R1–R5, M1–M5 (each work-order
+      doc's checkbox list)
+- [ ] Sync invariant test green across both games (every `hitT` payoff ≤ 1
+      frame)
+- [ ] Scrub-exactness frame-hash tests green (both scenes, incl. R4 effects)
+- [ ] Determinism: byte-identical recompiles; identical frame hashes on
+      re-render
+- [ ] Perf: < 8 ms/frame on the reference song; export faster than realtime
+- [ ] Golden frames committed: Runner {takeoff, apex, landing, erasure,
+      grind, ghost, end card}, Metro {mid-draw, ring lap, final reveal,
+      poster}; SSIM ≥ 0.995 in CI
+- [ ] Reference song full watch-throughs (both games, with audio): no visual
+      glitch, sync feels locked, premises read — the human gate
+- [ ] One **second** real song (different tempo/key/structure) renders both
+      games without code changes — the generality gate
+- [ ] Status doc: every phase row `concept-parity` in the visual column; docs
+      match as-built behavior ("docs-lie" pass)
+
+---
+
+## Effort summary
+
+| Track | Stages | Rough total |
+|---|---|---|
+| Foundation | S0–S2 | 3–4 days |
+| Runner to done | S3–S5, S8 | 10–15 days |
+| Metro to done | S6–S7, S9 | 7–10 days |
+| Export + ship | S10–S11 | 3–4 days |
+
+Interleaving suggestion: S0→S1→S2→S3→**demo**→S6→**demo**→S5→S7→S4→S8→S9→S10→S11
+— identity work (S5/S7) lands right after each game's foundation so every
+demo checkpoint shows a visibly different product.
+
+## Standing rules while executing (the guardrails that kept this design honest)
+
+1. **Never judge visuals on a project that fails the authoring checklist.**
+2. **Every payoff event carries `hitT`** — new features included; the sync
+   test covers them for free.
+3. **Scenes stay pure in `t`** — the frame-hash scrub test is the tripwire;
+   run it after every scene change.
+4. **Smart compiler, dumb renderer** — if a scene starts computing music or
+   layout (lane math, framing branches), stop and move it to the compiler.
+5. **All color through the palette; all randomness through the seeded RNG;
+   all time through the frame clock.** Grep-able bans (`Math.random`,
+   `Date.now`, hex literals in scenes) are cheaper than review vigilance.

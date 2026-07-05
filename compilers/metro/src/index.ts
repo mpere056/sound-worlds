@@ -48,7 +48,13 @@ function stationForEvents(song: Song, line: MetroLine, events: SongEvent[]): Abs
       revealT: Math.min(...group.map((event) => event.t)),
       times: group.map((event) => event.t).sort((a, b) => a - b),
       mergedCount: group.length,
-      ...(pitches.length > 1 ? { span: [laneForPitch(pitches[0]!), laneForPitch(pitches[pitches.length - 1]!)] as [number, number] } : {}),
+      ...(pitches.length > 1 ? {
+        span: [laneForPitch(pitches[0]!), laneForPitch(pitches[pitches.length - 1]!)] as [number, number],
+        spanPos: [
+          { x: 90 + laneForPitch(pitches[0]!) * 75, y: 210 + row * 72 },
+          { x: 90 + laneForPitch(pitches[pitches.length - 1]!) * 75, y: 210 + row * 72 },
+        ] as [MetroPoint, MetroPoint],
+      } : {}),
     });
   }
   const merged = new Map<string, AbstractStation>();
@@ -212,7 +218,7 @@ export function compileMetro(song: Song): MetroPerformance {
     }
   }
   const edges: MetroEdge[] = [];
-  const corridorSpacing = 6;
+  const corridorSpacing = 7;
   for (const [lineIndex, line] of lines.entries()) {
     const ids = lineStationIds.get(line.id) ?? [];
     for (let index = 1; index < ids.length; index += 1) {
@@ -255,6 +261,7 @@ export function compileMetro(song: Song): MetroPerformance {
       t,
       pos: [(bounds.minX + bounds.maxX) / 2, finalReveal ? (bounds.minY + bounds.maxY) / 2 : frontier, 10] as [number, number, number],
       zoom: finalReveal ? 1 : 1.35,
+      anchor: finalReveal ? [0.5, 0.5] as [number, number] : [0.5, 1240 / 1920] as [number, number],
       ease: finalReveal ? "cubicInOut" : "smoothstep",
     };
   });

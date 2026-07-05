@@ -8,13 +8,13 @@ unified `song.json` timeline consumed by visualizer compilers.
 From the repository root:
 
 ```powershell
-python -m analyzer projects\untitled-project-e2f16a30
+python -m analyzer projects\untitled-project-6d2e04f7
 ```
 
 Use `--force` to ignore the content-hash cache and rebuild the file:
 
 ```powershell
-python -m analyzer projects\untitled-project-e2f16a30 --force
+python -m analyzer projects\untitled-project-6d2e04f7 --force
 ```
 
 The command validates the complete manifest, WAV metadata, alignment, and
@@ -28,8 +28,10 @@ result passes `schemas/song.v1.schema.json`.
   `unknown` section covering the arranged content.
 - Unmuted MIDI notes passed through as authoritative note events.
 - Native PCM WAV decoding for 8-, 16-, 24-, and 32-bit REAPER renders.
-- Per-track 50 Hz normalized RMS and spectral-centroid curves.
-- Drum-role onset events and eight-band onset spectra when MIDI is absent.
+- Per-track 50 Hz normalized RMS and spectral-centroid curves, plus
+  pre-normalization `peakRms` and `meanRms` gain metadata.
+- Sample-accurate drum-role onset events and eight-band onset spectra when
+  MIDI is absent.
 - Master energy, 20 Hz waveform summary, and loudest-hit attribution.
 - Content-hash cache: unchanged packages reuse the existing validated output.
 

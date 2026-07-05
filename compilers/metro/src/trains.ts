@@ -19,7 +19,7 @@ export function compileTrainSchedule(
     const nextId = stationIds[index + 1];
     const next = nextId ? stations.get(nextId) : undefined;
     const gap = next ? Math.max(0, (next.times[0] ?? next.revealT) - arriveT) : 0;
-    const dwell = next ? clamp(gap * 0.25, 0.08, 0.6) : 0;
+    const dwell = next ? Math.min(clamp(gap * 0.25, 0.08, 0.6), gap * 0.5) : 0;
     const edge = nextId ? edgeByPair.get(`${stationId}|${nextId}`) : undefined;
     const travel = next ? gap - dwell : 0;
     return {

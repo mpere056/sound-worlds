@@ -8,6 +8,15 @@ and build phases. Everything here consumes `song.json` and produces
 
 ---
 
+## Current implementation
+
+M1 and M2 are implemented. M3 is in progress: labels, legend presentation,
+frontier/final-fit camera, stable global-rank corridor separation, offset train
+paths, and interchange sizing are implemented. Occupancy-specific joint
+healing, district bands, and complete label-overlap optimization remain before
+M4 topology work. See [Current implementation status](../implementation-status.md)
+and [M3 — Cartography](metro-map/M3-cartography.md).
+
 ## 1. Why this layout problem is tractable
 
 General octilinear transit-map layout is NP-hard (it's solved with MIPs in the

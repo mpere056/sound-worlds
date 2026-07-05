@@ -78,9 +78,10 @@ backwards just repositions it. Curves are sampled directly:
 - Shared **post chain** (EffectComposer): bloom, chromatic aberration, vignette,
   film grain — all parameters driven per-frame from events/curves, defaulting to
   0. Scenes request passes; nothing is on by default.
-- Camera rig: interprets `performance.camera` keyframes (position/zoom/roll +
-  easing), plus a shake bus (impulses decay deterministically as `f(t − hitT)`,
-  never via accumulated state).
+- Camera rig: interprets `performance.camera` keyframes (position, zoom,
+  optional normalized viewport anchor, roll + easing), plus a shake bus
+  (impulses decay deterministically as `f(t − hitT)`, never via accumulated
+  state).
 - Asset loading in `init()` only; loaders awaited so render mode never sees a
   half-loaded scene. Instancing helpers for crowds (plankton, drones, windows).
 

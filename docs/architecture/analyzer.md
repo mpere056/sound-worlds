@@ -16,8 +16,9 @@ Everything works librosa-only in the MVP.
 > **Current implementation:** the P0 foundation intentionally uses NumPy plus
 > native PCM WAV decoding, so it runs against a fresh REAPER export without the
 > heavier librosa stack. Grid/section compilation, MIDI passthrough,
-> RMS/centroid curves, drum onset spectra, master energy/waveform, schema
-> validation, and caching are present. Pitch, key/chords, mel sidecars,
+> RMS/centroid curves, per-stem gain metadata, sample-accurate drum onsets,
+> drum onset spectra, master energy/waveform, schema validation, and caching
+> are present. Pitch, key/chords, mel sidecars,
 > automatic segmentation, and the HTML report below describe the next analyzer
 > phases.
 
@@ -44,10 +45,11 @@ Run per track, parameterized by role:
 
 | Feature | Method | Notes |
 |---|---|---|
-| Onsets | `librosa.onset.onset_detect` on the stem, `backtrack=True` | Per-role tuning: drums use tight `wait`/`delta`; pads use loose settings or skip onsets entirely |
-| Velocity proxy | Onset-strength envelope value at each onset, normalized per-stem to 0–1 | Good enough to drive size/brightness |
-| RMS curve | `librosa.feature.rms`, resampled to the 50 Hz TimedCurve grid | Every track gets one |
-| Spectral centroid | `librosa.feature.spectral_centroid`, 50 Hz | Brightness driver (palette, light temperature) |
+| Onsets | Native sample-domain threshold crossing for drum roles | Avoids the 20 ms animation-curve quantization; click tests must land within ±5 ms |
+| Velocity proxy | Local peak amplitude in the 50 ms after each onset, normalized per-stem to 0–1 | Good enough to drive size/brightness |
+| RMS curve | Native RMS, sampled to the 50 Hz TimedCurve grid and normalized per stem | Every track gets one |
+| Gain metadata | Pre-normalization `peakRms` and `meanRms` | Lets consumers reconstruct cross-track dynamics from normalized curves |
+| Spectral centroid | Native FFT centroid, 50 Hz | Brightness driver (palette, light temperature) |
 | Pitch track | `librosa.pyin` (or crepe) — **pitched mono roles only** (lead, bass, vocals) | Voiced-confidence gated; unvoiced gaps left null |
 | Note segmentation | Pitch track → notes: split on voiced gaps + median-pitch steps > 0.6 semitones; min duration 60 ms | Produces `kind:"note"` events with float pitch for audio-only leads |
 | Per-onset spectra | 2048-sample FFT at each onset → 8 log-spaced band energies, normalized | **Drum roles only.** This is the Storm concept's bolt-shape input; cheap to compute for everyone, stored per onset |

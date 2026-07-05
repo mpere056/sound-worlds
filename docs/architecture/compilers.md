@@ -11,6 +11,22 @@ pnpm compile --project mysong --concept metro
 
 They run in Node (no DOM, no WebGL) so they're unit-testable and fast.
 
+## Implemented concept compilers
+
+As of 2026-07-04:
+
+- **Waveform Runner, compiler version 3:** monotone motion and inverse curves,
+  slope-limited terrain, closed-form ground/air trajectory, musical jump
+  events, camera keys, exact-pose melody/activity glyph merges, and compiled
+  `runner.step` gait events.
+- **Metro Map, M3 in progress:** MIDI or explicitly tagged audio-activity
+  lines, stations/clusters/interchanges, octilinear edges, trains, reveals,
+  blooms, labels, legend data, frontier/final-fit camera, and deterministic
+  parallel-corridor separation.
+
+See [Current implementation status](../implementation-status.md) for the
+verified feature matrix and open work.
+
 ## What a compiler owns
 
 1. **Casting** — map roles to concept entities (lead → jellyfish, bass → the

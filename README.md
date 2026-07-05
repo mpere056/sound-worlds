@@ -14,6 +14,13 @@ Full technical design in [ARCHITECTURE.md](ARCHITECTURE.md) and
 [docs/architecture/](docs/architecture/). Every visualizer concept in `docs/`
 is a different front-end on the same spine:
 
+For a navigable documentation map, see [docs/README.md](docs/README.md). The
+[current implementation status](docs/implementation-status.md) is the
+canonical record of what is implemented, verified, in progress, and planned.
+The [master implementation roadmap](docs/implementation/master-implementation-roadmap.md)
+and [song authoring guide](docs/implementation/song-authoring-guide.md) define
+the next practical path to concept-quality Runner and Metro renders.
+
 ```
 Reaper project
    │  Lua ReaScript extractor + REAPER-native rendering
@@ -67,11 +74,12 @@ preview application are the next layer. The PixiJS backend and
 stream their master WAV, switch between compiled worlds, scrub, flash beats,
 expose safe-area guides, and export short H.264 MP4 previews or PNG stills.
 
-Waveform Runner R2 is the first animated compiled world. Its compiler turns master
+Waveform Runner R3 is the first animated compiled world. Its compiler turns master
 energy and waveform data into monotone motion, slope-limited terrain, a ground
-and airborne trajectory, exact musical landings, and camera keys; its Pixi
-scene renders that data as a runner jumping across a layered waveform
-landscape. Metro Map now compiles MIDI or honest
+and airborne trajectory, exact musical landings, camera keys, and synchronized
+melody glyphs (with a beat-driven audio fallback); its Pixi scene renders that
+data as a runner collecting light across a layered waveform landscape. Metro
+Map now compiles MIDI or honest
 audio-activity fallback lines into an octilinear network that draws itself,
 runs timestamped trains, labels key stops, follows the drawing frontier, and
 blooms stations on musical arrivals. The
@@ -139,7 +147,10 @@ reaper-viz/
 ├── fixtures/ + tests/     ← contract and alignment fixtures
 ├── tools/                 ← standalone package validation
 ├── docs/
+│   ├── README.md          ← documentation map
+│   ├── implementation-status.md ← canonical current-state record
 │   ├── <concept>.md       ← the 8 concept documents
+│   ├── implementation/    ← milestone plans and implementation evidence
 │   └── architecture/      ← data contracts, analyzer, compilers, renderer, export
 ├── analyzer/              ← Python analyzer foundation: stems → song.json
 ├── packages/

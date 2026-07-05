@@ -18,6 +18,7 @@ export interface SongTrack {
   role: string;
   events: SongEvent[];
   curves: { rms: TimedCurve; centroid: TimedCurve; pitch: TimedCurve | null };
+  gain?: { peakRms: number; meanRms: number };
   spectra: Array<{ t: number; bands: number[] }>;
 }
 
@@ -70,6 +71,7 @@ export interface CameraKeyframe {
   t: number;
   pos: [number, number, number];
   zoom: number;
+  anchor?: [number, number];
   ease?: string;
 }
 

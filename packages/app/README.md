@@ -19,11 +19,14 @@ Then open `http://127.0.0.1:5173/`.
 - Audio-clock-driven rendering and millisecond scrub control.
 - A world selector that defaults to Waveform Runner when its compiled
   performance is present and keeps unimplemented concepts visibly disabled.
-- Waveform Runner R2: deterministic motion, slope-limited waveform terrain,
-  compiled musical jumps, parallax layers, and a humanoid runner.
+- Waveform Runner R3 (in progress): deterministic motion, slope-limited
+  waveform terrain, compiled musical jumps, parallax layers, a humanoid
+  runner, exact-time melody/activity glyph collection, palette-derived colors,
+  and additive glow layers with a live Glow tuning control.
 - Metro Map M3: a progressively drawn octilinear network with timestamped
-  trains, station blooms, terminal/downbeat labels, and a frontier-follow
-  camera that pulls back for the complete map.
+  trains, station blooms, terminal/downbeat labels, separated parallel
+  corridors, and a frontier-follow camera that pulls back for the complete
+  map.
 - A separately labeled pipeline test pattern driven by master energy, beats,
   bars, and sections. It is not the Metro Map scene.
 - Beat sync flash, platform safe-area overlay, and live Tweakpane controls.

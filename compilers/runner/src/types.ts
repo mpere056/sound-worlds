@@ -30,12 +30,28 @@ export interface RunnerJumpReport {
   source: string;
 }
 
+export interface RunnerPoint { x: number; y: number; }
+export interface RunnerGlyph {
+  id: string;
+  source: "midi" | "audio-activity";
+  role: string;
+  pitch: number | null;
+  spawnPos: RunnerPoint;
+  mergePos: RunnerPoint;
+  mergeT: number;
+  beamStartT: number;
+  mode: "beam" | "sparkle";
+  colorIndex: number;
+}
+
 export interface RunnerStatics extends Record<string, unknown> {
   worldLength: number;
   terrain: RunnerTerrain;
   trajectory: { segments: RunnerTrajectorySegment[] };
   jumpSource: string;
   jumpReport: RunnerJumpReport[];
+  glyphs: RunnerGlyph[];
+  glyphSource: "midi" | "audio-activity" | "none";
   compilerVersion: number;
 }
 

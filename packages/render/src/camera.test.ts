@@ -11,4 +11,13 @@ describe("sampleCamera", () => {
     expect(sampleCamera(frames, 1)).toEqual({ pos: [2, 1, 9], zoom: 1.5 });
     expect(sampleCamera(frames, 4)).toEqual({ pos: [4, 2, 8], zoom: 2 });
   });
+
+  it("interpolates optional viewport anchors without changing legacy keyframes", () => {
+    const frames = [
+      { t: 0, pos: [0, 0, 10] as [number, number, number], zoom: 1, anchor: [0.5, 0.65] as [number, number] },
+      { t: 2, pos: [0, 4, 10] as [number, number, number], zoom: 1, anchor: [0.5, 0.5] as [number, number] },
+    ];
+    expect(sampleCamera(frames, 1).anchor).toEqual([0.5, 0.575]);
+    expect(sampleCamera([{ t: 0, pos: [0, 0, 10] as [number, number, number], zoom: 1 }], 0)).toEqual({ pos: [0, 0, 10], zoom: 1 });
+  });
 });

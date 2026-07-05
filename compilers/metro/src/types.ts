@@ -13,6 +13,7 @@ export interface MetroStation {
   times: number[];
   mergedCount: number;
   span?: [number, number];
+  spanPos?: [MetroPoint, MetroPoint];
   label?: { text: string; side: "L" | "R"; tier: 0 | 1 | 2 };
 }
 export interface MetroEdge {

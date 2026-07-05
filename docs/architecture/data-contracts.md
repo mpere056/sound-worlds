@@ -206,6 +206,10 @@ the only file compilers read.
         "centroid": { "t0": 0, "dt": 0.02, "values": [ ... ] },
         "pitch":    null          // present for pitched mono roles
       },
+      "gain": {                    // optional pre-normalization dynamics
+        "peakRms": 0.18,
+        "meanRms": 0.04
+      },
       "spectra": [                // drum roles only — per-onset log-band FFT
         { "t": 0.0, "bands": [0.9, 0.7, 0.3, 0.2, 0.1, 0.05, 0.02, 0.01] }
       ]
@@ -259,8 +263,10 @@ renderer executes without consulting `song.json`.
   },
 
   "camera": [                     // keyframed; renderer interpolates
-    { "t": 0,    "pos": [0, 0, 10], "zoom": 1.0, "ease": "cubicInOut" },
-    { "t": 12.5, "pos": [0, -4, 10], "zoom": 1.15 }
+    { "t": 0,    "pos": [0, 0, 10], "zoom": 1.0,
+      "anchor": [0.5, 0.65], "ease": "cubicInOut" },
+    { "t": 12.5, "pos": [0, -4, 10], "zoom": 1.15,
+      "anchor": [0.5, 0.5] }
   ],
 
   "curves": {                     // named TimedCurves the scene may sample
@@ -289,6 +295,9 @@ Rules:
   about `t`/`tEnd`/`layer` — payloads are concept-typed in TS.
 - Every event that "lands on" a musical hit **must carry the hit time it was
   solved against** in `params.hitT` — this is what sync tests assert on.
+- `camera.anchor` is optional and normalized viewport space. When present, the
+  scene frames `camera.pos` at that viewport anchor instead of deriving framing
+  from zoom thresholds or other scene-local branches.
 
 ---
 

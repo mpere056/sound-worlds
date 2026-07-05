@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from analyzer.core import analyze_project, build_grid, read_wav
+from analyzer.core import AudioData, _sections, analyze_project, build_grid, detect_onsets, qn_to_time, read_wav
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,6 +40,46 @@ class AnalyzerTests(unittest.TestCase):
         self.assertEqual(grid["beats"], [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0])
         self.assertEqual(len(grid["bars"]), 3)
         self.assertEqual(grid["bars"][-1]["endSec"], 4.25)
+
+    def test_pure_tempo_change_does_not_restart_bars(self) -> None:
+        tempo = [
+            {"timeSec": 0.0, "qn": 0.0, "bpm": 120.0, "tsNum": 4, "tsDen": 4},
+            {"timeSec": 3.0, "qn": 6.0, "bpm": 90.0, "tsNum": 4, "tsDen": 4},
+        ]
+        content_end = qn_to_time(tempo, 10.0)
+        grid = build_grid(tempo, content_end)
+        self.assertEqual(len(grid["bars"]), 3)
+        self.assertAlmostEqual(grid["bars"][0]["startSec"], qn_to_time(tempo, 0.0), places=6)
+        self.assertAlmostEqual(grid["bars"][1]["startSec"], qn_to_time(tempo, 4.0), places=6)
+        self.assertAlmostEqual(grid["bars"][2]["startSec"], qn_to_time(tempo, 8.0), places=6)
+        self.assertNotIn(3.0, [bar["startSec"] for bar in grid["bars"]])
+
+    def test_sections_fill_gaps_with_unknown_spans(self) -> None:
+        energy = {"t0": 0.0, "dt": 1.0, "values": [0.1, 0.2, 0.3, 0.4, 0.5]}
+        sections = _sections([
+            {"name": "Verse", "startSec": 1.0, "endSec": 2.0},
+            {"name": "Chorus", "startSec": 3.0, "endSec": 4.0},
+        ], 5.0, energy)
+        self.assertEqual(
+            [(section["name"], section["kind"], section["startSec"], section["endSec"]) for section in sections],
+            [
+                ("Unlabeled", "unknown", 0.0, 1.0),
+                ("Verse", "verse", 1.0, 2.0),
+                ("Unlabeled", "unknown", 2.0, 3.0),
+                ("Chorus", "chorus", 3.0, 4.0),
+                ("Unlabeled", "unknown", 4.0, 5.0),
+            ],
+        )
+
+    def test_click_onsets_are_sample_accurate(self) -> None:
+        rate = 44100
+        samples = np.zeros(rate * 4, dtype=np.float32)
+        for time_sec in (1.0, 2.0, 3.0):
+            samples[round(time_sec * rate)] = 1.0
+        events = detect_onsets(AudioData(samples=samples, sample_rate=rate))
+        self.assertEqual(len(events), 3)
+        for event, expected in zip(events, (1.0, 2.0, 3.0)):
+            self.assertLessEqual(abs(event["t"] - expected), 0.005)
 
     def test_read_wav_decodes_24_bit_pcm(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -81,6 +121,8 @@ class AnalyzerTests(unittest.TestCase):
             self.assertEqual(song["sections"][0]["kind"], "intro")
             self.assertGreater(len(song["tracks"][0]["events"]), 0)
             self.assertEqual(song["tracks"][0]["events"][0]["kind"], "onset")
+            self.assertGreater(song["tracks"][0]["gain"]["peakRms"], 0)
+            self.assertGreater(song["tracks"][0]["gain"]["meanRms"], 0)
             self.assertEqual(song["master"]["energy"]["dt"], 0.02)
 
             _, cached, changed = analyze_project(package)

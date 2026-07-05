@@ -15,3 +15,9 @@ When an exported track has no MIDI or pitch events, M1 creates an explicitly
 tagged `audio-activity` shuttle from beat positions and the track RMS curve.
 This keeps audio-only REAPER packages useful without pretending that inferred
 stations are pitches. The chosen source is recorded for every line.
+
+M2 adds timestamped train schedules, progressive reveal, and bloom events. The
+implemented M3 slice labels stations, compiles a frontier-follow/final-fit
+camera, and offsets coincident routes by stable global line rank. Edge lengths
+are recomputed after offsetting, so trains follow the displayed paths, and
+interchange rings expand to cover their separated member lines.

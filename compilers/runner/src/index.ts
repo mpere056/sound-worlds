@@ -2,17 +2,23 @@ import { parsePerformance, sampleCurve, solvePalette, type CameraKeyframe, type 
 import { compileMotion } from "./motion.js";
 import { compileTerrain, sampleTerrain } from "./terrain.js";
 import { compileJumps } from "./jumps.js";
+import { compileGlyphs } from "./glyphs.js";
+import { compileSteps } from "./steps.js";
 import type { RunnerPerformance } from "./types.js";
 
 export * from "./motion.js";
 export * from "./terrain.js";
 export * from "./jumps.js";
+export * from "./glyphs.js";
+export * from "./steps.js";
 export * from "./types.js";
 
 export function compileRunner(song: Song): RunnerPerformance {
   const motion = compileMotion(song);
   const terrain = compileTerrain(song, motion.tAtX, motion.worldLength);
   const jumps = compileJumps(song, motion.x, terrain);
+  const glyphs = compileGlyphs(song, motion.x, terrain, jumps.segments);
+  const steps = compileSteps(song);
   const camera: CameraKeyframe[] = [];
   for (let t = 0; t <= song.meta.durationSec + 1e-9; t += 0.5) {
     const x = sampleCurve(motion.x, t);
@@ -29,14 +35,16 @@ export function compileRunner(song: Song): RunnerPerformance {
     palette: solvePalette(null, song.tracks.map((track) => track.role)),
     camera,
     curves: { x: motion.x, speed: motion.speed, tAtX: motion.tAtX, energy: song.master.energy },
-    events: jumps.events,
+    events: [...jumps.events, ...glyphs.events, ...steps].sort((a, b) => a.t - b.t || a.type.localeCompare(b.type)),
     statics: {
       worldLength: motion.worldLength,
       terrain,
       trajectory: { segments: jumps.segments },
       jumpSource: jumps.source,
       jumpReport: jumps.reports,
-      compilerVersion: 2,
+      glyphs: glyphs.glyphs,
+      glyphSource: glyphs.source,
+      compilerVersion: 3,
     },
   };
   parsePerformance(performance);

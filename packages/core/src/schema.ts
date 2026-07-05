@@ -30,6 +30,7 @@ export const songSchema = z.object({
   tracks: z.array(z.object({
     id: z.string().min(1), name: z.string().min(1), role: z.string().min(1), events: z.array(event),
     curves: z.object({ rms: unitCurve, centroid: unitCurve, pitch: unitCurve.nullable() }).strict(),
+    gain: z.object({ peakRms: finite.nonnegative(), meanRms: finite.nonnegative() }).strict().optional(),
     spectra: z.array(z.object({ t: finite.nonnegative(), bands: z.array(unit) }).passthrough()),
   }).strict()).min(1),
   master: z.object({
@@ -55,7 +56,8 @@ export const performanceSchema = z.object({
   resolution: z.object({ w: z.number().int().positive(), h: z.number().int().positive() }).strict(),
   palette: z.object({ bg: z.string().regex(/^#[0-9a-fA-F]{6}$/), roles: z.record(z.string().regex(/^#[0-9a-fA-F]{6}$/)) }).strict(),
   camera: z.array(z.object({
-    t: finite.nonnegative(), pos: z.tuple([finite, finite, finite]), zoom: finite.positive(), ease: z.string().optional(),
+    t: finite.nonnegative(), pos: z.tuple([finite, finite, finite]), zoom: finite.positive(),
+    anchor: z.tuple([unit, unit]).optional(), ease: z.string().optional(),
   }).strict()),
   curves: z.record(numericCurve), events: z.array(performanceEvent), statics: z.record(z.unknown()),
 }).strict().superRefine((performance, context) => {

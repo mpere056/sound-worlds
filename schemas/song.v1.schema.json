@@ -72,6 +72,13 @@
           "type": "object", "additionalProperties": false, "required": ["rms", "centroid", "pitch"],
           "properties": { "rms": { "$ref": "#/definitions/curve" }, "centroid": { "$ref": "#/definitions/curve" }, "pitch": { "type": ["object", "null"] } }
         },
+        "gain": {
+          "type": "object", "additionalProperties": false, "required": ["peakRms", "meanRms"],
+          "properties": {
+            "peakRms": { "type": "number", "minimum": 0 },
+            "meanRms": { "type": "number", "minimum": 0 }
+          }
+        },
         "spectra": { "type": "array", "items": { "type": "object" } }
       }
     },

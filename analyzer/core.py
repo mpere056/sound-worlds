@@ -91,7 +91,7 @@ def _normalize(values: Sequence[float]) -> List[float]:
     return [round(min(1.0, max(0.0, value / peak)), 6) for value in values]
 
 
-def audio_curves(audio: AudioData) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+def audio_curves(audio: AudioData) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, float]]:
     hop = max(1, round(audio.sample_rate * CURVE_DT))
     frame_size = max(2048, hop * 2)
     window = np.hanning(frame_size).astype(np.float32)
@@ -105,9 +105,12 @@ def audio_curves(audio: AudioData) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         total = float(spectrum.sum())
         centroid = float(np.dot(spectrum, frequencies) / total / nyquist) if total > 1e-12 else 0.0
         centroid_values.append(round(min(1.0, max(0.0, centroid)), 6))
+    peak_rms = max(rms_values) if rms_values else 0.0
+    mean_rms = sum(rms_values) / len(rms_values) if rms_values else 0.0
     return (
         {"t0": 0.0, "dt": CURVE_DT, "values": _normalize(rms_values)},
         {"t0": 0.0, "dt": CURVE_DT, "values": centroid_values},
+        {"peakRms": round(peak_rms, 9), "meanRms": round(mean_rms, 9)},
     )
 
 
@@ -133,38 +136,37 @@ def _sample_curve(curve: Dict[str, Any], time_sec: float) -> float:
     return float(values[low] * (1.0 - alpha) + values[high] * alpha)
 
 
-def detect_onsets(rms: Dict[str, Any]) -> List[Dict[str, Any]]:
-    values = np.asarray(rms["values"], dtype=np.float64)
-    if len(values) < 3 or float(values.max()) <= 1e-9:
+def detect_onsets(audio: AudioData) -> List[Dict[str, Any]]:
+    magnitude = np.abs(audio.samples.astype(np.float64))
+    if len(magnitude) < 2 or float(magnitude.max()) <= 1e-9:
         return []
-    novelty = np.maximum(0.0, np.diff(values, prepend=values[0]))
-    positive = novelty[novelty > 0]
-    if not len(positive):
-        return []
-    threshold = max(0.035, float(np.median(positive) + 1.5 * np.std(positive)))
-    candidates = [
-        i for i in range(1, len(novelty) - 1)
-        if novelty[i] >= threshold and novelty[i] >= novelty[i - 1] and novelty[i] >= novelty[i + 1]
-    ]
-    # Collapse adjacent candidates; retain the strongest within 80 ms.
-    selected: List[int] = []
-    separation = max(1, round(0.08 / rms["dt"]))
-    for candidate in candidates:
-        if selected and candidate - selected[-1] < separation:
-            if novelty[candidate] > novelty[selected[-1]]:
-                selected[-1] = candidate
+    peak = float(magnitude.max())
+    noise_floor = float(np.median(magnitude))
+    threshold = max(1e-4, noise_floor * 4.0, peak * 0.15)
+    refractory = max(1, round(0.08 * audio.sample_rate))
+    velocity_window = max(1, round(0.05 * audio.sample_rate))
+    selected: List[Tuple[int, float]] = []
+    index = 1
+    while index < len(magnitude):
+        if magnitude[index] >= threshold and magnitude[index - 1] < threshold:
+            start = index
+            end = min(len(magnitude), start + velocity_window)
+            velocity = float(magnitude[start:end].max()) / peak if end > start else float(magnitude[start]) / peak
+            selected.append((start, velocity))
+            index = start + refractory
         else:
-            selected.append(candidate)
-    peak = max(float(novelty[i]) for i in selected) if selected else 1.0
+            index += 1
+    if not selected:
+        return []
     return [
         {
-            "t": round(rms["t0"] + i * rms["dt"], 6),
+            "t": round(index / audio.sample_rate, 6),
             "dur": 0.0,
             "pitch": None,
-            "vel": round(float(novelty[i]) / peak, 6),
+            "vel": round(min(1.0, max(0.0, velocity)), 6),
             "kind": "onset",
         }
-        for i in selected
+        for index, velocity in selected
     ]
 
 
@@ -238,7 +240,6 @@ def build_grid(tempo: Sequence[Dict[str, Any]], content_end: float) -> Dict[str,
     beats: List[float] = []
     bars: List[Dict[str, Any]] = []
     downbeats: List[float] = []
-    bar_index = 0
     for index, point in enumerate(points):
         next_qn = points[index + 1]["qn"] if index + 1 < len(points) else content_end_qn
         segment_end_qn = min(next_qn, content_end_qn)
@@ -249,6 +250,21 @@ def build_grid(tempo: Sequence[Dict[str, Any]], content_end: float) -> Dict[str,
             if not beats or abs(beat_time - beats[-1]) > 1e-6:
                 beats.append(round(beat_time, 9))
             cursor += beat_qn
+        if segment_end_qn >= content_end_qn - 1e-9:
+            break
+
+    signature_points: List[Dict[str, Any]] = []
+    for point in points:
+        if not signature_points or (
+            point["tsNum"] != signature_points[-1]["tsNum"]
+            or point["tsDen"] != signature_points[-1]["tsDen"]
+        ):
+            signature_points.append(point)
+    bar_index = 0
+    for index, point in enumerate(signature_points):
+        next_qn = signature_points[index + 1]["qn"] if index + 1 < len(signature_points) else content_end_qn
+        segment_end_qn = min(next_qn, content_end_qn)
+        beat_qn = 4.0 / point["tsDen"]
         bar_qn = point["tsNum"] * beat_qn
         cursor = point["qn"]
         while cursor < segment_end_qn - 1e-9:
@@ -259,8 +275,6 @@ def build_grid(tempo: Sequence[Dict[str, Any]], content_end: float) -> Dict[str,
             bars.append({"index": bar_index, "startSec": round(start_time, 9), "endSec": round(end_time, 9)})
             bar_index += 1
             cursor += bar_qn
-        if segment_end_qn >= content_end_qn - 1e-9:
-            break
     return {"beats": beats, "downbeats": downbeats, "bars": bars}
 
 
@@ -279,20 +293,36 @@ def _section_kind(name: str) -> str:
 
 
 def _sections(regions: Sequence[Dict[str, Any]], content_end: float, energy: Dict[str, Any]) -> List[Dict[str, Any]]:
-    source = list(regions) or [{"name": "Song", "startSec": 0.0, "endSec": content_end}]
-    result = []
-    for region in source:
-        kind = _section_kind(region["name"])
-        start_index = max(0, int(region["startSec"] / energy["dt"]))
-        end_index = min(len(energy["values"]), max(start_index + 1, int(math.ceil(region["endSec"] / energy["dt"]))))
+    def section_payload(name: str, start_sec: float, end_sec: float) -> Dict[str, Any]:
+        kind = _section_kind(name)
+        start_index = max(0, int(start_sec / energy["dt"]))
+        end_index = min(len(energy["values"]), max(start_index + 1, int(math.ceil(end_sec / energy["dt"]))))
         values = energy["values"][start_index:end_index]
         mean_energy = sum(values) / len(values) if values else 0.0
-        repeat_group = kind if kind != "unknown" else region["name"].strip().lower()
-        result.append({
-            "name": region["name"], "kind": kind,
-            "startSec": region["startSec"], "endSec": region["endSec"],
+        repeat_group = kind if kind != "unknown" else name.strip().lower()
+        return {
+            "name": name, "kind": kind,
+            "startSec": round(start_sec, 9), "endSec": round(end_sec, 9),
             "repeatGroup": repeat_group or "unknown", "energy": round(mean_energy, 6),
-        })
+        }
+
+    if not regions:
+        return [section_payload("Song", 0.0, content_end)]
+
+    result = []
+    cursor = 0.0
+    for region in sorted(regions, key=lambda item: (item["startSec"], item["endSec"])):
+        start_sec = max(0.0, min(content_end, region["startSec"]))
+        end_sec = max(start_sec, min(content_end, region["endSec"]))
+        if start_sec > cursor + 1e-9:
+            result.append(section_payload("Unlabeled", cursor, start_sec))
+        if end_sec > cursor + 1e-9:
+            result.append(section_payload(region["name"], max(start_sec, cursor), end_sec))
+            cursor = end_sec
+        if cursor >= content_end - 1e-9:
+            break
+    if cursor < content_end - 1e-9:
+        result.append(section_payload("Unlabeled", cursor, content_end))
     return result
 
 
@@ -304,22 +334,23 @@ def _analysis_hash(manifest: Dict[str, Any]) -> str:
 def build_song(package_dir: Path, manifest: Dict[str, Any]) -> Dict[str, Any]:
     project = manifest["project"]
     master_audio = read_wav(package_dir / manifest["master"]["path"])
-    master_energy, _ = audio_curves(master_audio)
+    master_energy, _, _ = audio_curves(master_audio)
     tracks = []
     track_curves: Dict[str, Dict[str, Any]] = {}
     for source in manifest["tracks"]:
         audio = read_wav(package_dir / source["stem"]["path"])
-        rms, centroid = audio_curves(audio)
+        rms, centroid, gain = audio_curves(audio)
         role = source.get("role") or "other"
         events = _midi_events(source.get("midi"))
         if not events and role in DRUM_ROLES:
-            events = detect_onsets(rms)
+            events = detect_onsets(audio)
         spectra = onset_spectra(audio, events) if role in DRUM_ROLES and events else []
         track_curves[source["id"]] = rms
         tracks.append({
             "id": source["id"], "name": source["name"], "role": role,
             "events": sorted(events, key=lambda event: event["t"]),
             "curves": {"rms": rms, "centroid": centroid, "pitch": None},
+            "gain": gain,
             "spectra": spectra,
         })
     energy_values = master_energy["values"]

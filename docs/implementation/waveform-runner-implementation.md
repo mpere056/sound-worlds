@@ -8,6 +8,17 @@ that math and specifies terrain, systems, rendering, tests, and build order.
 
 ---
 
+## Current implementation
+
+R1 and R2 are implemented. R3 is in progress: the compiler emits deterministic
+MIDI melody glyphs or explicitly tagged beat/activity fallback glyphs after
+the final trajectory, stores exact runner-pose merge targets, limits concurrent
+beams to six, and preserves overflow events as sparkles. The scene renders
+stateless 300 ms approaches and merge ripples. Gates, palette transitions, kick
+camera impulses, vocal halo, and float segments remain. See
+[Current implementation status](../implementation-status.md) and
+[R3 — The Music](waveform-runner/R3-music.md).
+
 ## 1. World model
 
 ### 1.1 Horizontal motion: `x(t)` is a compiled curve
@@ -198,7 +209,7 @@ runner "pulling" the melody out of the world.
 4. rail geometry           (drop sections)
 5. jump solver             (landings ← snares; budget; clearance; escalation)
 6. trajectory assembly     (segments; continuity assert)
-7. glyph schedule          (beams from pose(t_note))
+7. glyph schedule          (implemented: beams from final pose(t_note))
 8. erasure milestones, gates, palette ramps, ghost windows
 9. camera curves           (compile-time damping)
 10. statics + events + curves → performance.runner.json
@@ -211,7 +222,8 @@ like that" audit trail.
 ## 6. Event & statics inventory
 
 ```
-statics: terrain polyline + strata, rail, gates, glyph list (pos, t, pitch),
+statics: terrain polyline + strata, rail, gates, glyph list
+         (spawnPos, mergePos, mergeT, source, pitch/mode),
          palette ramps, ghost window mapping
 curves:  x(t), camY(t), zoomBase(t), energy
 events:  jump.takeoff {hitT: snareT}       jump.land {hitT}
