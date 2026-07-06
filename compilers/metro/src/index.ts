@@ -1,5 +1,5 @@
 import { parsePerformance, sampleCurve, solvePalette, type Song, type SongEvent, type SongTrack } from "@reaper-viz/core";
-import type { MetroDistrict, MetroEdge, MetroLine, MetroLineAudit, MetroPerformance, MetroPoint, MetroStation, MetroSyncHit } from "./types.js";
+import type { MetroDistrict, MetroEdge, MetroLine, MetroLineAudit, MetroPerformance, MetroPoint, MetroStation, MetroSyncHit, MetroTailPulse } from "./types.js";
 import { compileTrainSchedule, metroEvents } from "./trains.js";
 
 export * from "./types.js";
@@ -144,6 +144,60 @@ function polyLength(points: MetroPoint[]): number {
 
 function samePoint(a: MetroPoint, b: MetroPoint): boolean {
   return Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6;
+}
+
+function median(values: number[]): number {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2 : sorted[middle] ?? 0;
+}
+
+function compileTailPulses(song: Song, lastHitT: number | null, bounds: { minX: number; minY: number; maxX: number; maxY: number }): MetroTailPulse[] {
+  if (lastHitT === null || song.meta.durationSec - lastHitT < 0.45) return [];
+  const curve = song.master.energy;
+  if (!curve.values.length || curve.dt <= 0) return [];
+  const maxEnergy = Math.max(...curve.values);
+  if (maxEnergy <= 0.001) return [];
+  const tailStart = Math.max(0, lastHitT + 0.04);
+  const startIndex = Math.max(2, Math.ceil((tailStart - curve.t0) / curve.dt));
+  const endIndex = Math.min(curve.values.length - 2, Math.floor((song.meta.durationSec - 0.08 - curve.t0) / curve.dt));
+  const tailValues = curve.values.slice(startIndex, Math.max(startIndex, endIndex + 1));
+  const floor = median(tailValues);
+  const energyThreshold = Math.max(0.18 * maxEnergy, Math.min(floor + 0.08, 0.28 * maxEnergy));
+  const riseThreshold = Math.max(0.045 * maxEnergy, 0.06);
+  const candidates: Array<{ t: number; strength: number }> = [];
+  for (let index = startIndex; index <= endIndex; index += 1) {
+    const value = curve.values[index] ?? 0;
+    const twoBack = curve.values[index - 2] ?? 0;
+    const oneBack = curve.values[index - 1] ?? 0;
+    const rise = value - Math.max(twoBack, oneBack * 0.72);
+    if (value >= energyThreshold && rise >= riseThreshold && value >= oneBack) {
+      candidates.push({ t: curve.t0 + index * curve.dt, strength: Math.min(1, value / maxEnergy) });
+    }
+  }
+  const collapsed: Array<{ t: number; strength: number }> = [];
+  for (const candidate of candidates) {
+    const prior = collapsed.at(-1);
+    if (!prior || candidate.t - prior.t > 0.16) collapsed.push(candidate);
+    else if (candidate.strength > prior.strength) collapsed[collapsed.length - 1] = candidate;
+  }
+  const width = bounds.maxX - bounds.minX;
+  const lowerY = Math.max(bounds.minY, bounds.maxY - 96);
+  return collapsed.slice(0, 16).map((pulse, index) => {
+    const lane = (index * 5 + Math.round(pulse.strength * 7)) % 12;
+    return {
+      id: `master-tail:${index}:${pulse.t.toFixed(3)}`,
+      t: pulse.t,
+      pos: {
+        x: bounds.minX + width * 0.12 + lane * (width * 0.76 / 11),
+        y: lowerY - (index % 4) * 44,
+      },
+      strength: pulse.strength,
+      radius: 120 + pulse.strength * 130,
+      label: "MASTER TAIL",
+    };
+  });
 }
 
 /**
@@ -341,6 +395,8 @@ export function compileMetro(song: Song): MetroPerformance {
   const xs = stations.map((station) => station.pos.x);
   const ys = stations.map((station) => station.pos.y);
   const bounds = { minX: Math.min(...xs, 90), minY: Math.min(...ys, 210), maxX: Math.max(...xs, 915), maxY: Math.max(...ys, 1650) };
+  const tailPulses = compileTailPulses(song, syncHits.at(-1)?.t ?? null, bounds);
+  if (tailPulses.length) compileLog.push(`master tail: ${tailPulses.length} audio-energy pulses after last station hit`);
   compileLog.push("camera: final reveal deferred until a post-audio end-card hold exists");
   const cameraTimes = [...new Set([0, ...song.grid.beats, song.meta.durationSec])].sort((a, b) => a - b);
   let previousFrontier = bounds.minY;
@@ -370,9 +426,10 @@ export function compileMetro(song: Song): MetroPerformance {
       lines, districts, stations, edges, trains,
       lineAudits,
       syncHits,
+      tailPulses,
       bounds,
       compileLog,
-      compilerVersion: 6,
+      compilerVersion: 7,
     },
   };
   parsePerformance(performance);

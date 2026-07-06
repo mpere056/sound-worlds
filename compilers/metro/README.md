@@ -22,7 +22,7 @@ camera, and offsets coincident routes by stable global line rank. Edge lengths
 are recomputed after offsetting, so trains follow the displayed paths, and
 interchange rings expand to cover their separated member lines.
 
-Performance version 6 includes:
+Performance version 7 includes:
 
 - sync-readability diagnostics: `lineAudits` record per-line source, hit, and
   station counts, and `syncHits` records the current/next note payoff data
@@ -31,4 +31,7 @@ Performance version 6 includes:
   bands rendered behind the transit lines;
 - music-locked camera timing: the final poster pullback is deferred until the
   export pipeline provides a post-audio end-card hold, so the preview does not
-  zoom out while the master audio is still playing.
+  zoom out while the master audio is still playing;
+- master-tail pulse diagnostics: `tailPulses` marks strong master-energy
+  attacks after the final extracted station hit, so reverb/delay tails remain
+  visibly reactive without inventing fake MIDI stations.

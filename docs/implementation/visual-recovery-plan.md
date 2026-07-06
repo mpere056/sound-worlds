@@ -223,6 +223,14 @@ verification on `untitled-project-6d2e04f7` showed 4 MIDI lines, 40 stations,
 or errors. A human audio watch-through is still needed before marking the
 perceptual acceptance gate complete.
 
+**Progress 2026-07-06:** Metro performance version 7 now emits `tailPulses`
+from strong master-energy attacks after the final extracted station hit. This
+keeps the map visibly reactive during rendered audio tails without inventing
+fake MIDI stations. The Metro scene renders those pulses as city-power waves,
+adds stronger line/station glow, and makes trains easier to see with a body
+halo/headlight pass. On `untitled-project-6d2e04f7`, the final station hit is
+8.969 s and the compiler now marks tail pulses at 9.36 s, 9.64 s, and 10.34 s.
+
 ---
 
 ## V3 — Identity pull-forward (reordered phases)

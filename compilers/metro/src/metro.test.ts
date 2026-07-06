@@ -39,7 +39,7 @@ describe("Metro Map M1 compiler", () => {
       { role: "keys", beats: [0, 2], pitch: 64, kind: "note" },
     ] });
     const output = compileMetro(song);
-    expect(output.statics.compilerVersion).toBe(6);
+    expect(output.statics.compilerVersion).toBe(7);
     expect(output.statics.lineAudits).toHaveLength(2);
     expect(output.statics.lineAudits[0]).toMatchObject({
       name: "lead",
@@ -137,6 +137,25 @@ describe("Metro Map M1 compiler", () => {
     expect(output.camera.at(-1)!.t).toBe(song.meta.durationSec);
     expect(output.camera.every((key) => key.zoom === 1.35)).toBe(true);
     expect(output.camera.every((key) => key.anchor?.[1] === 1240 / 1920)).toBe(true);
+  });
+
+  it("emits master-tail pulses when audible energy continues after the last station hit", () => {
+    const song = buildFixtureSong({ bars: 2, patterns: [{ role: "lead", beats: [0], pitch: 60, kind: "note" }] });
+    song.meta.durationSec = 5;
+    song.meta.contentEndSec = 3;
+    song.master.energy = {
+      t0: 0,
+      dt: 0.1,
+      values: Array.from({ length: 50 }, (_, index) => {
+        if ([18, 24, 31, 38].includes(index)) return 1;
+        if ([19, 25, 32, 39].includes(index)) return 0.62;
+        return index < 12 ? 0.04 : 0.08;
+      }),
+    };
+    const output = compileMetro(song);
+    expect(output.statics.tailPulses.map((pulse) => Number(pulse.t.toFixed(1)))).toEqual([2.4, 3.1, 3.8]);
+    expect(output.statics.tailPulses.every((pulse) => pulse.label === "MASTER TAIL")).toBe(true);
+    expect(output.statics.compileLog).toContain("master tail: 3 audio-energy pulses after last station hit");
   });
 
   it("routes every segment horizontally, vertically, or at 45 degrees", () => {

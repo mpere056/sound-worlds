@@ -41,6 +41,14 @@ export interface MetroSyncHit {
   eventType: "station.bloom";
   hitT: number;
 }
+export interface MetroTailPulse {
+  id: string;
+  t: number;
+  pos: MetroPoint;
+  strength: number;
+  radius: number;
+  label: string;
+}
 export interface MetroStation {
   id: string;
   pos: MetroPoint;
@@ -78,6 +86,7 @@ export interface MetroStatics extends Record<string, unknown> {
   trains: MetroTrainSchedule[];
   lineAudits: MetroLineAudit[];
   syncHits: MetroSyncHit[];
+  tailPulses: MetroTailPulse[];
   bounds: { minX: number; minY: number; maxX: number; maxY: number };
   compileLog: string[];
   compilerVersion: number;

@@ -1,4 +1,4 @@
-import type { MetroPerformance, MetroPoint, MetroSyncHit } from "@reaper-viz/compiler-metro";
+import type { MetroPerformance, MetroPoint, MetroSyncHit, MetroTailPulse } from "@reaper-viz/compiler-metro";
 import { PixiBackend, sampleCamera } from "@reaper-viz/render";
 import { Graphics, Text } from "pixi.js";
 
@@ -109,15 +109,22 @@ export class MetroScene {
 
   auditFrame(t: number): string[] {
     const hits = this.#performance.statics.syncHits ?? [];
+    const tailPulses = this.#performance.statics.tailPulses ?? [];
     const prior = hits.filter((hit) => hit.t <= t).at(-1);
     const next = hits.find((hit) => hit.t > t);
     const active = hits.filter((hit) => Math.abs(hit.t - t) <= 0.08).slice(0, 3);
+    const activeTail = tailPulses.filter((pulse) => t >= pulse.t && t - pulse.t <= 0.7).slice(-2);
+    const nextTail = tailPulses.find((pulse) => pulse.t > t);
     const lineAudits = this.#performance.statics.lineAudits ?? [];
     const lines = ["METRO AUDIT"];
     if (active.length) {
       for (const hit of active) lines.push(`NOW  ${this.#formatHit(hit, t)}`);
+    } else if (activeTail.length) {
+      for (const pulse of activeTail) lines.push(`TAIL ${this.#formatTailPulse(pulse, t)}`);
     } else if (next) {
       lines.push(`NEXT ${this.#formatHit(next, t)}`);
+    } else if (nextTail) {
+      lines.push(`TAIL NEXT ${this.#formatTailPulse(nextTail, t)}`);
     } else if (prior) {
       lines.push(`LAST ${this.#formatHit(prior, t)}`);
     } else {
@@ -134,6 +141,12 @@ export class MetroScene {
     const delta = hit.t - t;
     const sign = delta >= 0 ? "+" : "-";
     return `${hit.lineName} · ${hit.pitchName} · ${hit.label} · ${hit.source} · hitT ${hit.hitT.toFixed(3)} (${sign}${Math.abs(delta).toFixed(3)}s)`;
+  }
+
+  #formatTailPulse(pulse: MetroTailPulse, t: number): string {
+    const delta = pulse.t - t;
+    const sign = delta >= 0 ? "+" : "-";
+    return `${pulse.label} · energy ${(pulse.strength * 100).toFixed(0)}% · hitT ${pulse.t.toFixed(3)} (${sign}${Math.abs(delta).toFixed(3)}s)`;
   }
 
   #transform(point: MetroPoint, t: number): MetroPoint {
@@ -190,6 +203,12 @@ export class MetroScene {
       const points = partialPolyline(polyline, revealProgress).map((point) => this.#transform(point, t));
       this.#map.moveTo(points[0]!.x, points[0]!.y);
       for (const point of points.slice(1)) this.#map.lineTo(point.x, point.y);
+      this.#map.stroke({ color: colorNumber(line.color), width: 34 * this.tuning.lineWeight, alpha: 0.12, cap: "round", join: "round" });
+      this.#map.moveTo(points[0]!.x, points[0]!.y);
+      for (const point of points.slice(1)) this.#map.lineTo(point.x, point.y);
+      this.#map.stroke({ color: colorNumber(line.color), width: 24 * this.tuning.lineWeight, alpha: 0.16, cap: "round", join: "round" });
+      this.#map.moveTo(points[0]!.x, points[0]!.y);
+      for (const point of points.slice(1)) this.#map.lineTo(point.x, point.y);
       this.#map.stroke({ color: 0x06101a, width: 22 * this.tuning.lineWeight, cap: "round", join: "round" });
       this.#map.moveTo(points[0]!.x, points[0]!.y);
       for (const point of points.slice(1)) this.#map.lineTo(point.x, point.y);
@@ -204,6 +223,8 @@ export class MetroScene {
       if (station.revealT > t) continue;
       const point = this.#transform(station.pos, t);
       const scale = this.tuning.stationScale;
+      const stationColor = this.#lineColorForStation(station);
+      this.#map.circle(point.x, point.y, 28 * scale).fill({ color: stationColor, alpha: station.kind === "interchange" ? 0.12 : 0.055 });
       if (station.kind === "interchange") {
         const ringRadius = (18 + (station.lines.length - 1) * 3.5) * scale;
         this.#map.circle(point.x, point.y, ringRadius).fill(0xf5f0df).stroke({ color: 0x06101a, width: 6 });
@@ -229,6 +250,23 @@ export class MetroScene {
         this.#motion.circle(point.x, point.y, Math.max(4, 9 * scale * (1 + (1 - age) * 0.8 * cue)))
           .fill({ color: 0xf5f0df, alpha: 0.18 * (1 - age) * cue });
       }
+    }
+
+    for (const pulse of this.#performance.statics.tailPulses ?? []) {
+      const ageSec = t - pulse.t;
+      if (ageSec < 0 || ageSec > 0.92) continue;
+      const age = ageSec / 0.92;
+      const point = this.#transform(pulse.pos, t);
+      const intensity = pulse.strength * this.tuning.cueStrength;
+      const radius = (38 + pulse.radius * age) * (0.75 + intensity * 0.5);
+      this.#motion.circle(point.x, point.y, radius)
+        .stroke({ color: 0xa8ffdf, width: Math.max(2, 12 * (1 - age) * intensity), alpha: Math.min(0.8, 0.52 * (1 - age) * intensity) });
+      this.#motion.circle(point.x, point.y, radius * 0.48)
+        .stroke({ color: 0xf5f0df, width: Math.max(1, 5 * (1 - age) * intensity), alpha: Math.min(0.86, 0.72 * (1 - age) * intensity) });
+      this.#motion.moveTo(point.x, point.y - radius * 0.46).lineTo(point.x, point.y + radius * 0.46)
+        .stroke({ color: 0x7dffd2, width: Math.max(1, 4 * (1 - age) * intensity), alpha: Math.min(0.5, 0.34 * (1 - age) * intensity), cap: "round" });
+      this.#motion.circle(point.x, point.y, 10 + 16 * (1 - age) * intensity)
+        .fill({ color: 0xf5f0df, alpha: Math.min(0.5, 0.22 * (1 - age) * intensity) });
     }
 
     for (const schedule of this.#performance.statics.trains) {
@@ -264,8 +302,13 @@ export class MetroScene {
         this.#motion.circle(point.x, point.y, 16 + age * 22)
           .fill({ color: colorNumber(line.color), alpha: 0.12 * (1 - age) * this.tuning.cueStrength });
       }
+      this.#motion.roundRect(point.x - 26, point.y - 15, 52, 30, 14)
+        .fill({ color: colorNumber(line.color), alpha: 0.1 });
       this.#motion.roundRect(point.x - 18, point.y - 10, 36, 20, 9)
         .fill(0xf5f0df).stroke({ color: colorNumber(line.color), width: 5 });
+      this.#motion.circle(point.x + 20, point.y, 8)
+        .fill({ color: colorNumber(line.color), alpha: 0.18 });
+      this.#motion.circle(point.x + 20, point.y, 3.5).fill(0xf5f0df);
       this.#motion.circle(point.x + 8, point.y, 3).fill(colorNumber(line.color));
       const lineIndex = this.#lineIndexById.get(line.id) ?? 0;
       const pipCount = Math.min(4, lineIndex + 1);
