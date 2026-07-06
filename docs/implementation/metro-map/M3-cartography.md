@@ -62,8 +62,11 @@ strength must make each line traceable before moving on to topology.
 - **Phase 1 — follow:** target = drawing frontier `maxRowY(t)` from the reveal
   schedule, smoothed at compile time (critically damped, ζ=1, ω tuned);
   zoom 1.6; horizontal centering on the active lane centroid (slow lerp).
-- **Phase 3 — the reveal:** final 6 s, ease to fit `statics.bounds` (padding
-  8%), then hold. Title lozenge `title.stamp` event on the final chord.
+- **Phase 3 — the reveal:** only during post-audio end-card time. The preview
+  camera must not ease to `statics.bounds` while the master audio is still
+  playing; if no post-audio hold exists, defer the pullback and stay locked to
+  the drawing frontier. Title lozenge `title.stamp` belongs in the end-card
+  hold, not over active music.
 - Emit as `performance.camera` keyframes (the 2D camera rig from P0 consumes
   them); scene stays camera-dumb.
 
@@ -82,7 +85,8 @@ strength must make each line traceable before moving on to topology.
 - [ ] Zero tier-0 label overlaps on all fixtures + one real project.
 - [ ] Camera never moves backwards (frontier is monotone; smoothing must not
       overshoot into reverse — test on the sampled camera curve).
-- [ ] Final frame (pull-back) contains the entire `bounds` with padding.
+- [ ] Preview camera remains music-locked through the active audio duration;
+      final pull-back only occurs in explicit post-audio end-card time.
 - [ ] Human check: 60 s of a real project reads as "a metro map being drawn."
 - [ ] Similar-track check: `untitled-project-6d2e04f7` or an equivalent
       multi-keys export still lets the reviewer distinguish individual lines
@@ -109,7 +113,8 @@ interchange rings grow with their line count. Occupancy-specific joint healing,
 district-band acceptance on an authored-region song, and full overlap
 optimization remain open M3 work. Section district statics/rendering landed on
 2026-07-05, but the current reference export only exercises the single
-whole-song fallback band.
+whole-song fallback band. The preview camera was also fixed on 2026-07-05 to
+defer final pullback until a post-audio end-card hold exists.
 
 - **The offset pass is the most fiddly code in the whole game** (joint healing
   at corridor-membership changes). Time-box it: micro-jogs may look imperfect

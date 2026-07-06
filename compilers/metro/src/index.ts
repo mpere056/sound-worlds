@@ -341,19 +341,19 @@ export function compileMetro(song: Song): MetroPerformance {
   const xs = stations.map((station) => station.pos.x);
   const ys = stations.map((station) => station.pos.y);
   const bounds = { minX: Math.min(...xs, 90), minY: Math.min(...ys, 210), maxX: Math.max(...xs, 915), maxY: Math.max(...ys, 1650) };
-  const cameraTimes = [...new Set([0, ...song.grid.beats, Math.max(0, song.meta.durationSec - 2), song.meta.durationSec])].sort((a, b) => a - b);
+  compileLog.push("camera: final reveal deferred until a post-audio end-card hold exists");
+  const cameraTimes = [...new Set([0, ...song.grid.beats, song.meta.durationSec])].sort((a, b) => a - b);
   let previousFrontier = bounds.minY;
   const camera = cameraTimes.map((t) => {
     const revealed = stations.filter((station) => station.revealT <= t + 1e-6);
     const frontier = Math.max(previousFrontier, ...revealed.map((station) => station.pos.y));
     previousFrontier = frontier;
-    const finalReveal = t >= song.meta.durationSec - 1e-6;
     return {
       t,
-      pos: [(bounds.minX + bounds.maxX) / 2, finalReveal ? (bounds.minY + bounds.maxY) / 2 : frontier, 10] as [number, number, number],
-      zoom: finalReveal ? 1 : 1.35,
-      anchor: finalReveal ? [0.5, 0.5] as [number, number] : [0.5, 1240 / 1920] as [number, number],
-      ease: finalReveal ? "cubicInOut" : "smoothstep",
+      pos: [(bounds.minX + bounds.maxX) / 2, frontier, 10] as [number, number, number],
+      zoom: 1.35,
+      anchor: [0.5, 1240 / 1920] as [number, number],
+      ease: "smoothstep",
     };
   });
   const performance: MetroPerformance = {

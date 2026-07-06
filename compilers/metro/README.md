@@ -28,4 +28,7 @@ Performance version 6 includes:
   station counts, and `syncHits` records the current/next note payoff data
   consumed by the preview app's Metro audit overlay;
 - section district bands: `districts` maps `song.sections[]` into world-space
-  bands rendered behind the transit lines.
+  bands rendered behind the transit lines;
+- music-locked camera timing: the final poster pullback is deferred until the
+  export pipeline provides a post-audio end-card hold, so the preview does not
+  zoom out while the master audio is still playing.

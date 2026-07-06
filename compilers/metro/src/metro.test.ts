@@ -117,17 +117,26 @@ describe("Metro Map M1 compiler", () => {
     expect(schedule.stops[0]!.sprint).toBe(true);
   });
 
-  it("labels terminals and keeps the frontier camera monotone", () => {
+  it("labels terminals and keeps the frontier camera monotone during the audio", () => {
     const output = compileMetro(buildFixtureSong({ patterns: [{ role: "keys", beats: [], kind: "note" }] }));
     const terminals = output.statics.stations.filter((station) => station.kind === "terminal");
     expect(terminals.length).toBeGreaterThanOrEqual(2);
     expect(terminals.every((station) => station.label?.tier === 0)).toBe(true);
-    for (let index = 1; index < output.camera.length - 1; index += 1) {
+    for (let index = 1; index < output.camera.length; index += 1) {
       expect(output.camera[index]!.pos[1]).toBeGreaterThanOrEqual(output.camera[index - 1]!.pos[1]);
     }
-    expect(output.camera[output.camera.length - 1]!.zoom).toBe(1);
-    expect(output.camera[0]!.anchor).toEqual([0.5, 1240 / 1920]);
-    expect(output.camera.at(-1)!.anchor).toEqual([0.5, 0.5]);
+    expect(output.camera.every((key) => key.zoom === 1.35)).toBe(true);
+    expect(output.camera.every((key) => key.anchor?.[1] === 1240 / 1920)).toBe(true);
+    expect(output.statics.compileLog).toContain("camera: final reveal deferred until a post-audio end-card hold exists");
+  });
+
+  it("does not start final pullback inside the rendered audio duration", () => {
+    const song = buildFixtureSong({ bars: 2, patterns: [{ role: "lead", beats: [0, 1, 2, 3], pitch: 60, kind: "note" }] });
+    song.meta.contentEndSec = Math.max(0, song.meta.durationSec - 2);
+    const output = compileMetro(song);
+    expect(output.camera.at(-1)!.t).toBe(song.meta.durationSec);
+    expect(output.camera.every((key) => key.zoom === 1.35)).toBe(true);
+    expect(output.camera.every((key) => key.anchor?.[1] === 1240 / 1920)).toBe(true);
   });
 
   it("routes every segment horizontally, vertically, or at 45 degrees", () => {

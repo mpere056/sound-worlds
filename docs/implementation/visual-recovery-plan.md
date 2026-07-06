@@ -162,6 +162,11 @@ statics if needed — compiler-side change).
 viewport anchors, Metro emits frontier/final anchors from the compiler, and
 the scene uses those anchors instead of a zoom-threshold framing branch.
 
+**Correction 2026-07-05:** the preview camera no longer starts a final
+pullback during the master audio duration. The compiler keeps Metro zoom locked
+through active audio and defers the poster reveal until the export pipeline
+provides explicit post-audio end-card time.
+
 ### V2.4 Geometry single-source
 Remove the scene's re-derived lane math (`90 + span·75`, L150–151); cluster
 spans must arrive as world coordinates in statics.
