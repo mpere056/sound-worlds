@@ -39,7 +39,7 @@ describe("Metro Map M1 compiler", () => {
       { role: "keys", beats: [0, 2], pitch: 64, kind: "note" },
     ] });
     const output = compileMetro(song);
-    expect(output.statics.compilerVersion).toBe(5);
+    expect(output.statics.compilerVersion).toBe(6);
     expect(output.statics.lineAudits).toHaveLength(2);
     expect(output.statics.lineAudits[0]).toMatchObject({
       name: "lead",
@@ -73,6 +73,25 @@ describe("Metro Map M1 compiler", () => {
     expect(output.statics.lineAudits.map((audit) => audit.lineId)).toEqual(song.tracks.map((track) => track.id));
     expect(output.statics.lineAudits.every((audit) => audit.source === "midi" && audit.hitCount === 2)).toBe(true);
     expect(new Set(output.statics.lines.map((line) => line.color)).size).toBe(4);
+  });
+
+  it("compiles song sections into district bands behind the map", () => {
+    const output = compileMetro(buildFixtureSong({ bars: 8 }));
+    expect(output.statics.districts.map((district) => ({
+      name: district.name,
+      kind: district.kind,
+      repeatGroup: district.repeatGroup,
+      startT: district.startT,
+      endT: district.endT,
+      color: district.color,
+    }))).toEqual([
+      { name: "Verse 1", kind: "verse", repeatGroup: "verse", startT: 0, endT: 4, color: "#118ab2" },
+      { name: "Chorus 1", kind: "chorus", repeatGroup: "chorus", startT: 4, endT: 8, color: "#ef476f" },
+      { name: "Verse 2", kind: "verse", repeatGroup: "verse", startT: 8, endT: 12, color: "#118ab2" },
+      { name: "Chorus 2", kind: "chorus", repeatGroup: "chorus", startT: 12, endT: 16, color: "#ef476f" },
+    ]);
+    expect(output.statics.districts.every((district) => district.yMax > district.yMin)).toBe(true);
+    expect(output.statics.compileLog).toContain("districts: 4 section bands");
   });
 
   it("caps train dwell to half the gap for fast runs", () => {

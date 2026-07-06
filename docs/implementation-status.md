@@ -47,8 +47,8 @@ not a valid M4 chorus-ring fixture.
 | Waveform Runner R3 | In progress | engineering-preview | MIDI melody glyphs, honest beat/activity fallback, role-colored exact-pose merge targets, note-timed route platforms, 300 ms beams, six-beam cap, overflow sparkles, merge ripples, section gates with `gate.open` spans, section palette shifts, compiled vocal-halo curve with silent fallback, conservative sustained-downlifter float spans, compiled step events for beat-locked gait, compiled track strata, compiled-camera scene framing, trajectory-sampled trail, palette-sourced background/terrain/runner/ripples, additive glow layers, no in-canvas debug title/status | Authored-song gate/palette/vocal/float acceptance, golden-frame visual verification |
 | Waveform Runner R4–R5 | Planned | planned | Design and work orders | Erasure/crumbs/identity, rail, ghost, cadence gate, final export polish |
 | Metro M1 | Implemented | engineering-preview | Deterministic MIDI stations, clusters, interchanges, octilinear edges, honest audio-activity fallback | More varied MIDI-bearing real-project validation and map-field presentation polish |
-| Metro M2 | Implemented | engineering-preview | Timestamped trains, progressive edge reveal, station blooms, stateless seeking, v5 sync-readability diagnostics (`lineAudits`, `syncHits`), stronger station/train/label payoff cues | Human audio watch-through on a richer/longer real project |
-| Metro M3 | In progress | engineering-preview | Terminal/downbeat labels, screen-pinned legend, monotone frontier camera, compiled viewport anchors, final fit, stable corridor offsets, offset train paths, interchange ring sizing, compiler-owned cluster span geometry, init-time edge arc-length tables, cleaner map-field background, no in-canvas debug header, Metro audit overlay, train identity pips, `Cues` tuning | Occupancy-specific joint healing, district bands, full label-overlap pass, authored-song visual acceptance |
+| Metro M2 | Implemented | engineering-preview | Timestamped trains, progressive edge reveal, station blooms, stateless seeking, v5+ sync-readability diagnostics (`lineAudits`, `syncHits`), stronger station/train/label payoff cues | Human audio watch-through on a richer/longer real project |
+| Metro M3 | In progress | engineering-preview | Terminal/downbeat labels, screen-pinned legend, monotone frontier camera, compiled viewport anchors, final fit, stable corridor offsets, offset train paths, interchange ring sizing, compiler-owned cluster span geometry, init-time edge arc-length tables, cleaner map-field background, no in-canvas debug header, Metro audit overlay, train identity pips, `Cues` tuning, v6 section district bands | Occupancy-specific joint healing, full label-overlap pass, authored-song district/ring visual acceptance |
 | Metro M4–M5 | Planned | planned | Design and work orders | Chorus rings/laps require repeated authored regions; bridge bypass, polish, night mode, poster/SVG shipping |
 
 Visual quality terms:
@@ -122,27 +122,27 @@ Metro now moves beyond the initial node-graph appearance:
 - interchange rings expand according to the number of member lines.
 
 The next Metro slice should continue M3 before moving to chorus rings on the
-current export: heal corridor membership transitions, add district bands, and
-run a complete tier-0 label-overlap pass. The new sync-readability diagnostics
-and first-pass cue strengthening are implemented, but still need a human
-audio watch-through before the perceptual gate should be called complete. If a
-richer reference song with repeated same-name regions arrives first, M4 can
-start after the M3 readability/line-identity gate because rings are the Metro
-identity feature.
+current export: heal corridor membership transitions and run a complete
+tier-0 label-overlap pass. The new sync-readability diagnostics, first-pass
+cue strengthening, and section district bands are implemented, but still need
+a human audio watch-through and an authored-region reference before the
+perceptual gate should be called complete. If a richer reference song with
+repeated same-name regions arrives first, M4 can start after the M3
+readability/line-identity gate because rings are the Metro identity feature.
 
 ## Verification record
 
 The current implementation was verified on 2026-07-05:
 
 - `corepack pnpm check` passed, including the determinism guard, production
-  build, and 68 TypeScript tests across 12 files.
+  build, and 69 TypeScript tests across 12 files.
 - `corepack pnpm --filter @reaper-viz/compiler-runner test` passed 27 Runner
   compiler tests after the jump, motion, terrain, glyph, step, strata, gate,
   section palette, vocal-halo, float-segment, MIDI-contour terrain, and
   MIDI-note landing contracts were added, including energetic audio-tail
   terrain coverage and note-platform coverage.
-- `corepack pnpm --filter @reaper-viz/compiler-metro test` passed 13 Metro
-  compiler tests after the v5 sync-readability audit contract was added.
+- `corepack pnpm --filter @reaper-viz/compiler-metro test` passed 14 Metro
+  compiler tests after the v6 section district-band contract was added.
 - `python -m unittest discover -s tests` passed 12 tests after the analyzer
   S0 fixes.
 - `projects/untitled-project-6d2e04f7` analyzed successfully to a 4-track,
@@ -155,9 +155,9 @@ The current implementation was verified on 2026-07-05:
   authored region boundaries. The route tail no longer flattens: the last 40
   terrain samples retain about 3.57 world units of height motion from the
   exported audio energy.
-- That export compiled successfully to Metro performance version 5: 4 MIDI
+- That export compiled successfully to Metro performance version 6: 4 MIDI
   lines, 40 stations, 42 edges, 48 `syncHits`/note payoffs, 4 `lineAudits`,
-  and 0 audio fallback lines.
+  1 default whole-song district band, and 0 audio fallback lines.
 - Browser verification at `http://127.0.0.1:5173/` showed the Metro status
   summary (`4 lines`, `40 stations`, `48 note payoffs`, `0 audio fallback`),
   the enabled Metro audit overlay with next-hit/source/pitch/`hitT` details,
@@ -261,7 +261,8 @@ before starting another server.
    vectors, and camera impulse/follow behavior.
 4. Verify Runner R3 gates/palettes/vocals/floats on an authored-region,
    vocal-bearing, FX-bearing reference song.
-5. Complete Metro M3 joint healing, districts, and label overlap handling;
-   run a human audio watch-through for the new sync-readability cues.
+5. Complete Metro M3 joint healing and label overlap handling; run a human
+   audio watch-through for the new sync-readability cues and verify districts
+   on an authored-region song.
 6. Start Metro M4 only on a region-bearing export with repeated same-name
    sections; on `untitled-project-6d2e04f7`, the correct M4 result is no rings.

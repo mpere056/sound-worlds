@@ -53,6 +53,7 @@ export class MetroScene {
   readonly #backend: PixiBackend;
   readonly #performance: MetroPerformance;
   readonly #background = new Graphics();
+  readonly #districts = new Graphics();
   readonly #map = new Graphics();
   readonly #motion = new Graphics();
   readonly #labels: Text[] = [];
@@ -73,6 +74,7 @@ export class MetroScene {
     this.#edgeById = new Map(performance.statics.edges.map((edge) => [edge.id, edge]));
     this.#edgePolylines = new Map(performance.statics.edges.map((edge) => [edge.id, buildPolylineMetrics(edge.poly)]));
     backend.layer("metro-background").addChild(this.#background);
+    backend.layer("metro-districts").addChild(this.#districts);
     backend.layer("metro-map").addChild(this.#map);
     backend.layer("metro-motion").addChild(this.#motion);
     performance.statics.lines.forEach((line, index) => {
@@ -151,6 +153,7 @@ export class MetroScene {
     const width = this.#backend.width;
     const height = this.#backend.height;
     this.#background.clear();
+    this.#districts.clear();
     this.#map.clear();
     this.#motion.clear();
     this.#background.rect(0, 0, width, height).fill(colorNumber(this.#performance.palette.bg));
@@ -164,6 +167,18 @@ export class MetroScene {
     }
     for (let x = 75; x < width; x += 75) this.#background.moveTo(x, 90).lineTo(x, height - 90).stroke({ color: 0x6d8799, width: 1, alpha: this.tuning.gridOpacity * 0.14 });
     for (let y = 138; y < height - 110; y += 72) this.#background.moveTo(55, y).lineTo(width - 55, y).stroke({ color: 0x6d8799, width: 1, alpha: this.tuning.gridOpacity * 0.42 });
+
+    for (const district of this.#performance.statics.districts ?? []) {
+      const topLeft = this.#transform({ x: this.#performance.statics.bounds.minX - 170, y: district.yMin }, t);
+      const bottomRight = this.#transform({ x: this.#performance.statics.bounds.maxX + 170, y: district.yMax }, t);
+      const y = Math.min(topLeft.y, bottomRight.y);
+      const h = Math.max(1, Math.abs(bottomRight.y - topLeft.y));
+      const alpha = Math.min(0.18, 0.045 + district.energy * 0.08);
+      this.#districts.rect(Math.min(topLeft.x, bottomRight.x), y, Math.abs(bottomRight.x - topLeft.x), h)
+        .fill({ color: colorNumber(district.color), alpha });
+      this.#districts.rect(Math.min(topLeft.x, bottomRight.x), y, Math.abs(bottomRight.x - topLeft.x), 2)
+        .fill({ color: colorNumber(district.color), alpha: Math.min(0.32, alpha * 1.8) });
+    }
 
     for (const edge of this.#performance.statics.edges) {
       const line = this.#lineById.get(edge.lineId);
@@ -280,6 +295,7 @@ export class MetroScene {
 
   destroy(): void {
     this.#background.destroy();
+    this.#districts.destroy();
     this.#map.destroy();
     this.#motion.destroy();
     this.#labels.forEach((label) => label.destroy());

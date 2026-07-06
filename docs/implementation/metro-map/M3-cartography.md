@@ -106,7 +106,10 @@ scene applies the compiled camera to map geometry, trains, blooms, clusters,
 and labels while keeping the title and legend screen-pinned. Lines now receive
 stable global-rank corridor offsets, trains ride the offset polylines, and
 interchange rings grow with their line count. Occupancy-specific joint healing,
-district bands, and full overlap optimization remain open M3 work.
+district-band acceptance on an authored-region song, and full overlap
+optimization remain open M3 work. Section district statics/rendering landed on
+2026-07-05, but the current reference export only exercises the single
+whole-song fallback band.
 
 - **The offset pass is the most fiddly code in the whole game** (joint healing
   at corridor-membership changes). Time-box it: micro-jogs may look imperfect

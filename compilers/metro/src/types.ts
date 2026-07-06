@@ -2,6 +2,18 @@ import type { Performance } from "@reaper-viz/core";
 
 export interface MetroPoint { x: number; y: number; }
 export interface MetroLine { id: string; name: string; role: string; color: string; source: "midi" | "audio-activity"; }
+export interface MetroDistrict {
+  id: string;
+  name: string;
+  kind: string;
+  repeatGroup: string;
+  startT: number;
+  endT: number;
+  yMin: number;
+  yMax: number;
+  color: string;
+  energy: number;
+}
 export interface MetroLineAudit {
   lineId: string;
   name: string;
@@ -60,6 +72,7 @@ export interface MetroTrainSchedule { lineId: string; stops: MetroTrainStop[]; }
 export interface MetroStatics extends Record<string, unknown> {
   lanes: { count: 12; laneX: number[] };
   lines: MetroLine[];
+  districts: MetroDistrict[];
   stations: MetroStation[];
   edges: MetroEdge[];
   trains: MetroTrainSchedule[];

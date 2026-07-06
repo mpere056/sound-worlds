@@ -178,6 +178,13 @@ rules), correct tier thresholds (1.4/2.2), and the tier-0 overlap pass from
 **Accept:** zero overlapping tier-0 labels on the reference song; the map
 reads "designed," not "labeled."
 
+**Progress 2026-07-05:** Metro performance version 6 now emits section
+district bands from `song.sections[]`, and the Metro scene renders them as
+subtle world-space bands behind the lines. This is a first pass: the current
+`untitled-project-6d2e04f7` export only has one default whole-song section, so
+authored regions are still required before district contrast can be visually
+judged.
+
 ### V2.6 Per-frame arc-length precompute
 Move `pointAt`/`partialPolyline` length computation (L11–44) to init-time
 arc-length tables (perf budget: <8 ms/frame on the reference song).

@@ -1,5 +1,5 @@
 import { parsePerformance, sampleCurve, solvePalette, type Song, type SongEvent, type SongTrack } from "@reaper-viz/core";
-import type { MetroEdge, MetroLine, MetroLineAudit, MetroPerformance, MetroPoint, MetroStation, MetroSyncHit } from "./types.js";
+import type { MetroDistrict, MetroEdge, MetroLine, MetroLineAudit, MetroPerformance, MetroPoint, MetroStation, MetroSyncHit } from "./types.js";
 import { compileTrainSchedule, metroEvents } from "./trains.js";
 
 export * from "./types.js";
@@ -8,6 +8,18 @@ export * from "./trains.js";
 const LINE_COLORS = ["#ef476f", "#118ab2", "#06d6a0", "#ffd166", "#9b5de5", "#f78c6b", "#4cc9f0", "#90be6d"];
 const DRUM_ROLES = new Set(["kick", "snare", "hats", "toms", "percussion", "drums"]);
 const PITCH_NAMES = ["F#", "G", "G#", "A", "A#", "B", "C", "C#", "D", "D#", "E", "F"];
+const DISTRICT_COLORS: Record<string, string> = {
+  intro: "#4cc9f0",
+  verse: "#118ab2",
+  prechorus: "#ffd166",
+  chorus: "#ef476f",
+  bridge: "#9b5de5",
+  drop: "#06d6a0",
+  breakdown: "#f78c6b",
+  solo: "#90be6d",
+  outro: "#dce8ed",
+  unknown: "#6d8799",
+};
 
 interface AbstractStation extends MetroStation { lineId: string; }
 
@@ -19,6 +31,30 @@ function beatIndex(song: Song, t: number): number {
     if (next < distance) { best = index; distance = next; }
   });
   return best;
+}
+
+function rowAtOrAfter(song: Song, t: number): number {
+  const index = song.grid.beats.findIndex((beat) => beat >= t - 1e-6);
+  return index >= 0 ? index : song.grid.beats.length;
+}
+
+function compileDistricts(song: Song): MetroDistrict[] {
+  return song.sections.map((section, index) => {
+    const startRow = rowAtOrAfter(song, section.startSec);
+    const endRow = Math.max(startRow + 1, rowAtOrAfter(song, section.endSec));
+    return {
+      id: `district:${index}:${section.repeatGroup || section.name || "section"}`,
+      name: section.name || section.kind.toUpperCase(),
+      kind: section.kind,
+      repeatGroup: section.repeatGroup,
+      startT: section.startSec,
+      endT: section.endSec,
+      yMin: 210 + startRow * 72 - 36,
+      yMax: 210 + endRow * 72 - 36,
+      color: DISTRICT_COLORS[section.kind] ?? DISTRICT_COLORS.unknown!,
+      energy: section.energy,
+    };
+  });
 }
 
 function laneForPitch(pitch: number): number {
@@ -138,6 +174,7 @@ function offsetRoute(points: MetroPoint[], offset: number): MetroPoint[] {
 export function compileMetro(song: Song): MetroPerformance {
   const candidates = song.tracks.filter((track) => !DRUM_ROLES.has(track.role.toLowerCase()));
   const tracks = (candidates.length ? candidates : song.tracks).slice(0, 8);
+  const districts = compileDistricts(song);
   const sourceEventCounts = new Map<string, number>();
   const lines: MetroLine[] = tracks.map((track, index) => ({
     id: track.id,
@@ -147,6 +184,7 @@ export function compileMetro(song: Song): MetroPerformance {
     source: track.events.some((event) => event.kind === "note" && event.pitch !== null) ? "midi" : "audio-activity",
   }));
   const compileLog = lines.map((line) => `${line.name}: ${line.source}`);
+  if (districts.length) compileLog.push(`districts: ${districts.length} section bands`);
   const perLine = new Map<string, AbstractStation[]>();
   tracks.forEach((track, index) => {
     const line = lines[index]!;
@@ -329,12 +367,12 @@ export function compileMetro(song: Song): MetroPerformance {
     camera, curves: {}, events: metroEvents(stations, edges),
     statics: {
       lanes: { count: 12, laneX: Array.from({ length: 12 }, (_, index) => 90 + index * 75) },
-      lines, stations, edges, trains,
+      lines, districts, stations, edges, trains,
       lineAudits,
       syncHits,
       bounds,
       compileLog,
-      compilerVersion: 5,
+      compilerVersion: 6,
     },
   };
   parsePerformance(performance);
