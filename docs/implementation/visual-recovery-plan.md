@@ -201,6 +201,16 @@ identify which visible line/station responds to prominent piano notes. Four
 similar keys tracks must remain distinguishable by color, legend identity,
 route offset, and train/arrival cue.
 
+**Progress 2026-07-05:** Metro performance version 5 now emits `lineAudits`
+and `syncHits`; the preview app exposes a dev-only Metro audit overlay with
+current/next hit, source line, pitch/station label, source type, and `hitT`.
+The scene also adds a `Cues` tuning control plus stronger station blooms,
+arrival brake/glow rings, label flash, and train identity pips. Browser
+verification on `untitled-project-6d2e04f7` showed 4 MIDI lines, 40 stations,
+48 note payoffs, 0 audio fallback, visible audit text, and no browser warnings
+or errors. A human audio watch-through is still needed before marking the
+perceptual acceptance gate complete.
+
 ---
 
 ## V3 — Identity pull-forward (reordered phases)

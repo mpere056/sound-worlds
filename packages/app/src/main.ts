@@ -7,7 +7,7 @@ import { Pane } from "tweakpane";
 import "./styles.css";
 
 interface ProjectSummary { id: string; name: string; durationSec: number; concepts: string[]; }
-interface ActiveScene { tuning: object; renderFrame(t: number): void; destroy(): void; }
+interface ActiveScene { tuning: object; renderFrame(t: number): void; destroy(): void; auditFrame?(t: number): string[]; }
 interface BindingApi { on(event: "change", handler: () => void): BindingApi; }
 interface BindingPane {
   addBinding<T extends object, K extends keyof T>(target: T, key: K, options: Record<string, unknown>): BindingApi;
@@ -23,12 +23,12 @@ root.innerHTML = `
       <section class="control-group"><label for="project">Project</label><select id="project"><option>Loading exports…</option></select></section>
       <section class="control-group"><label for="concept">World</label><select id="concept"><option>Loading concepts…</option></select></section>
       <section class="control-group"><div class="eyebrow">Transport</div><div class="transport"><button class="play" id="play" aria-label="Play">▶</button><span class="timecode" id="time">00:00.000 / 00:00.000</span></div><input id="scrub" aria-label="Timeline" type="range" min="0" max="1" value="0" step="0.001" /><audio id="audio" preload="auto"></audio></section>
-      <section class="checks"><label class="check">Sync flash <input id="sync" type="checkbox" checked /></label><label class="check">9:16 safe area <input id="guides" type="checkbox" /></label></section>
+      <section class="checks"><label class="check">Sync flash <input id="sync" type="checkbox" checked /></label><label class="check">Metro audit <input id="audit" type="checkbox" /></label><label class="check">9:16 safe area <input id="guides" type="checkbox" /></label></section>
       <section class="tuning"><div class="eyebrow">Scene tuning</div><div id="tweakpane"></div></section>
       <section class="exports"><div class="eyebrow">Export</div><div class="export-actions"><button id="export-mp4" disabled>Render 3s MP4</button><button id="export-png">Save PNG</button></div><div class="export-progress" id="export-progress"><span></span></div><p>Preview MP4 is silent; the mastered WAV is attached in the delivery step.</p></section>
       <div class="status"><strong id="status-title">Waiting for project</strong><span id="status-detail">Analyzer output appears here automatically.</span></div>
     </aside>
-    <section class="stage-wrap"><div class="stage-meta"><span id="scene-label">Loading world…</span><span>1080 × 1920 · 60 FPS</span></div><div class="frame" id="frame"><canvas id="canvas"></canvas><div class="guide" id="guide"></div><div class="sync-flash" id="flash"></div></div></section>
+    <section class="stage-wrap"><div class="stage-meta"><span id="scene-label">Loading world…</span><span>1080 × 1920 · 60 FPS</span></div><div class="frame" id="frame"><canvas id="canvas"></canvas><div class="guide" id="guide"></div><div class="sync-flash" id="flash"></div><div class="metro-audit" id="metro-audit"></div></div></section>
   </main>`;
 
 const select = document.querySelector<HTMLSelectElement>("#project")!;
@@ -39,6 +39,7 @@ const timecode = document.querySelector<HTMLSpanElement>("#time")!;
 const guide = document.querySelector<HTMLDivElement>("#guide")!;
 const flash = document.querySelector<HTMLDivElement>("#flash")!;
 const sync = document.querySelector<HTMLInputElement>("#sync")!;
+const audit = document.querySelector<HTMLInputElement>("#audit")!;
 const guides = document.querySelector<HTMLInputElement>("#guides")!;
 const canvas = document.querySelector<HTMLCanvasElement>("#canvas")!;
 const audioElement = document.querySelector<HTMLAudioElement>("#audio")!;
@@ -48,6 +49,7 @@ const exportMp4 = document.querySelector<HTMLButtonElement>("#export-mp4")!;
 const exportPng = document.querySelector<HTMLButtonElement>("#export-png")!;
 const exportProgress = document.querySelector<HTMLDivElement>("#export-progress")!;
 const sceneLabel = document.querySelector<HTMLSpanElement>("#scene-label")!;
+const metroAudit = document.querySelector<HTMLDivElement>("#metro-audit")!;
 
 let backend: PixiBackend | undefined;
 let scene: ActiveScene | undefined;
@@ -93,6 +95,13 @@ function renderAt(t: number): void {
     requestAnimationFrame(() => flash.classList.add("active"));
   }
   previousBeat = beat;
+  if (audit.checked && scene.auditFrame) {
+    metroAudit.classList.add("visible");
+    metroAudit.textContent = scene.auditFrame(t).join("\n");
+  } else {
+    metroAudit.classList.remove("visible");
+    metroAudit.textContent = "";
+  }
 }
 
 function tick(): void {
@@ -141,10 +150,13 @@ async function loadConcept(concept: string): Promise<void> {
     addTuningBinding(bindingPane, metro.tuning, "lineWeight", { min: 0.5, max: 1.5, step: 0.02, label: "Lines" });
     addTuningBinding(bindingPane, metro.tuning, "gridOpacity", { min: 0, max: 1, step: 0.01, label: "Grid" });
     addTuningBinding(bindingPane, metro.tuning, "stationScale", { min: 0.6, max: 1.6, step: 0.02, label: "Stations" });
+    addTuningBinding(bindingPane, metro.tuning, "cueStrength", { min: 0.4, max: 1.8, step: 0.02, label: "Cues" });
     sceneLabel.textContent = "Metro Map · M3 Cartography";
     statusTitle.textContent = "Metro Map · labeled live network";
-    const fallbacks = performance.statics.lines.filter((line) => line.source === "audio-activity").length;
-    statusDetail.textContent = `${performance.statics.lines.length} lines · ${performance.statics.stations.length} stations · ${fallbacks} audio fallback`;
+    const lineAudits = performance.statics.lineAudits ?? [];
+    const fallbacks = lineAudits.filter((line) => line.source === "audio-activity").length;
+    const hits = lineAudits.reduce((sum, line) => sum + line.hitCount, 0);
+    statusDetail.textContent = `${performance.statics.lines.length} lines · ${performance.statics.stations.length} stations · ${hits} note payoffs · ${fallbacks} audio fallback`;
   } else if (concept === "runner") {
     const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.runner.json`);
     if (!response.ok) throw new Error(`Runner performance request failed: ${response.status}`);
@@ -168,6 +180,8 @@ async function loadConcept(concept: string): Promise<void> {
     statusTitle.textContent = "Pipeline test pattern";
     statusDetail.textContent = "Timing and export diagnostics only";
   }
+  audit.disabled = !scene.auditFrame;
+  if (!scene.auditFrame) audit.checked = false;
   previousBeat = -1;
   renderAt(audio.currentTime);
   const mp4Supported = await supportsCanvasMp4(canvas.width, canvas.height);
@@ -246,6 +260,7 @@ audio.addEventListener("ended", () => {
   play.setAttribute("aria-label", "Play");
 });
 guides.addEventListener("change", () => guide.classList.toggle("visible", guides.checked));
+audit.addEventListener("change", () => renderAt(audio.currentTime));
 exportPng.addEventListener("click", async () => {
   if (!song || !scene) return;
   const blob = await captureCanvasPng(canvas);

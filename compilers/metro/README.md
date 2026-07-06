@@ -21,3 +21,8 @@ implemented M3 slice labels stations, compiles a frontier-follow/final-fit
 camera, and offsets coincident routes by stable global line rank. Edge lengths
 are recomputed after offsetting, so trains follow the displayed paths, and
 interchange rings expand to cover their separated member lines.
+
+Performance version 5 adds sync-readability diagnostics: `lineAudits` record
+per-line source, hit, and station counts, and `syncHits` records the
+current/next note payoff data consumed by the preview app's Metro audit
+overlay.

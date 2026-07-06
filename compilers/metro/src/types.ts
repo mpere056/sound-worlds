@@ -2,6 +2,33 @@ import type { Performance } from "@reaper-viz/core";
 
 export interface MetroPoint { x: number; y: number; }
 export interface MetroLine { id: string; name: string; role: string; color: string; source: "midi" | "audio-activity"; }
+export interface MetroLineAudit {
+  lineId: string;
+  name: string;
+  role: string;
+  source: MetroLine["source"];
+  color: string;
+  sourceEventCount: number;
+  stationCount: number;
+  hitCount: number;
+  firstHitT: number | null;
+  lastHitT: number | null;
+  notes: string[];
+}
+export interface MetroSyncHit {
+  t: number;
+  lineId: string;
+  lineName: string;
+  role: string;
+  source: MetroLine["source"];
+  stationId: string;
+  stationKind: MetroStation["kind"];
+  lane: number;
+  pitchName: string;
+  label: string;
+  eventType: "station.bloom";
+  hitT: number;
+}
 export interface MetroStation {
   id: string;
   pos: MetroPoint;
@@ -36,6 +63,8 @@ export interface MetroStatics extends Record<string, unknown> {
   stations: MetroStation[];
   edges: MetroEdge[];
   trains: MetroTrainSchedule[];
+  lineAudits: MetroLineAudit[];
+  syncHits: MetroSyncHit[];
   bounds: { minX: number; minY: number; maxX: number; maxY: number };
   compileLog: string[];
   compilerVersion: number;

@@ -1,10 +1,10 @@
-import type { MetroPerformance, MetroPoint } from "@reaper-viz/compiler-metro";
+import type { MetroPerformance, MetroPoint, MetroSyncHit } from "@reaper-viz/compiler-metro";
 import { PixiBackend, sampleCamera } from "@reaper-viz/render";
 import { Graphics, Text } from "pixi.js";
 
 export type { MetroPerformance } from "@reaper-viz/compiler-metro";
 
-export interface MetroTuning { lineWeight: number; gridOpacity: number; stationScale: number; }
+export interface MetroTuning { lineWeight: number; gridOpacity: number; stationScale: number; cueStrength: number; }
 
 function colorNumber(value: string): number { return Number.parseInt(value.slice(1), 16); }
 
@@ -58,15 +58,17 @@ export class MetroScene {
   readonly #labels: Text[] = [];
   readonly #stationLabels: Array<{ stationId: string; text: Text }> = [];
   readonly #lineById: Map<string, MetroPerformance["statics"]["lines"][number]>;
+  readonly #lineIndexById: Map<string, number>;
   readonly #stationById: Map<string, MetroPerformance["statics"]["stations"][number]>;
   readonly #edgeById: Map<string, MetroPerformance["statics"]["edges"][number]>;
   readonly #edgePolylines: Map<string, PolylineMetrics>;
-  readonly tuning: MetroTuning = { lineWeight: 1, gridOpacity: 0.28, stationScale: 1 };
+  readonly tuning: MetroTuning = { lineWeight: 1, gridOpacity: 0.28, stationScale: 1, cueStrength: 1 };
 
   constructor(backend: PixiBackend, performance: MetroPerformance) {
     this.#backend = backend;
     this.#performance = performance;
     this.#lineById = new Map(performance.statics.lines.map((line) => [line.id, line]));
+    this.#lineIndexById = new Map(performance.statics.lines.map((line, index) => [line.id, index]));
     this.#stationById = new Map(performance.statics.stations.map((station) => [station.id, station]));
     this.#edgeById = new Map(performance.statics.edges.map((edge) => [edge.id, edge]));
     this.#edgePolylines = new Map(performance.statics.edges.map((edge) => [edge.id, buildPolylineMetrics(edge.poly)]));
@@ -92,6 +94,44 @@ export class MetroScene {
       this.#stationLabels.push({ stationId: station.id, text: label });
       this.#labels.push(label);
     });
+  }
+
+  #recentStationHit(station: MetroPerformance["statics"]["stations"][number], t: number): number | undefined {
+    return station.times.filter((hitT) => hitT <= t).at(-1);
+  }
+
+  #lineColorForStation(station: MetroPerformance["statics"]["stations"][number]): number {
+    const line = this.#lineById.get(station.lines[0]!);
+    return line ? colorNumber(line.color) : 0xf5f0df;
+  }
+
+  auditFrame(t: number): string[] {
+    const hits = this.#performance.statics.syncHits ?? [];
+    const prior = hits.filter((hit) => hit.t <= t).at(-1);
+    const next = hits.find((hit) => hit.t > t);
+    const active = hits.filter((hit) => Math.abs(hit.t - t) <= 0.08).slice(0, 3);
+    const lineAudits = this.#performance.statics.lineAudits ?? [];
+    const lines = ["METRO AUDIT"];
+    if (active.length) {
+      for (const hit of active) lines.push(`NOW  ${this.#formatHit(hit, t)}`);
+    } else if (next) {
+      lines.push(`NEXT ${this.#formatHit(next, t)}`);
+    } else if (prior) {
+      lines.push(`LAST ${this.#formatHit(prior, t)}`);
+    } else {
+      lines.push("WAIT no hit reached yet");
+    }
+    for (const audit of lineAudits.slice(0, 4)) {
+      const index = (this.#lineIndexById.get(audit.lineId) ?? 0) + 1;
+      lines.push(`${String(index).padStart(2, "0")} ${audit.name}: ${audit.source}, ${audit.hitCount} hits, ${audit.stationCount} stations`);
+    }
+    return lines;
+  }
+
+  #formatHit(hit: MetroSyncHit, t: number): string {
+    const delta = hit.t - t;
+    const sign = delta >= 0 ? "+" : "-";
+    return `${hit.lineName} · ${hit.pitchName} · ${hit.label} · ${hit.source} · hitT ${hit.hitT.toFixed(3)} (${sign}${Math.abs(delta).toFixed(3)}s)`;
   }
 
   #transform(point: MetroPoint, t: number): MetroPoint {
@@ -163,10 +203,16 @@ export class MetroScene {
           .stroke({ color: line ? colorNumber(line.color) : 0xffffff, width: 4 });
       }
       const lastHit = station.times.filter((hitT) => hitT <= t).at(-1);
-      if (lastHit !== undefined && t - lastHit < 0.35) {
-        const age = (t - lastHit) / 0.35;
-        this.#motion.circle(point.x, point.y, (14 + age * 38) * scale)
-          .stroke({ color: 0xf5f0df, width: 5 * (1 - age), alpha: 1 - age });
+      if (lastHit !== undefined && t - lastHit < 0.55) {
+        const age = (t - lastHit) / 0.55;
+        const cue = this.tuning.cueStrength;
+        const lineColor = this.#lineColorForStation(station);
+        this.#motion.circle(point.x, point.y, (18 + age * 62) * scale * cue)
+          .stroke({ color: lineColor, width: Math.max(1, 8 * (1 - age) * cue), alpha: 0.72 * (1 - age) });
+        this.#motion.circle(point.x, point.y, (10 + age * 28) * scale * cue)
+          .stroke({ color: 0xf5f0df, width: Math.max(1, 5 * (1 - age) * cue), alpha: 0.95 * (1 - age) });
+        this.#motion.circle(point.x, point.y, Math.max(4, 9 * scale * (1 + (1 - age) * 0.8 * cue)))
+          .fill({ color: 0xf5f0df, alpha: 0.18 * (1 - age) * cue });
       }
     }
 
@@ -181,6 +227,7 @@ export class MetroScene {
       const stop = schedule.stops[stopIndex]!;
       const station = this.#stationById.get(stop.stationId);
       if (!station) continue;
+      const stopAge = t - stop.arriveT;
       let point = this.#transform(station.pos, t);
       if (stopIndex < schedule.stops.length - 1 && t > stop.departT && stop.edgeToNext) {
         const next = schedule.stops[stopIndex + 1]!;
@@ -195,9 +242,21 @@ export class MetroScene {
             .stroke({ color: colorNumber(line.color), width: 8, alpha: 0.35, cap: "round" });
         }
       }
+      if (stopAge >= 0 && stopAge < 0.42) {
+        const age = stopAge / 0.42;
+        this.#motion.circle(point.x, point.y, 34 + age * 36)
+          .stroke({ color: colorNumber(line.color), width: Math.max(1, 9 * (1 - age) * this.tuning.cueStrength), alpha: 0.55 * (1 - age) * this.tuning.cueStrength });
+        this.#motion.circle(point.x, point.y, 16 + age * 22)
+          .fill({ color: colorNumber(line.color), alpha: 0.12 * (1 - age) * this.tuning.cueStrength });
+      }
       this.#motion.roundRect(point.x - 18, point.y - 10, 36, 20, 9)
         .fill(0xf5f0df).stroke({ color: colorNumber(line.color), width: 5 });
       this.#motion.circle(point.x + 8, point.y, 3).fill(colorNumber(line.color));
+      const lineIndex = this.#lineIndexById.get(line.id) ?? 0;
+      const pipCount = Math.min(4, lineIndex + 1);
+      for (let pip = 0; pip < pipCount; pip += 1) {
+        this.#motion.circle(point.x - 10 + pip * 5, point.y + 6, 1.6).fill(colorNumber(line.color));
+      }
     }
     for (const entry of this.#stationLabels) {
       const station = this.#stationById.get(entry.stationId);
@@ -207,6 +266,12 @@ export class MetroScene {
       if (!entry.text.visible) continue;
       const point = this.#transform(station.pos, t);
       const left = station.label.side === "L";
+      const lastHit = this.#recentStationHit(station, t);
+      const hitAge = lastHit === undefined ? Number.POSITIVE_INFINITY : t - lastHit;
+      const flash = hitAge >= 0 && hitAge < 0.28 ? 1 - hitAge / 0.28 : 0;
+      entry.text.alpha = 0.82 + 0.18 * flash * this.tuning.cueStrength;
+      const textScale = 1 + 0.12 * flash * this.tuning.cueStrength;
+      entry.text.scale.set(textScale);
       entry.text.anchor.set(left ? 1 : 0, 0.5);
       entry.text.position.set(Math.max(65, Math.min(this.#backend.width - 65, point.x + (left ? -18 : 18))), point.y);
     }

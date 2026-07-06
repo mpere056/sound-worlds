@@ -1,5 +1,5 @@
 import { parsePerformance, sampleCurve, solvePalette, type Song, type SongEvent, type SongTrack } from "@reaper-viz/core";
-import type { MetroEdge, MetroLine, MetroPerformance, MetroPoint, MetroStation } from "./types.js";
+import type { MetroEdge, MetroLine, MetroLineAudit, MetroPerformance, MetroPoint, MetroStation, MetroSyncHit } from "./types.js";
 import { compileTrainSchedule, metroEvents } from "./trains.js";
 
 export * from "./types.js";
@@ -7,6 +7,7 @@ export * from "./trains.js";
 
 const LINE_COLORS = ["#ef476f", "#118ab2", "#06d6a0", "#ffd166", "#9b5de5", "#f78c6b", "#4cc9f0", "#90be6d"];
 const DRUM_ROLES = new Set(["kick", "snare", "hats", "toms", "percussion", "drums"]);
+const PITCH_NAMES = ["F#", "G", "G#", "A", "A#", "B", "C", "C#", "D", "D#", "E", "F"];
 
 interface AbstractStation extends MetroStation { lineId: string; }
 
@@ -137,6 +138,7 @@ function offsetRoute(points: MetroPoint[], offset: number): MetroPoint[] {
 export function compileMetro(song: Song): MetroPerformance {
   const candidates = song.tracks.filter((track) => !DRUM_ROLES.has(track.role.toLowerCase()));
   const tracks = (candidates.length ? candidates : song.tracks).slice(0, 8);
+  const sourceEventCounts = new Map<string, number>();
   const lines: MetroLine[] = tracks.map((track, index) => ({
     id: track.id,
     name: track.name,
@@ -149,7 +151,9 @@ export function compileMetro(song: Song): MetroPerformance {
   tracks.forEach((track, index) => {
     const line = lines[index]!;
     const pitched = track.events.filter((event) => event.kind === "note" && event.pitch !== null);
+    sourceEventCounts.set(line.id, pitched.length);
     const rawStations = pitched.length ? stationForEvents(song, line, pitched) : audioStations(song, line, track, index);
+    if (!pitched.length) sourceEventCounts.set(line.id, rawStations.length);
     if (rawStations.length > 120) {
       const stride = Math.ceil(rawStations.length / 120);
       const reduced = rawStations.filter((_, stationIndex) => stationIndex % stride === 0 || stationIndex === rawStations.length - 1);
@@ -201,7 +205,6 @@ export function compileMetro(song: Song): MetroPerformance {
     if (ids[0]) terminalIds.add(ids[0]);
     if (ids[ids.length - 1]) terminalIds.add(ids[ids.length - 1]!);
   }
-  const pitchNames = ["F#", "G", "G#", "A", "A#", "B", "C", "C#", "D", "D#", "E", "F"];
   for (const station of stations) {
     if (terminalIds.has(station.id) && station.kind === "stop") station.kind = "terminal";
     const onDownbeat = song.grid.downbeats.some((time) => Math.abs(time - station.revealT) < 0.04);
@@ -211,7 +214,7 @@ export function compileMetro(song: Song): MetroPerformance {
       const terminalName = station.lines.map((lineId) => lines.find((line) => line.id === lineId)?.name ?? "LINE")
         .map((name) => name.replace(/^VV_/i, "").replace(/^SAMPLE_/i, "").replace(/_VITAL$/i, "").replace(/_INPUT$/i, "").replace(/_/g, " ").toUpperCase()).join(" / ");
       station.label = {
-        text: station.kind === "terminal" ? terminalName : hasMidi ? pitchNames[station.lane] ?? "STOP" : station.kind === "interchange" ? `XFER ${station.row + 1}` : `BAR ${(bar?.index ?? 0) + 1}`,
+        text: station.kind === "terminal" ? terminalName : hasMidi ? PITCH_NAMES[station.lane] ?? "STOP" : station.kind === "interchange" ? `XFER ${station.row + 1}` : `BAR ${(bar?.index ?? 0) + 1}`,
         side: station.lane > 5 ? "L" : "R",
         tier: station.kind === "interchange" || station.kind === "terminal" ? 0 : 1,
       };
@@ -247,6 +250,56 @@ export function compileMetro(song: Song): MetroPerformance {
     const ids = lineStationIds.get(line.id) ?? [];
     return compileTrainSchedule(line.id, ids, byId, edges);
   });
+  const syncHits: MetroSyncHit[] = [];
+  const lineAudits: MetroLineAudit[] = lines.map((line) => {
+    const ids = lineStationIds.get(line.id) ?? [];
+    const uniqueIds = [...new Set(ids)];
+    const lineHits: number[] = [];
+    const sourceStations = perLine.get(line.id) ?? [];
+    for (const sourceStation of sourceStations) {
+      const stationId = canonical.get(sourceStation.id) ?? sourceStation.id;
+      const station = byId.get(stationId);
+      if (!station) continue;
+      for (const hitT of sourceStation.times) {
+        lineHits.push(hitT);
+        syncHits.push({
+          t: hitT,
+          lineId: line.id,
+          lineName: line.name,
+          role: line.role,
+          source: line.source,
+          stationId,
+          stationKind: station.kind,
+          lane: sourceStation.lane,
+          pitchName: PITCH_NAMES[sourceStation.lane] ?? "STOP",
+          label: station.label?.text ?? (line.source === "midi" ? PITCH_NAMES[sourceStation.lane] ?? "STOP" : `BAR ${sourceStation.row + 1}`),
+          eventType: "station.bloom",
+          hitT,
+        });
+      }
+    }
+    lineHits.sort((a, b) => a - b);
+    const notes = [
+      `${line.source} source`,
+      `${uniqueIds.length} visible stations`,
+      `${lineHits.length} note/payoff hits`,
+    ];
+    if (line.source === "audio-activity") notes.push("fallback: no pitched MIDI notes found");
+    return {
+      lineId: line.id,
+      name: line.name,
+      role: line.role,
+      source: line.source,
+      color: line.color,
+      sourceEventCount: sourceEventCounts.get(line.id) ?? lineHits.length,
+      stationCount: uniqueIds.length,
+      hitCount: lineHits.length,
+      firstHitT: lineHits[0] ?? null,
+      lastHitT: lineHits.at(-1) ?? null,
+      notes,
+    };
+  });
+  syncHits.sort((a, b) => a.t - b.t || lines.findIndex((line) => line.id === a.lineId) - lines.findIndex((line) => line.id === b.lineId) || a.stationId.localeCompare(b.stationId));
   const xs = stations.map((station) => station.pos.x);
   const ys = stations.map((station) => station.pos.y);
   const bounds = { minX: Math.min(...xs, 90), minY: Math.min(...ys, 210), maxX: Math.max(...xs, 915), maxY: Math.max(...ys, 1650) };
@@ -277,9 +330,11 @@ export function compileMetro(song: Song): MetroPerformance {
     statics: {
       lanes: { count: 12, laneX: Array.from({ length: 12 }, (_, index) => 90 + index * 75) },
       lines, stations, edges, trains,
+      lineAudits,
+      syncHits,
       bounds,
       compileLog,
-      compilerVersion: 4,
+      compilerVersion: 5,
     },
   };
   parsePerformance(performance);

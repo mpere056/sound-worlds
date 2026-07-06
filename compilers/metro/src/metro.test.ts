@@ -33,6 +33,48 @@ describe("Metro Map M1 compiler", () => {
     expect(output.events.filter((event) => event.type === "station.bloom").map((event) => event.params.hitT)).toEqual(song.tracks[0]!.events.map((event) => event.t));
   });
 
+  it("emits sync-readability audit data for visible note payoffs", () => {
+    const song = buildFixtureSong({ bars: 1, patterns: [
+      { role: "lead", beats: [0, 1], pitch: 60, kind: "note" },
+      { role: "keys", beats: [0, 2], pitch: 64, kind: "note" },
+    ] });
+    const output = compileMetro(song);
+    expect(output.statics.compilerVersion).toBe(5);
+    expect(output.statics.lineAudits).toHaveLength(2);
+    expect(output.statics.lineAudits[0]).toMatchObject({
+      name: "lead",
+      source: "midi",
+      sourceEventCount: 2,
+      hitCount: 2,
+    });
+    expect(output.statics.syncHits.map((hit) => ({
+      t: hit.t,
+      lineName: hit.lineName,
+      source: hit.source,
+      pitchName: hit.pitchName,
+      eventType: hit.eventType,
+    }))).toEqual([
+      { t: 0, lineName: "lead", source: "midi", pitchName: "C", eventType: "station.bloom" },
+      { t: 0, lineName: "keys", source: "midi", pitchName: "E", eventType: "station.bloom" },
+      { t: 0.5, lineName: "lead", source: "midi", pitchName: "C", eventType: "station.bloom" },
+      { t: 1, lineName: "keys", source: "midi", pitchName: "E", eventType: "station.bloom" },
+    ]);
+  });
+
+  it("keeps similar MIDI lines auditable instead of collapsing them to one anonymous role", () => {
+    const song = buildFixtureSong({ bars: 1, patterns: [
+      { role: "keys", beats: [0, 1], pitch: 60, kind: "note" },
+      { role: "keys", beats: [0, 2], pitch: 64, kind: "note" },
+      { role: "keys", beats: [1, 3], pitch: 67, kind: "note" },
+      { role: "keys", beats: [2, 3], pitch: 71, kind: "note" },
+    ] });
+    const output = compileMetro(song);
+    expect(output.statics.lineAudits).toHaveLength(4);
+    expect(output.statics.lineAudits.map((audit) => audit.lineId)).toEqual(song.tracks.map((track) => track.id));
+    expect(output.statics.lineAudits.every((audit) => audit.source === "midi" && audit.hitCount === 2)).toBe(true);
+    expect(new Set(output.statics.lines.map((line) => line.color)).size).toBe(4);
+  });
+
   it("caps train dwell to half the gap for fast runs", () => {
     const stations = new Map<string, MetroStation>([
       ["a", { id: "a", pos: { x: 0, y: 0 }, row: 0, lane: 0, kind: "stop", lines: ["line"], revealT: 0, times: [0], mergedCount: 1 }],
