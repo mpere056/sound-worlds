@@ -42,6 +42,7 @@ not a valid M4 chorus-ring fixture.
 | Analyzer foundation | Implemented | n/a | Package validation, musical grid and sections, MIDI passthrough, track RMS/centroid/gain, sample-accurate drum onsets, master waveform/energy, schema-valid `song.json` | Pitch/chord analysis, automatic segmentation, HTML report |
 | Shared TypeScript core/runtime | Implemented | n/a | Strict loaders, deterministic random streams, musical time, curve sampling, back-solving, palettes, fixtures, frame clock, seek-safe events, camera interpolation | Continue extending shared facilities only as concepts need them |
 | Preview/export shell | Implemented foundation | engineering-preview | Project/world discovery, WAV streaming, audio-clock playback, scrub, overlays, tuning, PNG and short H.264 preview export | Full-song orchestration, direct project-output writing, audio mux |
+| Painting P1 | Implemented | engineering-preview | New deterministic compiler and Pixi scene, section washes, sketch guides, bass/low-note terrain, note ribbons, rhythm dabs/splatters, paper grain, varnish sweep, signature reveal, preview app integration | True accumulation/FBO paint buffer, impasto lighting, anti-mud density budgets, chorus reinforcement repainting, 4x print export |
 | Waveform Runner R1 | Implemented | engineering-preview | Monotone `x(t)`, inverse `t(x)`, energy speed, slope-limited terrain, camera keys, stateless Pixi world | Richer bass-derived results need a MIDI/pitch-bearing export and the visual recovery pass |
 | Waveform Runner R2 | Implemented | engineering-preview | Budgeted musical landings, tempo-scaled closed-form jumps, clearance validation, deterministic boost fallback, takeoff/landing events | Double-jump mid-impulses, terrain-concession fallback, and beat/character polish |
 | Waveform Runner R3 | In progress | engineering-preview | MIDI melody glyphs, honest beat/activity fallback, role-colored exact-pose merge targets, note-timed route platforms, 300 ms beams, six-beam cap, overflow sparkles, merge ripples, section gates with `gate.open` spans, section palette shifts, compiled vocal-halo curve with silent fallback, conservative sustained-downlifter float spans, compiled step events for beat-locked gait, compiled track strata, compiled-camera scene framing, trajectory-sampled trail, palette-sourced background/terrain/runner/ripples, additive glow layers, no in-canvas debug title/status | Authored-song gate/palette/vocal/float acceptance, golden-frame visual verification |
@@ -104,6 +105,31 @@ MIDI glyphs and 48 corresponding merge events. Because the project has no
 dedicated lead role, those glyphs prove timing/collection behavior but should
 not be treated as a finished melody art direction.
 
+## Painting P1 artifact-canvas contract
+
+Painting is now a first-class compiler/scene path. The P1 implementation is
+deliberately an artifact-canvas slice rather than a full fluid paint simulator:
+
+1. Compile deterministic paint marks from `song.json` into
+   `performance.painting.json`.
+2. Use sections for broad translucent washes and intro-like sketch guides.
+3. Use bass, or the lowest note-bearing track when no bass role exists, for a
+   lower-third terrain/horizon stroke.
+4. Use lead/vocal tracks, or note-bearing musical tracks as a fallback, for
+   calligraphic subject ribbons.
+5. Use drum/onset roles for dabs, splatter, and stipple; when no drums exist,
+   create a smaller number of rhythm marks from prominent note/onset events so
+   keys-only exports still produce texture.
+6. Render paper grain, wet highlights, a varnish sweep, and a final song-title
+   signature in the Pixi scene.
+
+On `untitled-project-6d2e04f7`, the current all-keys export compiles to
+Painting performance version 1 with 81 marks: 9 sketch marks, 5 washes, 1
+terrain stroke, 48 subject/ribbon strokes, 16 rhythm marks, 1 glaze, and 1
+signature. This is a more promising visual-artifact checkpoint than the current
+Metro/Runner data because a painting can still look intentional with sparse
+role variety.
+
 ## Metro cartography implemented so far
 
 Metro now moves beyond the initial node-graph appearance:
@@ -138,7 +164,10 @@ readability/line-identity gate because rings are the Metro identity feature.
 The current implementation was verified on 2026-07-06:
 
 - `corepack pnpm check` passed, including the determinism guard, production
-  build, and 71 TypeScript tests across 12 files.
+  build, and 74 TypeScript tests across 13 files.
+- `corepack pnpm --filter @reaper-viz/compiler-painting test` passed 3
+  Painting compiler tests covering deterministic output, role fallbacks, and
+  event/stroke timing invariants.
 - `corepack pnpm --filter @reaper-viz/compiler-runner test` passed 27 Runner
   compiler tests after the jump, motion, terrain, glyph, step, strata, gate,
   section palette, vocal-halo, float-segment, MIDI-contour terrain, and
@@ -165,6 +194,9 @@ The current implementation was verified on 2026-07-06:
   constant preview camera zoom of 1.35 through the full 11.056 s audio
   duration. The final poster pullback is now logged as deferred until a
   post-audio end-card hold exists.
+- That export compiled successfully to Painting performance version 1: 81
+  deterministic paint marks, 260 paper-grain marks, role fallback from four
+  `keys` tracks, and a final `Untitled Project` signature.
 - The dev server was restarted at `http://127.0.0.1:5173/` for local review.
   A follow-up human/browser watch-through should confirm the new visible tail
   pulses feel correctly synchronized in motion.
@@ -246,6 +278,7 @@ From the repository root:
 python -m analyzer projects\your-export
 corepack pnpm compile:runner -- projects\your-export
 corepack pnpm compile:metro -- projects\your-export
+corepack pnpm compile:painting -- projects\your-export
 corepack pnpm dev
 ```
 
@@ -259,17 +292,21 @@ before starting another server.
 1. Author the reference song from
    [Song Authoring Guide](implementation/song-authoring-guide.md), because the
    current 11-second keys-only export starves both concepts.
-2. Execute the early
+2. Review Painting P1 in the browser and decide whether its artifact-canvas
+   direction feels better than Metro/Runner on the current export. If yes, the
+   next Painting slice should add accumulation/FBO-style smearing and stronger
+   final-frame composition polish.
+3. Execute the early
    [Visual Recovery Plan](implementation/visual-recovery-plan.md) items:
    Runner glow/beat-gait/real-strata polish and Metro field/panel cleanup.
-3. Keep extending the [Math Audit](implementation/math-audit.md) test battery
+4. Keep extending the [Math Audit](implementation/math-audit.md) test battery
    as future-only systems land, especially double-jump, clearance rejection
    vectors, and camera impulse/follow behavior.
-4. Verify Runner R3 gates/palettes/vocals/floats on an authored-region,
+5. Verify Runner R3 gates/palettes/vocals/floats on an authored-region,
    vocal-bearing, FX-bearing reference song.
-5. Complete Metro M3 joint healing and label overlap handling; run a human
+6. Complete Metro M3 joint healing and label overlap handling; run a human
    audio watch-through for the new sync-readability cues and verify districts
    on an authored-region song. Keep the preview camera music-locked until the
    export pipeline adds true post-audio end-card time.
-6. Start Metro M4 only on a region-bearing export with repeated same-name
+7. Start Metro M4 only on a region-bearing export with repeated same-name
    sections; on `untitled-project-6d2e04f7`, the correct M4 result is no rings.

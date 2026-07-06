@@ -6,6 +6,7 @@
   "scripts": {
     "build": "corepack pnpm -r build",
     "compile:metro": "corepack pnpm --filter @reaper-viz/compiler-metro build && corepack pnpm --filter @reaper-viz/compiler-metro compile",
+    "compile:painting": "corepack pnpm --filter @reaper-viz/compiler-painting build && corepack pnpm --filter @reaper-viz/compiler-painting compile",
     "compile:runner": "corepack pnpm --filter @reaper-viz/compiler-runner build && corepack pnpm --filter @reaper-viz/compiler-runner compile",
     "dev": "corepack pnpm --filter @reaper-viz/app dev",
     "test": "vitest run --maxWorkers=1 --minWorkers=1 --fileParallelism=false",

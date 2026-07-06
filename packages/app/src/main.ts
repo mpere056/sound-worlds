@@ -1,6 +1,7 @@
 import { parsePerformance, parseSong, type Song } from "@reaper-viz/core";
 import { captureCanvasPng, exportCanvasMp4, PixiBackend, supportsCanvasMp4 } from "@reaper-viz/render";
 import { MetroScene, type MetroPerformance } from "@reaper-viz/scene-metro";
+import { PaintingScene, type PaintingPerformance } from "@reaper-viz/scene-painting";
 import { RunnerScene, type RunnerPerformance } from "@reaper-viz/scene-runner";
 import { TestPatternScene } from "@reaper-viz/scene-testpattern";
 import { Pane } from "tweakpane";
@@ -157,6 +158,19 @@ async function loadConcept(concept: string): Promise<void> {
     const fallbacks = lineAudits.filter((line) => line.source === "audio-activity").length;
     const hits = lineAudits.reduce((sum, line) => sum + line.hitCount, 0);
     statusDetail.textContent = `${performance.statics.lines.length} lines · ${performance.statics.stations.length} stations · ${hits} note payoffs · ${fallbacks} audio fallback`;
+  } else if (concept === "painting") {
+    const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.painting.json`);
+    if (!response.ok) throw new Error(`Painting performance request failed: ${response.status}`);
+    const performance = parsePerformance(await response.json()) as PaintingPerformance;
+    const painting = new PaintingScene(backend, performance);
+    scene = painting;
+    addTuningBinding(bindingPane, painting.tuning, "paperTexture", { min: 0, max: 1.3, step: 0.01, label: "Paper" });
+    addTuningBinding(bindingPane, painting.tuning, "wetness", { min: 0, max: 1.4, step: 0.01, label: "Wetness" });
+    addTuningBinding(bindingPane, painting.tuning, "strokeScale", { min: 0.65, max: 1.45, step: 0.01, label: "Stroke size" });
+    addTuningBinding(bindingPane, painting.tuning, "reveal", { min: 0.2, max: 1.4, step: 0.01, label: "Reveal" });
+    sceneLabel.textContent = "Painting · P1 Artifact Canvas";
+    statusTitle.textContent = "Painting · song-made artwork";
+    statusDetail.textContent = `${performance.statics.strokes.length} marks · ${performance.statics.strokeCounts.subject} ribbon strokes · ${performance.statics.strokeCounts.rhythm} rhythm marks`;
   } else if (concept === "runner") {
     const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.runner.json`);
     if (!response.ok) throw new Error(`Runner performance request failed: ${response.status}`);
@@ -217,6 +231,12 @@ async function loadProject(id: string): Promise<void> {
     metro.textContent = "Metro Map · M3 Cartography";
     options.push(metro);
   }
+  if (project?.concepts.includes("painting")) {
+    const painting = document.createElement("option");
+    painting.value = "painting";
+    painting.textContent = "Painting · P1 Artifact Canvas";
+    options.push(painting);
+  }
   const testPattern = document.createElement("option");
   testPattern.value = "testpattern";
   testPattern.textContent = "Pipeline Test Pattern";
@@ -227,6 +247,13 @@ async function loadProject(id: string): Promise<void> {
     metro.textContent = "Metro Map · compile required";
     metro.disabled = true;
     options.push(metro);
+  }
+  if (!project?.concepts.includes("painting")) {
+    const painting = document.createElement("option");
+    painting.value = "painting";
+    painting.textContent = "Painting · compile required";
+    painting.disabled = true;
+    options.push(painting);
   }
   conceptSelect.replaceChildren(...options);
   await loadConcept(options[0]?.value ?? "testpattern");
