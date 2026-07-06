@@ -60,6 +60,14 @@ camera motion (M3 — keep fixed full-map view so sync is easy to eyeball).
   bloom = `t`).
 - Dev overlay: confirm `hitT` markers coincide with beat flashes on a real
   project (human check, 60 seconds of watching).
+- Add a **sync-readability audit** mode before tuning visuals further:
+  current/next hit time, bar.beat, source track, line name, pitch/station id,
+  source type (`midi` vs `audio-activity`), and event type. The overlay is
+  development-only, but it is required to diagnose whether a weak result is a
+  timing bug, a subtle cue, or missing project data.
+- Strengthen note payoffs until a non-technical watcher can see the cause:
+  train brake/glow, station bloom, optional line pulse, and label flash should
+  all be evaluated as perceptual sync aids rather than decorative polish.
 
 ## Acceptance criteria
 
@@ -68,7 +76,11 @@ camera motion (M3 — keep fixed full-map view so sync is easy to eyeball).
 - [ ] Scrub test: seek to random `t` = identical frame to playing through
       (EventCursor seek-safety exercised with accumulating reveals — reveal
       state must derive from `t`, not from fired-event history).
-- [ ] A 30-second real-project preview *feels* locked (human check with audio).
+- [ ] A 30-second real-project preview *feels* locked (human check with audio):
+      the reviewer can point to the line/station responding to prominent MIDI
+      notes without inspecting JSON.
+- [ ] Dev audit overlay explains every visible payoff: line, source track,
+      pitch/station, source type, and `hitT`.
 - [ ] Blooms fire per merged note, not per station.
 
 ## Tests added
@@ -93,3 +105,6 @@ audio/visual human sync check remains pending.
   this wrong and M5's export is fine but dev scrubbing lies.
 - Trains during dense runs will look frantic at full-map zoom — don't tune
   this yet; M3's camera follow fixes the perceived speed.
+- A green timing suite is necessary but insufficient. If train arrivals are
+  correct but too small/subtle to read, treat it as an unfinished M2 cue-design
+  problem, not as "randomness" or user confusion.

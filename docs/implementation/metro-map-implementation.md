@@ -17,6 +17,14 @@ healing, district bands, and complete label-overlap optimization remain before
 M4 topology work. See [Current implementation status](../implementation-status.md)
 and [M3 — Cartography](metro-map/M3-cartography.md).
 
+Planning correction (2026-07-05): Metro's next implementation work must be
+judged by **perceptual sync**, not only by compiler correctness. A train can
+arrive on the mathematically correct frame and still fail if the viewer cannot
+tell which audible note caused the movement. Until a richer region-bearing
+reference export exists, `projects/untitled-project-6d2e04f7` is useful for
+MIDI train/station timing and line-identity checks only; it is not a valid M4
+chorus-ring benchmark because it has no repeated regions.
+
 ## 1. Why this layout problem is tractable
 
 General octilinear transit-map layout is NP-hard (it's solved with MIPs in the
@@ -108,6 +116,12 @@ interface TrainSchedule {
 Key invariant: **geometry is quantized, timing is not.** Stations sit on the
 grid; trains arrive at real note times. The grid organizes space; the music
 owns time.
+
+User-facing invariant: **the cause must be visible.** Every note-timed payoff
+needs a readable visual answer at the same moment: train arrival, station
+bloom, line pulse, label flash, or a dev-only audit marker. If a viewer cannot
+connect the visible change to the audible note, the feature is not done even
+when the `hitT` test is green.
 
 ## 4. The layout solver
 
@@ -266,6 +280,23 @@ construction, and each stop event carries `hitT = arriveT` for the sync tests.
 - Drums don't get trains: `kick` → cross-tie pulse event at the current
   frontier row; `snare` → beacon blink at the nearest upcoming interchange.
 
+### 5.1 Sync-readability audit
+
+The shared `hitT` invariant proves frame accuracy; Metro also needs an
+operator-facing audit mode that proves the mapping is understandable:
+
+- Current/next hit readout: time, bar.beat, line name, source track, pitch,
+  station id, event type, and `hitT`.
+- Per-line provenance: MIDI vs audio-activity fallback, source event count,
+  station count, and merge/coarsening decisions.
+- Visual markers at the payoff moment: a brief station target ring and train
+  brake/glow that can be toggled for debugging but kept out of final exports.
+
+Acceptance target: at 1x playback with audio, a reviewer can point to the line
+or station that corresponds to the audible piano/lead/bass note without
+needing to inspect JSON. If this fails, increase cue strength or line identity
+before adding topology polish.
+
 ## 6. Reveal choreography (drawing the map)
 
 Everything has `revealT`:
@@ -310,9 +341,11 @@ Three compiled phases (keyframes in `performance.camera`):
 | Case | Handling |
 |---|---|
 | No regions in project | No rings; single trunk; camera phases 1+3 only |
+| Current `untitled-project-6d2e04f7` export | Treat as MIDI sync/line-identity fixture only; do not judge M4 rings, districts, or final concept parity from it |
 | Arp track with 2 000 notes | Bar-merge policy + station budget (§4.1); blooms still fire per note on the merged station |
 | Only drums (no melodic tracks) | Refuse with a clear message — this concept needs pitches (documented limitation) |
 | Two long-unison lines | Single interchange at unison start + parallel corridor (§4.2) |
+| Multiple similar MIDI tracks with same role/instrument | Preserve distinct line colors, train markers, legend names, and deterministic corridor offsets so the map does not collapse into one anonymous braid |
 | Tempo changes | All bin math via `core/mtime`; rows are beat-indexed, not second-indexed |
 | Key confidence low | Tonic centering skipped (lane 0 = C), neutral palette |
 
@@ -327,6 +360,13 @@ Three compiled phases (keyframes in `performance.camera`):
   recompile).
 - **Sync invariant** (shared harness): every `station.bloom` / train stop
   carries `hitT`; payoff within 1 frame.
+- **Perceptual sync review:** a 30–60 s watch-through with audio where the
+  reviewer confirms that at least the prominent MIDI notes visibly cause train
+  stops/blooms/line pulses. Record failures as cue-strength or line-identity
+  bugs, not as vague "looks random" feedback.
+- **Provenance audit:** compiled output exposes counts by line/source and any
+  fallback/coarsening decisions so a bland result can be traced to missing
+  project data instead of guessed at from the canvas.
 - **Golden frames:** t = {2 s, chorus 1 mid, ring lap 2, final reveal}.
 
 ## 11. Build phases
@@ -341,5 +381,11 @@ Each phase has a full work-order document. All phases depend on the shared
 | M3 | It's a map — corridors, labels, legend, camera | [metro-map/M3-cartography.md](metro-map/M3-cartography.md) |
 | M4 | Topology — chorus rings + laps, bypass | [metro-map/M4-topology.md](metro-map/M4-topology.md) |
 | M5 | Ship — polish, night mode, mp4 + poster + SVG | [metro-map/M5-ship.md](metro-map/M5-ship.md) |
+
+Sequencing rule: finish the M2/M3 sync-readability and line-identity gates on
+the current MIDI export, then move to M4 only when the active project has
+authored repeated regions. If a proper reference song with repeated `Chorus`
+regions arrives first, M4 can be pulled forward immediately after the M3
+readability gates because rings are the concept's signature.
 
 Rough size: compiler ~1 200 LOC, scene ~800 LOC, shared kit reuse for the rest.

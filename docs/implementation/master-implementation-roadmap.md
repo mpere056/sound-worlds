@@ -24,6 +24,11 @@ The current local reference export is
 it is intentionally not a visual-quality benchmark because it has no drums,
 bass, lead/vocal MIDI, or section regions.
 
+Metro-specific consequence: that export can validate MIDI station timing,
+train arrivals, line identity, and fallback honesty, but it cannot validate
+M4 chorus rings/laps. M4 must be judged on a region-bearing reference song with
+repeated same-name chorus sections.
+
 ```
 S0  Repo & math hygiene            S6  Metro M3 completion
 S1  Reference song + re-baseline   S7  Metro M4 — rings & laps
@@ -163,14 +168,27 @@ single-source, typography, arc-length precompute) — then finish
 (spatial-hash AABB; the current "clamp x to margins" is not overlap
 avoidance).
 
-**Done when:** M3 acceptance checklist + V2 criteria pass on the reference
-song; zero overlapping tier-0 labels; a paused final frame passes the
-"plausible next to a real transit diagram" test.
+Add the 2026-07-05 Metro correction: S6 must also prove
+**sync-readability** and **line identity**. The current keys-only export is a
+valid fixture for "four similar MIDI lines must still be distinguishable" and
+"train/station payoffs must visibly answer audible notes." Use a dev-only
+audit overlay or equivalent report to expose current/next hit, source track,
+line, pitch/station, source type, and `hitT`.
+
+**Done when:** M3 acceptance checklist + V2 criteria pass on the active MIDI
+fixture; zero overlapping tier-0 labels; a paused final frame passes the
+"plausible next to a real transit diagram" test; and a 30–60 s audio
+watch-through lets the reviewer point to which line/station responds to
+prominent MIDI notes.
 
 ## S7 — Metro M4 — rings & laps *(3–4 days)*
 
 Spec: [M4 work order](metro-map/M4-topology.md) — fully
-valid. Adaptation notes:
+valid, but data-gated. Do not judge or prioritize S7 against
+`untitled-project-6d2e04f7`; it has no regions and should produce zero rings.
+Start S7 once a project has repeated same-name regions (for example
+`Chorus`, `Chorus`, `Chorus`) and M2/M3 sync-readability is already green.
+Adaptation notes:
 
 - Emit ring geometry as **dense polylines** (rounded-rect sampled at ~4 px) —
   the scene already draws arbitrary polylines and needs zero new primitives.
@@ -182,7 +200,8 @@ valid. Adaptation notes:
   keyframes legitimately move up-map.
 
 **Done when:** M4 acceptance checklist passes; chorus 2 visibly reads as
-"everyone rides downtown again."
+"everyone rides downtown again"; a missing-region fixture logs why rings were
+skipped instead of silently looking unfinished.
 
 ## S8 — Runner R5 — set pieces & ship *(3–4 days)*
 
@@ -259,9 +278,10 @@ The final checklist — **"fully properly implemented" means every box below:**
 | Metro to done | S6–S7, S9 | 7–10 days |
 | Export + ship | S10–S11 | 3–4 days |
 
-Interleaving suggestion: S0→S1→S2→S3→**demo**→S6→**demo**→S5→S7→S4→S8→S9→S10→S11
-— identity work (S5/S7) lands right after each game's foundation so every
-demo checkpoint shows a visibly different product.
+Interleaving suggestion when a proper reference song exists:
+S0→S1→S2→S3→**demo**→S6→**demo**→S5→S7→S4→S8→S9→S10→S11.
+If only the current keys-only export is available, keep S7 paused and use the
+Metro time on S6 sync-readability/line-identity instead.
 
 ## Standing rules while executing (the guardrails that kept this design honest)
 

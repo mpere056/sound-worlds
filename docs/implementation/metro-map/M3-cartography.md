@@ -21,6 +21,11 @@ legend, key-change districts, camera phases 1 & 3 (follow + final reveal).
 **Out:** rings/bypass (M4), ring camera moments (M4), annealing/night
 mode/export (M5).
 
+M3 now also owns the **line-identity gate** for projects with similar MIDI
+tracks. If four keys lines are present, they must not read as one anonymous
+braid: color, legend naming, corridor separation, train markers, and cue
+strength must make each line traceable before moving on to topology.
+
 ## Work breakdown
 
 ### 1. Parallel corridors (`compilers/metro/src/passes/corridors.ts`)
@@ -47,6 +52,9 @@ mode/export (M5).
 - Legend entry per line: color chip + track name; `legend.reveal` at the
   line's first note (event already exists — add statics + placement: bottom
   margin, two columns).
+- For duplicate/similar role names, preserve stable source identity in the
+  legend (`track name`, short index, or user alias) rather than collapsing the
+  display to a generic role label like `Keys`.
 - Districts: key-change detection from chords/`key` → horizontal tint bands
   behind row ranges (`district.shift` events tint-lerp over 1 beat).
 
@@ -76,6 +84,11 @@ mode/export (M5).
       overshoot into reverse — test on the sampled camera curve).
 - [ ] Final frame (pull-back) contains the entire `bounds` with padding.
 - [ ] Human check: 60 s of a real project reads as "a metro map being drawn."
+- [ ] Similar-track check: `untitled-project-6d2e04f7` or an equivalent
+      multi-keys export still lets the reviewer distinguish individual lines
+      and identify which line is reacting to a note.
+- [ ] Sync-readability from M2 survives the M3 camera/label/corridor work:
+      added cartography must not make note payoffs harder to see.
 
 ## Tests added
 
@@ -100,3 +113,7 @@ district bands, and full overlap optimization remain open M3 work.
   at extreme cases; M5's annealing can flip bend orientations to reduce them.
 - Re-deriving occupancy from polylines (not from the router) keeps corridors
   correct even for M4's portal edges later — worth the small extra cost now.
+- Do not start M4 solely because M3 is "visually prettier." M4 should begin
+  after this phase is readable on the current MIDI export, or immediately when
+  a richer export with repeated regions exists and the M3 line-identity gate is
+  already green.

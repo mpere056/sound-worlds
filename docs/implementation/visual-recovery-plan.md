@@ -189,6 +189,18 @@ maps while rendering. This removes the old per-frame segment-length
 recalculation for edge reveal and train interpolation; frame-time measurement
 on a richer reference song is still needed for final acceptance.
 
+### V2.7 Metro sync-readability and line identity
+The scene can be mathematically synced and still fail if the cue is too subtle.
+Before adding rings, make note payoffs unmistakable: train brake/glow, station
+bloom, optional line pulse, and label flash. Add or use a dev-only audit view
+that shows current/next hit time, source track, line, pitch/station, source
+type, and `hitT`.
+
+**Accept:** on the current MIDI export, a reviewer watching with audio can
+identify which visible line/station responds to prominent piano notes. Four
+similar keys tracks must remain distinguishable by color, legend identity,
+route offset, and train/arrival cue.
+
 ---
 
 ## V3 — Identity pull-forward (reordered phases)
@@ -199,14 +211,20 @@ The original order finishes breadth (R3 extras, M3 polish) before identity
 1. **Runner: R4 erasure front + crumbs** next after V1 — it's the concept's
    signature and it's mostly scene work
    ([R4 work order](waveform-runner/R4-identity.md)).
-2. **Metro: M4 chorus rings** next after V2 — rings are the topology signature
-   and the reference song (3× chorus) is built to show them
+2. **Metro: M4 chorus rings** next after V2 — but only on a region-bearing
+   reference song. Rings are the topology signature and the intended reference
+   song (3× chorus) is built to show them
    ([M4 work order](metro-map/M4-topology.md)).
 3. Then return for R3 authored-song acceptance (gate/palette/vocal/float) and
    M3 leftovers (joint healing) — they land better on top of the identity.
 
 Rationale: every demo until identity ships will keep producing the "this
 doesn't look right" reaction regardless of correctness underneath.
+
+Data gate: if the active export is still `untitled-project-6d2e04f7`, do not
+use it to judge V3 Metro. It has no repeated regions, so the correct M4 result
+is "no rings." Keep Metro effort on V2.7/M3 readability until a repeated-region
+project exists.
 
 ## V4 — Verification & documentation honesty
 
@@ -228,8 +246,8 @@ doesn't look right" reaction regardless of correctness underneath.
 
 ## Suggested execution order (one line)
 
-**V0 → V2.2 → demo checkpoint → V2.5 →
-V3 (R4, then M4) → V4 → everything else.**
+**V0 → V2.2 → demo checkpoint → V2.5/V2.7 →
+V3 (R4, then M4 only if regions exist) → V4 → everything else.**
 
 The demo checkpoint is deliberate: the remaining early items (real song,
 Metro field polish, and visual acceptance of the Runner glow pass) build on

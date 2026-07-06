@@ -14,6 +14,24 @@ The structural signature of the whole concept: repetition becomes topology.
 This phase changes the section-layout pass from linear-only to
 rings-and-bypasses, and teaches trains to lap.
 
+## Preconditions
+
+M4 is data-gated. It should be implemented and judged on a project with
+authored section regions where at least one repeated section name is identical
+across occurrences (`Chorus`, `Chorus`, `Chorus`). The current
+`untitled-project-6d2e04f7` export has no regions, so it cannot exercise this
+phase beyond negative fallback behavior ("no rings should appear").
+
+Before starting M4 on a real song, confirm:
+
+- `song.json.sections[]` contains repeated regions with matching
+  `repeatGroup`s.
+- The repeated section contains MIDI events for at least two visible lines.
+- M2/M3 sync-readability is green: train arrivals and station blooms are
+  already obvious on linear map sections.
+- The compiled output can report whether rings were skipped because of missing
+  or non-repeating regions.
+
 ## Scope
 
 **In:** ring geometry + arc mapping, portal edges, lap scheduling, bypass
@@ -73,6 +91,8 @@ under-construction pre-draw.
 
 - [ ] Chorus-repeat fixture: exactly one ring; repeats emit **zero** stations
       /edges (property test on statics).
+- [ ] Missing-region fixture: zero rings, clear compile log/provenance message,
+      and no visual expectation that M4 should be present.
 - [ ] Lap stop times equal the repeat occurrences' real note times.
 - [ ] Return/exit legs arrive on their back-solved `hitT` (sync invariant
       extended to portal travel).
@@ -99,3 +119,7 @@ keyframe ordering test. Golden re-baseline for the ring fixture only.
   (`mtime` bars relative to section start), clamping the extended tail to
   extra laps — a double-length final chorus = two laps. Delightful, and falls
   out of the math.
+- If authored regions are absent, do not attempt clever automatic chorus
+  inference in this phase. Auto-segmentation can become a later analyzer
+  feature, but M4 should first prove the explicit-region contract so the visual
+  grammar is deterministic and debuggable.
