@@ -50,6 +50,7 @@ function partialPolyline(polyline: PolylineMetrics, progress: number): MetroPoin
 }
 
 export class MetroScene {
+  readonly backendKind = "pixi";
   readonly #backend: PixiBackend;
   readonly #performance: MetroPerformance;
   readonly #background = new Graphics();

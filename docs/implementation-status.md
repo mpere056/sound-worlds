@@ -1,6 +1,6 @@
 # Current implementation status
 
-**Status date:** 2026-07-06
+**Status date:** 2026-07-07
 
 This is the canonical snapshot of what Sound Worlds currently does. The concept
 and implementation-plan documents describe the intended destination; this page
@@ -43,6 +43,7 @@ not a valid M4 chorus-ring fixture.
 | Shared TypeScript core/runtime | Implemented | n/a | Strict loaders, deterministic random streams, musical time, curve sampling, back-solving, palettes, fixtures, frame clock, seek-safe events, camera interpolation | Continue extending shared facilities only as concepts need them |
 | Preview/export shell | Implemented foundation | engineering-preview | Project/world discovery, WAV streaming, audio-clock playback, scrub, overlays, tuning, PNG and short H.264 preview export | Full-song orchestration, direct project-output writing, audio mux |
 | Painting P3 | Implemented | engineering-preview | Deterministic persistent non-linear compiler and Pixi scene, centered construction rings, whole-canvas glow washes, bass/low-note ripple rings, symmetric note blooms, mirrored rhythm drops/splatters, master-tail stains, dry paint persistence, wet diffusion, cymatic ring scalloping, paper grain, varnish sweep, signature reveal, preview app integration | True accumulation/FBO paint buffer, impasto lighting, anti-mud density budgets, chorus reinforcement repainting, 4x print export, human visual acceptance on a richer reference |
+| Marble Music M0-M1 | In progress | engineering-preview | `@reaper-viz/compiler-marble`, `@reaper-viz/scene-marble`, `compile:marble`, Three.js app routing, Pixi/Three backend ownership, one-track auto-selection, compiled note impacts/path/tail, authored camera keys, and compiler tests are implemented. `untitled-project-6d2e04f7` now compiles to 20 low-track impacts with zero dropped notes and audible-tail resonance | Human browser watch-through, stronger physical/aesthetic pass, dense high-track manual stress review, screenshot/export polish, then two-track duet planning |
 | Waveform Runner R1 | Implemented | engineering-preview | Monotone `x(t)`, inverse `t(x)`, energy speed, slope-limited terrain, camera keys, stateless Pixi world | Richer bass-derived results need a MIDI/pitch-bearing export and the visual recovery pass |
 | Waveform Runner R2 | Implemented | engineering-preview | Budgeted musical landings, tempo-scaled closed-form jumps, clearance validation, deterministic boost fallback, takeoff/landing events | Double-jump mid-impulses, terrain-concession fallback, and beat/character polish |
 | Waveform Runner R3 | In progress | engineering-preview | MIDI melody glyphs, honest beat/activity fallback, role-colored exact-pose merge targets, note-timed route platforms, 300 ms beams, six-beam cap, overflow sparkles, merge ripples, section gates with `gate.open` spans, section palette shifts, compiled vocal-halo curve with silent fallback, conservative sustained-downlifter float spans, compiled step events for beat-locked gait, compiled track strata, compiled-camera scene framing, trajectory-sampled trail, palette-sourced background/terrain/runner/ripples, additive glow layers, no in-canvas debug title/status | Authored-song gate/palette/vocal/float acceptance, golden-frame visual verification |
@@ -171,10 +172,14 @@ readability/line-identity gate because rings are the Metro identity feature.
 
 ## Verification record
 
-The current implementation was verified on 2026-07-06:
+The current implementation was verified on 2026-07-07:
 
-- `corepack pnpm check` passed, including the determinism guard, production
-  build, and 74 TypeScript tests across 13 files.
+- `corepack pnpm check` passed with escalation for the Vite/esbuild build step,
+  including the determinism guard, production build, and 78 TypeScript tests
+  across 14 files.
+- `corepack pnpm --filter @reaper-viz/compiler-marble test` passed 4 Marble
+  compiler tests covering exact note-hit mapping, dense-note clustering, and
+  path/tail/camera coverage.
 - `corepack pnpm --filter @reaper-viz/compiler-painting test` passed 3
   Painting compiler tests covering deterministic output, role fallbacks, and
   event/stroke timing invariants.
@@ -210,9 +215,16 @@ The current implementation was verified on 2026-07-06:
   rhythm drops, 1 glaze, 5 master-tail stains spanning the post-MIDI audio tail,
   a final `Untitled Project` signature, and zero path-like ribbon/terrain/guide
   marks in the generated performance.
-- The dev server was restarted at `http://127.0.0.1:5173/` for local review.
-  A follow-up human/browser watch-through should confirm the new visible tail
-  pulses feel correctly synchronized in motion.
+- That export compiled successfully to Marble performance version 1: the
+  auto-selector chose the low repeating `keys` track, emitted 20 exact
+  `marble.impact` events, dropped 0 notes, produced 0 timing mismatches,
+  produced 0 teleport segments, authored note/cluster/final camera keys, and
+  added final-target resonance from the 8.832 s final selected note through
+  the 11.056 s audio end.
+- The existing dev server at `http://127.0.0.1:5173/` responded to the project
+  API and reported Marble availability for `untitled-project-6d2e04f7`. A
+  follow-up human/browser watch-through should confirm the Marble scene reads as
+  synchronized and physical in motion.
 
 S0 math hygiene progress:
 
@@ -307,25 +319,36 @@ before starting another server.
 
 ## Recommended next implementation order
 
-1. Author the reference song from
-   [Song Authoring Guide](implementation/song-authoring-guide.md), because the
-   current 11-second keys-only export starves both concepts.
-2. Review Painting P3 in the browser and judge the centered cymatic direction:
-   rings, glows, blooms, drops, master-tail stains, and persistent paint should
-   feel non-linear and intentional. If yes, the next Painting slice should add
-   accumulation/FBO-style diffusion, softer watercolor/ink spread, and stronger
-   final-frame composition polish.
-3. Execute the early
+1. Follow the
+   [Track-count generator strategy](implementation/track-count-generator-strategy.md):
+   do not judge broad all-track worlds from sparse one-/small-track exports.
+2. Review Marble Music M0-M1 in the browser, following
+   [Marble Music implementation](implementation/marble-music-implementation.md)
+   and the
+   [Marble Music deep design review](implementation/marble-music-deep-design-review.md).
+   The first code slice now exists; the next gate is whether the low-track
+   machine reads as synchronized and physical enough without debug overlays.
+3. Use
+   [the `untitled-project-6d2e04f7` visual brief](implementation/project-brief-untitled-project-6d2e04f7.md)
+   as the acceptance fixture: try the low repeating keys track first, then the
+   high denser keys track as the dense-note stress case.
+4. Only after the one-track marble generator feels good, design Marble Music M2
+   for two tracks. Do not return to broad all-track procedural generation until
+   the [Marble Music acceptance checklist](implementation/marble-music-acceptance-checklist.md)
+   passes for one-track Marble Music and the two-track generator is satisfying.
+5. Keep Painting P3 available as an engineering-preview reference, but do not
+   keep polishing it blindly without a stronger visual brief.
+6. Execute the early
    [Visual Recovery Plan](implementation/visual-recovery-plan.md) items:
    Runner glow/beat-gait/real-strata polish and Metro field/panel cleanup.
-4. Keep extending the [Math Audit](implementation/math-audit.md) test battery
+7. Keep extending the [Math Audit](implementation/math-audit.md) test battery
    as future-only systems land, especially double-jump, clearance rejection
    vectors, and camera impulse/follow behavior.
-5. Verify Runner R3 gates/palettes/vocals/floats on an authored-region,
+8. Verify Runner R3 gates/palettes/vocals/floats on an authored-region,
    vocal-bearing, FX-bearing reference song.
-6. Complete Metro M3 joint healing and label overlap handling; run a human
+9. Complete Metro M3 joint healing and label overlap handling; run a human
    audio watch-through for the new sync-readability cues and verify districts
    on an authored-region song. Keep the preview camera music-locked until the
    export pipeline adds true post-audio end-card time.
-7. Start Metro M4 only on a region-bearing export with repeated same-name
+10. Start Metro M4 only on a region-bearing export with repeated same-name
    sections; on `untitled-project-6d2e04f7`, the correct M4 result is no rings.

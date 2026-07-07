@@ -57,8 +57,8 @@ export class PixiBackend {
     target.set(extracted);
   }
 
-  destroy(): void {
+  destroy(options: { context?: boolean } = {}): void {
     this.#layers.clear();
-    this.app.destroy({ removeView: false }, { children: true, context: true });
+    this.app.destroy({ removeView: false }, { children: true, context: options.context ?? false });
   }
 }

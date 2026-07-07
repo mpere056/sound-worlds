@@ -19,7 +19,12 @@ For a navigable documentation map, see [docs/README.md](docs/README.md). The
 canonical record of what is implemented, verified, in progress, and planned.
 The [master implementation roadmap](docs/implementation/master-implementation-roadmap.md)
 and [song authoring guide](docs/implementation/song-authoring-guide.md) define
-the next practical path to concept-quality Runner and Metro renders.
+the longer path to concept-quality broad-world renders. The immediate next path
+is the track-count-specific
+[Marble Music](docs/marble-music.md) generator, guided by the
+[track-count generator strategy](docs/implementation/track-count-generator-strategy.md)
+and the current
+[untitled-project-6d2e04f7 brief](docs/implementation/project-brief-untitled-project-6d2e04f7.md).
 
 ```
 Reaper project
@@ -122,10 +127,15 @@ Name your Reaper tracks sensibly and everything maps automatically.
 | [descent.md](docs/descent.md) | One continuous dive to the seafloor | Bioluminescent, cinematic | Three.js | ●●●○ | Seafloor "coral organ" finale |
 | [painting.md](docs/painting.md) | The song paints a canvas in timelapse | Fine-art, impressionist | 2D WebGL (stroke FBO) | ●●○○ | The finished painting |
 | [storm.md](docs/storm.md) | One storm, birth to rainbow | Dramatic, weather-cinematic | 2.5D layered WebGL | ●●●○ | Rainbow chord end-card |
+| [marble-music.md](docs/marble-music.md) | One track becomes a wall-mounted kinetic marble machine | Tactile, musical, geometric | Three.js | ●●○○ | Resonant sculpture tableau |
 | [metro-map.md](docs/metro-map.md) | A transit map of the song draws itself | Clean flat design, clever | 2D vector Canvas | ●○○○ | Poster-grade map (PNG/SVG) |
 | [city-builder.md](docs/city-builder.md) | A city constructs itself; skyline = the song | Isometric, cozy-epic | Three.js / 2.5D | ●●●○ | Skyline poster |
 | [corridor-shooter.md](docs/corridor-shooter.md) | On-rails glide through the inside of the mix | Neon, high-energy FPS ballet | Three.js | ●●●● | Boss title-card explosion |
 | [waveform-runner.md](docs/waveform-runner.md) | The playhead as a runner crossing the song | Stylized 2D, kinetic | 2D WebGL parallax | ●●○○ | Cadence gate finish |
+
+New track-count-specific concept:
+[Marble Music](docs/marble-music.md) starts with a one-track Three.js marble
+machine before expanding to two-track and larger arrangement generators.
 
 ## Suggested build order
 

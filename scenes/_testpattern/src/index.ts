@@ -11,6 +11,7 @@ export interface TestPatternTuning {
 const DEFAULT_TUNING: TestPatternTuning = { glow: 0.72, gridOpacity: 0.22, motion: 1 };
 
 export class TestPatternScene {
+  readonly backendKind = "pixi";
   readonly #backend: PixiBackend;
   readonly #song: Song;
   readonly #time: MusicalTime;

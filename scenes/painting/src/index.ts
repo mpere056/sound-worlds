@@ -23,6 +23,7 @@ function partialPoints(points: PaintingPoint[], progress: number): PaintingPoint
 }
 
 export class PaintingScene {
+  readonly backendKind = "pixi";
   readonly #backend: PixiBackend;
   readonly #performance: PaintingPerformance;
   readonly #paper = new Graphics();

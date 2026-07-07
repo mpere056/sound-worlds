@@ -62,13 +62,14 @@ function projectApi(): Plugin {
                 ...(existsSync(join(PROJECTS, id, "performance.runner.json")) ? ["runner"] : []),
                 ...(existsSync(join(PROJECTS, id, "performance.metro.json")) ? ["metro"] : []),
                 ...(existsSync(join(PROJECTS, id, "performance.painting.json")) ? ["painting"] : []),
+                ...(existsSync(join(PROJECTS, id, "performance.marble.json")) ? ["marble"] : []),
               ];
               return { id, name: song.meta.name, durationSec: song.meta.durationSec, concepts };
             }));
             sendJson(response, 200, projects);
             return;
           }
-          const match = /^\/api\/projects\/([^/]+)\/(song\.json|performance\.(runner|metro|painting)\.json|master\.wav)$/.exec(url.pathname);
+          const match = /^\/api\/projects\/([^/]+)\/(song\.json|performance\.(runner|metro|painting|marble)\.json|master\.wav)$/.exec(url.pathname);
           if (!match) { next(); return; }
           const project = await resolveProject(decodeURIComponent(match[1] ?? ""));
           if (!project) { sendJson(response, 404, { error: "Unknown project" }); return; }

@@ -1,5 +1,6 @@
 import { parsePerformance, parseSong, type Song } from "@reaper-viz/core";
 import { captureCanvasPng, exportCanvasMp4, PixiBackend, supportsCanvasMp4 } from "@reaper-viz/render";
+import { MarbleScene, type MarblePerformance } from "@reaper-viz/scene-marble";
 import { MetroScene, type MetroPerformance } from "@reaper-viz/scene-metro";
 import { PaintingScene, type PaintingPerformance } from "@reaper-viz/scene-painting";
 import { RunnerScene, type RunnerPerformance } from "@reaper-viz/scene-runner";
@@ -8,7 +9,7 @@ import { Pane } from "tweakpane";
 import "./styles.css";
 
 interface ProjectSummary { id: string; name: string; durationSec: number; concepts: string[]; }
-interface ActiveScene { tuning: object; renderFrame(t: number): void; destroy(): void; auditFrame?(t: number): string[]; }
+interface ActiveScene { backendKind: "pixi" | "three"; tuning: object; renderFrame(t: number): void; destroy(): void; auditFrame?(t: number): string[]; }
 interface BindingApi { on(event: "change", handler: () => void): BindingApi; }
 interface BindingPane {
   addBinding<T extends object, K extends keyof T>(target: T, key: K, options: Record<string, unknown>): BindingApi;
@@ -61,6 +62,21 @@ let currentProjectId = "";
 let animationFrame = 0;
 let previousBeat = -1;
 let pane: Pane | undefined;
+
+function destroyActiveScene(): void {
+  scene?.destroy();
+  scene = undefined;
+}
+
+function destroyPixiBackend(): void {
+  backend?.destroy();
+  backend = undefined;
+}
+
+async function ensurePixiBackend(): Promise<PixiBackend> {
+  backend ??= await PixiBackend.create({ canvas, width: 1080, height: 1920 });
+  return backend;
+}
 
 function formatTime(value: number): string {
   const minutes = Math.floor(value / 60);
@@ -134,15 +150,17 @@ function addTuningBinding<T extends object, K extends keyof T>(
 }
 
 async function loadConcept(concept: string): Promise<void> {
-  scene?.destroy();
+  const wasThree = scene?.backendKind === "three";
+  destroyActiveScene();
+  if (wasThree) destroyPixiBackend();
   pane?.dispose();
   if (!song) return;
   statusTitle.textContent = "Building world";
   statusDetail.textContent = concept;
-  backend ??= await PixiBackend.create({ canvas, width: 1080, height: 1920 });
   pane = new Pane({ container: document.querySelector<HTMLDivElement>("#tweakpane")! });
   const bindingPane = pane as unknown as BindingPane;
   if (concept === "metro") {
+    const backend = await ensurePixiBackend();
     const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.metro.json`);
     if (!response.ok) throw new Error(`Metro performance request failed: ${response.status}`);
     const performance = parsePerformance(await response.json()) as MetroPerformance;
@@ -159,6 +177,7 @@ async function loadConcept(concept: string): Promise<void> {
     const hits = lineAudits.reduce((sum, line) => sum + line.hitCount, 0);
     statusDetail.textContent = `${performance.statics.lines.length} lines · ${performance.statics.stations.length} stations · ${hits} note payoffs · ${fallbacks} audio fallback`;
   } else if (concept === "painting") {
+    const backend = await ensurePixiBackend();
     const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.painting.json`);
     if (!response.ok) throw new Error(`Painting performance request failed: ${response.status}`);
     const performance = parsePerformance(await response.json()) as PaintingPerformance;
@@ -172,6 +191,7 @@ async function loadConcept(concept: string): Promise<void> {
     statusTitle.textContent = "Painting · song-made artwork";
     statusDetail.textContent = `${performance.statics.strokes.length} marks · ${performance.statics.strokeCounts.subject} ribbon strokes · ${performance.statics.strokeCounts.rhythm} rhythm marks`;
   } else if (concept === "runner") {
+    const backend = await ensurePixiBackend();
     const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.runner.json`);
     if (!response.ok) throw new Error(`Runner performance request failed: ${response.status}`);
     const performance = parsePerformance(await response.json()) as RunnerPerformance;
@@ -184,7 +204,22 @@ async function loadConcept(concept: string): Promise<void> {
     sceneLabel.textContent = "Waveform Runner · R3 Music";
     statusTitle.textContent = "Waveform Runner · compiled music";
     statusDetail.textContent = `${performance.statics.jumpReport.length} landings · ${performance.statics.glyphs.length} ${performance.statics.glyphSource} glyphs · ${performance.statics.terrain.source}`;
+  } else if (concept === "marble") {
+    destroyPixiBackend();
+    const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.marble.json`);
+    if (!response.ok) throw new Error(`Marble performance request failed: ${response.status}`);
+    const performance = parsePerformance(await response.json()) as MarblePerformance;
+    const marble = new MarbleScene(canvas, performance);
+    scene = marble;
+    addTuningBinding(bindingPane, marble.tuning, "glow", { min: 0, max: 1.6, step: 0.01, label: "Glow" });
+    addTuningBinding(bindingPane, marble.tuning, "camera", { min: 0.4, max: 1.8, step: 0.02, label: "Camera" });
+    addTuningBinding(bindingPane, marble.tuning, "targetScale", { min: 0.7, max: 1.4, step: 0.01, label: "Targets" });
+    addTuningBinding(bindingPane, marble.tuning, "tail", { min: 0, max: 1.5, step: 0.01, label: "Tail" });
+    sceneLabel.textContent = "Marble Music · M0/M1";
+    statusTitle.textContent = "Marble Music · one-track machine";
+    statusDetail.textContent = `${performance.statics.source.trackName} · ${performance.statics.source.noteCount} note impacts · ${performance.statics.clusters.filter((cluster) => cluster.kind !== "single").length} clusters`;
   } else {
+    const backend = await ensurePixiBackend();
     const diagnostics = new TestPatternScene(backend, song);
     scene = diagnostics;
     addTuningBinding(bindingPane, diagnostics.tuning, "glow", { min: 0, max: 1, step: 0.01, label: "Orb glow" });
@@ -237,6 +272,12 @@ async function loadProject(id: string): Promise<void> {
     painting.textContent = "Painting · P1 Artifact Canvas";
     options.push(painting);
   }
+  if (project?.concepts.includes("marble")) {
+    const marble = document.createElement("option");
+    marble.value = "marble";
+    marble.textContent = "Marble Music · M0/M1";
+    options.push(marble);
+  }
   const testPattern = document.createElement("option");
   testPattern.value = "testpattern";
   testPattern.textContent = "Pipeline Test Pattern";
@@ -254,6 +295,13 @@ async function loadProject(id: string): Promise<void> {
     painting.textContent = "Painting · compile required";
     painting.disabled = true;
     options.push(painting);
+  }
+  if (!project?.concepts.includes("marble")) {
+    const marble = document.createElement("option");
+    marble.value = "marble";
+    marble.textContent = "Marble Music · compile required";
+    marble.disabled = true;
+    options.push(marble);
   }
   conceptSelect.replaceChildren(...options);
   await loadConcept(options[0]?.value ?? "testpattern");

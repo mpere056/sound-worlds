@@ -118,6 +118,7 @@ function gateProgress(openStartT: number, openEndT: number, t: number): number {
 }
 
 export class RunnerScene {
+  readonly backendKind = "pixi";
   readonly #backend: PixiBackend;
   readonly #performance: RunnerPerformance;
   readonly #stepTimes: number[];

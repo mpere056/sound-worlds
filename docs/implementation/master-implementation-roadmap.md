@@ -24,6 +24,19 @@ The current local reference export is
 it is intentionally not a visual-quality benchmark because it has no drums,
 bass, lead/vocal MIDI, or section regions.
 
+Strategic pivot as of 2026-07-07: before continuing broad all-track
+visualizers on sparse exports, build track-count-specific generators. The first
+new target is [Marble Music](../marble-music.md): a one-track Three.js marble
+machine where each note is a compiled physical impact. Use the
+[Track-count generator strategy](track-count-generator-strategy.md), the
+[Marble Music deep design review](marble-music-deep-design-review.md), the
+[Marble Music implementation plan](marble-music-implementation.md), and the
+[`untitled-project-6d2e04f7` visual brief](project-brief-untitled-project-6d2e04f7.md)
+as the current implementation front door. Use the
+[Marble Music acceptance checklist](marble-music-acceptance-checklist.md)
+before promoting the concept beyond one track. After the one-track generator
+feels satisfying, extend to a two-track marble duet, then larger arrangements.
+
 Metro-specific consequence: that export can validate MIDI station timing,
 train arrivals, line identity, and fallback honesty, but it cannot validate
 M4 chorus rings/laps. M4 must be judged on a region-bearing reference song with
