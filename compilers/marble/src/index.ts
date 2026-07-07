@@ -138,6 +138,43 @@ function pathKind(gap: number): MarblePathKind {
   return "arc";
 }
 
+function pathEasing(kind: MarblePathKind): MarblePathSegment["easing"] {
+  if (kind === "arc") return "ballistic";
+  if (kind === "rail") return "smoothstep";
+  if (kind === "settle" || kind === "hold") return "easeOut";
+  return "linear";
+}
+
+function preferredTravelDuration(kind: MarblePathKind, interval: number): number {
+  const ideal = kind === "arc" ? 0.42 : kind === "rail" ? 0.3 : kind === "cascade" ? 0.14 : kind === "rattle" ? 0.08 : 0.22;
+  const share = kind === "arc" ? 0.55 : kind === "rail" ? 0.5 : 0.82;
+  return clamp(Math.min(ideal, interval * share), Math.min(interval, 0.045), interval);
+}
+
+function departureForNextNote(current: SongEvent, next: SongEvent, kind: MarblePathKind): number {
+  const interval = Math.max(EPS, next.t - current.t);
+  const release = clamp(current.t + Math.max(0, current.dur), current.t, next.t);
+  const silentGap = Math.max(0, next.t - release);
+  const preferredTravel = preferredTravelDuration(kind, interval);
+  if (silentGap >= preferredTravel) return next.t - preferredTravel;
+  if (silentGap >= 0.045) return release;
+  return Math.max(current.t, next.t - preferredTravel);
+}
+
+function pushHold(path: MarblePathSegment[], target: MarbleTarget, t0: number, t1: number): void {
+  if (t1 <= t0 + EPS) return;
+  path.push({
+    id: `path:${path.length}`,
+    t0: Number(t0.toFixed(6)),
+    t1: Number(t1.toFixed(6)),
+    from: target.pos,
+    to: target.pos,
+    kind: "hold",
+    easing: "easeOut",
+    targetId: target.id,
+  });
+}
+
 function targetKind(kind: MarbleClusterKind, noteIndex: number): MarbleTarget["kind"] {
   if (kind === "rattle") return "peg";
   if (kind === "cascade") return "chime";
@@ -233,12 +270,15 @@ function compileImpacts(notes: readonly SongEvent[], targets: readonly MarbleTar
 function compilePath(song: Song, notes: readonly SongEvent[], targets: readonly MarbleTarget[], clusters: readonly MarbleCluster[], diagnostics: MarbleDiagnostics): MarblePathSegment[] {
   const path: MarblePathSegment[] = [];
   if (!targets.length) return path;
+  const first = targets[0]!;
+  const firstNote = notes[0]!;
+  pushHold(path, first, 0, firstNote.t);
   for (let index = 0; index < targets.length - 1; index += 1) {
     const from = targets[index]!;
     const to = targets[index + 1]!;
-    const t0 = notes[index]!.t;
-    const t1 = notes[index + 1]!.t;
-    const gap = t1 - t0;
+    const currentNote = notes[index]!;
+    const nextNote = notes[index + 1]!;
+    const gap = nextNote.t - currentNote.t;
     if (gap <= EPS) {
       diagnostics.impossibleGaps.push({ noteIndex: index + 1, gap, resolution: "shared local rattle target with no travel segment" });
       continue;
@@ -247,14 +287,16 @@ function compilePath(song: Song, notes: readonly SongEvent[], targets: readonly 
     if (kind === "rattle" || kind === "cascade") {
       diagnostics.impossibleGaps.push({ noteIndex: index + 1, gap, resolution: `${kind} local mechanism` });
     }
+    const departureT = departureForNextNote(currentNote, nextNote, kind);
+    pushHold(path, from, currentNote.t, departureT);
     const segment: MarblePathSegment = {
       id: `path:${path.length}`,
-      t0,
-      t1,
+      t0: Number(departureT.toFixed(6)),
+      t1: Number(nextNote.t.toFixed(6)),
       from: from.pos,
       to: to.pos,
       kind,
-      easing: kind === "arc" ? "ballistic" : kind === "rail" ? "smoothstep" : "linear",
+      easing: pathEasing(kind),
       targetId: to.id,
     };
     const clusterId = clusterIdFor(clusters, index + 1);
@@ -269,16 +311,18 @@ function compilePath(song: Song, notes: readonly SongEvent[], targets: readonly 
   }
   const last = targets[targets.length - 1]!;
   const lastNote = notes[notes.length - 1]!;
+  const lastReleaseT = clamp(lastNote.t + Math.max(0, lastNote.dur), lastNote.t, song.meta.durationSec);
+  pushHold(path, last, lastNote.t, lastReleaseT);
   const endT = Math.max(song.meta.durationSec, lastNote.t + 0.001);
-  if (endT > lastNote.t + EPS) {
+  if (endT > lastReleaseT + EPS) {
     path.push({
       id: `path:${path.length}`,
-      t0: lastNote.t,
-      t1: endT,
+      t0: Number(lastReleaseT.toFixed(6)),
+      t1: Number(endT.toFixed(6)),
       from: last.pos,
       to: [Number((last.pos[0] + 0.18).toFixed(4)), Number((last.pos[1] - 0.34).toFixed(4)), last.pos[2]],
       kind: "settle",
-      easing: "easeOut",
+      easing: pathEasing("settle"),
       targetId: last.id,
     });
   }

@@ -39,6 +39,22 @@ describe("Marble Music compiler", () => {
     expect(performance.statics.tail.audioEndT).toBe(performance.durationSec);
   });
 
+  it("holds the marble on sustained notes before traveling to the next impact", () => {
+    const song = buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [0, 3], pitch: 55, kind: "note" }] });
+    song.tracks[0]!.events[0]!.dur = 1.1;
+    const performance = compileMarble(song);
+    const firstTarget = performance.statics.targets[0]!;
+    const firstHold = performance.statics.path.find((segment) => segment.kind === "hold" && segment.targetId === firstTarget.id && segment.t1 > 0.5);
+    expect(firstHold).toBeDefined();
+    const pose = sampleMarblePath(performance.statics.path, 0.9);
+    expect(pose.kind).toBe("hold");
+    expect(pose.pos).toEqual(firstTarget.pos);
+    const secondImpact = performance.statics.impacts[1]!;
+    const secondPose = sampleMarblePath(performance.statics.path, secondImpact.t);
+    const secondTarget = performance.statics.targets[1]!;
+    secondPose.pos.forEach((value, index) => expect(value).toBeCloseTo(secondTarget.pos[index]!, 6));
+  });
+
   it("authors camera keys from selected target timing through the tail", () => {
     const song = buildFixtureSong({ bars: 2, patterns: [{ role: "keys", beats: [0, 0.5, 1, 1.5, 4, 5], pitch: 50, kind: "note" }] });
     const performance = compileMarble(song);

@@ -9,7 +9,12 @@ arrangements until the one-track machine passes the acceptance checklist.
 
 For the reasoning behind these choices, read the
 [Marble Music deep design review](marble-music-deep-design-review.md) alongside
-this implementation plan.
+this implementation plan. Also read the project-wide
+[music visualization sync principles](music-visualization-sync-principles.md);
+the first Marble Music breakthrough established that exact hit timestamps are
+not enough unless the object also behaves musically between hits. The next
+renderer/motion work order is
+[Marble Music 3D physics-feel implementation](marble-music-3d-physics-implementation.md).
 
 ## Current implementation slice
 
@@ -27,6 +32,10 @@ As of 2026-07-07, the first implementation slice exists:
 - `compile:marble -- projects\untitled-project-6d2e04f7` emits 20 low-track
   impacts, 0 dropped notes, 0 timing mismatches, 0 teleport segments, and a
   final tail resonance span.
+- the new one-track package `projects\untitled-project-418cb58f` compiles to
+  one-marble motion where note impacts remain exact, sustained notes create
+  hold segments, and travel to the next target is back-solved from the next
+  note onset.
 
 This is an engineering-preview slice. It proves the compiler/app/Three.js path,
 but it does not yet satisfy the final aesthetic or human sync-readability gate.
@@ -46,6 +55,18 @@ Everything else exists to support that:
 
 If the viewer cannot connect heard notes to visible impacts without reading an
 overlay, the implementation is not done.
+
+The important 2026-07-07 sync finding is that impacts can be numerically exact
+while the motion still feels wrong. The marble must not leave a sustained note
+immediately just because the note attack already happened. For one-note-at-a-time
+tracks, the correct lifecycle is:
+
+```text
+land exactly on note onset
+hold / resonate while the note sustains
+depart only when enough setup time remains
+arrive exactly on the next note onset
+```
 
 ## Scope
 
@@ -257,6 +278,23 @@ The scene owns:
 The scene must not advance a physics simulation with `dt` and hope the marble
 arrives. Scrubbing to time `t` must produce the same frame as playing to time
 `t`.
+
+### Sustain-aware path timing
+
+The compiler should treat a note as more than a point in time when the source
+event has a duration. For each pair of notes:
+
+1. place the marble exactly at the current target on the current note onset;
+2. hold the marble on that target while the current note sustains, when the
+   next-note gap allows it;
+3. compute a travel duration from the path kind and available interval;
+4. depart at `nextHitT - travelDuration`;
+5. arrive exactly on `nextHitT`.
+
+If there is not enough time to both hold and travel, travel may begin before the
+source note fully releases, but the next impact still owns the timing. Dense
+passages should become local rattle/cascade mechanisms instead of impossible
+large jumps.
 
 ### Frame-accuracy detail
 

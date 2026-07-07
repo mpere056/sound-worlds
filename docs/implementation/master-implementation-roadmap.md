@@ -34,8 +34,12 @@ machine where each note is a compiled physical impact. Use the
 [`untitled-project-6d2e04f7` visual brief](project-brief-untitled-project-6d2e04f7.md)
 as the current implementation front door. Use the
 [Marble Music acceptance checklist](marble-music-acceptance-checklist.md)
-before promoting the concept beyond one track. After the one-track generator
-feels satisfying, extend to a two-track marble duet, then larger arrangements.
+before promoting the concept beyond one track. The next one-track step is the
+[Marble Music 3D physics-feel implementation](marble-music-3d-physics-implementation.md):
+real 3D machine geometry, distance-based spin, contact response, and camera-ready
+depth while preserving exact compiled note arrivals. After the one-track
+generator feels satisfying, extend to a two-track marble duet, then larger
+arrangements.
 
 Metro-specific consequence: that export can validate MIDI station timing,
 train arrivals, line identity, and fallback honesty, but it cannot validate

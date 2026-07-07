@@ -22,6 +22,10 @@ what works today, what was verified, and what should be built next.
 - [Track-count generator strategy](implementation/track-count-generator-strategy.md)
   - why Sound Worlds should start with one-track and two-track generators
   before judging broad full-arrangement worlds.
+- [Music visualization sync principles](implementation/music-visualization-sync-principles.md)
+  - the project-wide lesson from the first successful one-track Marble pass:
+  numeric hit timing is necessary, but visible behavior between hits must also
+  match the musical sustain/release.
 - [Visual brief: untitled-project-6d2e04f7](implementation/project-brief-untitled-project-6d2e04f7.md)
   - what the current reference export actually contains and why it is best used
   as a Marble Music/small-generator testbed.
@@ -32,6 +36,10 @@ what works today, what was verified, and what should be built next.
 - [Marble Music implementation](implementation/marble-music-implementation.md)
   - the new track-count-specific plan: one-track Three.js marble machine first,
   then two-track duet, then larger arrangements.
+- [Marble Music 3D physics-feel implementation](implementation/marble-music-3d-physics-implementation.md)
+  - the next Marble slice: deterministic 3D pseudo-physics, realistic-looking
+  weight/spin/contact, and camera-ready depth without giving timing to a
+  free-running physics engine.
 - [Marble Music deep design review](implementation/marble-music-deep-design-review.md)
   - the reasoning, highest-risk failure modes, and risk-minimizing build order
   for making Marble Music feel truly synced.

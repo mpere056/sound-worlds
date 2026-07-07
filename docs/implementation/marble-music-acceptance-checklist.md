@@ -7,10 +7,12 @@ Use it before moving from one-track Marble Music to two-track Marble Music.
 
 ## Required fixture order
 
-1. `untitled-project-6d2e04f7`, low repeating keys track.
-2. `untitled-project-6d2e04f7`, high keys dense stress track.
-3. A synthetic single-track dense trill.
-4. A synthetic single-track sparse melody with long rests.
+1. `untitled-project-418cb58f`, one-track extraction where only one note plays
+   at a time.
+2. `untitled-project-6d2e04f7`, low repeating keys track.
+3. `untitled-project-6d2e04f7`, high keys dense stress track.
+4. A synthetic single-track dense trill.
+5. A synthetic single-track sparse melody with long rests.
 
 Do not use the full all-track export as the main acceptance case for the first
 slice. The point is to prove one track first.
@@ -22,6 +24,10 @@ Pass only if all are true:
 - every selected note produces a visible impact or belongs to a visible dense
   cluster;
 - visible impacts land at the same moment as heard note attacks;
+- after an impact, the marble remains visually associated with that note while
+  it sustains whenever the next-note gap allows it;
+- travel to the next note is back-solved from the next note onset instead of
+  starting immediately after the previous onset by default;
 - the user can perceive the sync without enabling debug overlays;
 - scrubbing to a hit time shows the marble contacting or activating the target;
 - no note is silently dropped;
@@ -79,7 +85,9 @@ If sync fails:
 1. inspect compiler impact times before changing visuals;
 2. compare source note times to `marble.impact.params.hitT`;
 3. verify app audio clock drives `renderFrame(t)`;
-4. verify no runtime animation state is drifting from compiled time.
+4. verify no runtime animation state is drifting from compiled time;
+5. inspect behavior between hits: exact timestamps can still feel wrong if the
+   marble leaves during a sustained note or sits still while new notes sound.
 
 If visuals feel random:
 

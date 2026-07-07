@@ -134,6 +134,8 @@ These decisions are fixed for the first implementation:
 
 The detailed build contract lives in
 [Marble Music implementation](implementation/marble-music-implementation.md),
+the next 3D motion slice lives in
+[Marble Music 3D physics-feel implementation](implementation/marble-music-3d-physics-implementation.md),
 and the promotion gate lives in
 [Marble Music acceptance checklist](implementation/marble-music-acceptance-checklist.md).
 

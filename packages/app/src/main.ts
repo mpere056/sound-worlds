@@ -14,9 +14,21 @@ interface BindingApi { on(event: "change", handler: () => void): BindingApi; }
 interface BindingPane {
   addBinding<T extends object, K extends keyof T>(target: T, key: K, options: Record<string, unknown>): BindingApi;
 }
+interface HotModule {
+  dispose(callback: () => void): void;
+}
+interface HotImportMeta extends ImportMeta {
+  readonly hot?: HotModule;
+}
 
 const root = document.querySelector<HTMLDivElement>("#app");
 if (!root) throw new Error("Missing #app root");
+
+for (const staleAudio of document.querySelectorAll("audio")) {
+  staleAudio.pause();
+  staleAudio.removeAttribute("src");
+  staleAudio.load();
+}
 
 root.innerHTML = `
   <main class="shell">
@@ -62,6 +74,7 @@ let currentProjectId = "";
 let animationFrame = 0;
 let previousBeat = -1;
 let pane: Pane | undefined;
+let renderFailure: string | undefined;
 
 function destroyActiveScene(): void {
   scene?.destroy();
@@ -97,11 +110,31 @@ function downloadBlob(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-function renderAt(t: number): void {
-  if (!song || !scene) return;
-  scene.renderFrame(t);
+function updateTransport(t: number): void {
+  if (!song) return;
   scrub.value = String(t);
   timecode.textContent = `${formatTime(t)} / ${formatTime(song.meta.durationSec)}`;
+}
+
+function reportRenderFailure(error: unknown): void {
+  const message = error instanceof Error ? error.message : "Unknown render error";
+  if (message === renderFailure) return;
+  renderFailure = message;
+  statusTitle.textContent = "Visual render paused";
+  statusDetail.textContent = message;
+  console.error(error);
+}
+
+function renderAt(t: number): void {
+  if (!song || !scene) return;
+  updateTransport(t);
+  try {
+    scene.renderFrame(t);
+    renderFailure = undefined;
+  } catch (error) {
+    reportRenderFailure(error);
+    return;
+  }
   let beat = -1;
   for (let index = 0; index < song.grid.beats.length; index += 1) {
     if ((song.grid.beats[index] ?? Number.POSITIVE_INFINITY) > t + 1e-6) break;
@@ -334,6 +367,7 @@ audio.addEventListener("ended", () => {
   play.textContent = "▶";
   play.setAttribute("aria-label", "Play");
 });
+audio.addEventListener("timeupdate", () => updateTransport(audio.currentTime));
 guides.addEventListener("change", () => guide.classList.toggle("visible", guides.checked));
 audit.addEventListener("change", () => renderAt(audio.currentTime));
 exportPng.addEventListener("click", async () => {
@@ -402,4 +436,14 @@ void start().catch((error: unknown) => {
   statusTitle.textContent = "Preview failed";
   statusDetail.textContent = error instanceof Error ? error.message : "Unknown error";
   console.error(error);
+});
+
+(import.meta as HotImportMeta).hot?.dispose(() => {
+  cancelAnimationFrame(animationFrame);
+  audio.pause();
+  audio.removeAttribute("src");
+  audio.load();
+  pane?.dispose();
+  destroyActiveScene();
+  destroyPixiBackend();
 });
