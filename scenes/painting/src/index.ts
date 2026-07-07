@@ -128,57 +128,104 @@ export class PaintingScene {
     const baseAngle = Math.atan2(dy, dx);
     return Array.from({ length: copies }, (_, index) => {
       const angle = baseAngle + index / copies * Math.PI * 2;
+      const fold = 1 + Math.pow(distance / Math.max(1, this.#performance.resolution.w * 0.5), 2) * 0.22;
       const copy: PaintingPoint = {
-        x: center.x + Math.cos(angle) * distance,
-        y: center.y + Math.sin(angle) * distance,
+        x: center.x + Math.cos(angle) * distance * fold,
+        y: center.y + Math.sin(angle) * distance * fold,
       };
       if (point.z !== undefined) copy.z = point.z;
       return copy;
     });
   }
 
-  #drawWashField(stroke: PaintingStroke, t: number, alpha: number, revealProgress: number): void {
-    const point = this.#project(stroke.points[0] ?? this.#sourceCenter(), t);
-    const radius = (stroke.radius ?? stroke.width * 4) * point.scale * (0.42 + 0.58 * revealProgress);
-    this.#paint.circle(point.x, point.y, radius).fill({ color: colorNumber(stroke.color), alpha: alpha * 0.2 });
-    this.#wet.circle(point.x, point.y, radius * 0.72).fill({ color: colorNumber(stroke.color), alpha: alpha * 0.12 * this.tuning.wetness });
-    this.#wet.circle(point.x, point.y, radius * 0.34).fill({ color: 0xffffff, alpha: alpha * 0.035 });
+  #drawCymaticRing(point: ProjectedPoint, stroke: PaintingStroke, radius: number, alpha: number, widthScale: number, phase: number): void {
+    const lobes = Math.max(6, Math.round(stroke.symmetry ?? 10));
+    const steps = lobes * 12;
+    const modulation = 0.028 + Math.min(0.08, stroke.roughness * 0.045);
+    for (let band = 0; band < 2; band += 1) {
+      const bandRadius = radius * (1 + band * 0.09);
+      for (let index = 0; index <= steps; index += 1) {
+        const angle = index / steps * Math.PI * 2;
+        const pulse = 1 + Math.sin(angle * lobes + phase + band * 0.7) * modulation;
+        const x = point.x + Math.cos(angle) * bandRadius * pulse;
+        const y = point.y + Math.sin(angle) * bandRadius * pulse * 0.88;
+        if (index === 0) this.#paint.moveTo(x, y);
+        else this.#paint.lineTo(x, y);
+      }
+      this.#paint.stroke({
+        color: colorNumber(stroke.color),
+        width: Math.max(0.8, stroke.width * widthScale * point.scale * (band === 0 ? 1 : 0.34)),
+        alpha: alpha * (band === 0 ? 1 : 0.36),
+        cap: "round",
+        join: "round",
+      });
+    }
   }
 
-  #drawRing(stroke: PaintingStroke, t: number, alpha: number, revealProgress: number): void {
+  #drawWashField(stroke: PaintingStroke, t: number, alpha: number, revealProgress: number, age: number): void {
+    const point = this.#project(stroke.points[0] ?? this.#sourceCenter(), t);
+    const radius = (stroke.radius ?? stroke.width * 4) * point.scale * (0.42 + 0.58 * revealProgress);
+    const stain = stroke.stain ?? 0.42;
+    const wetLife = clamp(1 - age / 5.5, 0, 1);
+    this.#paint.circle(point.x, point.y, radius).fill({ color: colorNumber(stroke.color), alpha: alpha * 0.13 * stain });
+    this.#paint.circle(point.x, point.y, radius * 0.42).fill({ color: colorNumber(stroke.color), alpha: alpha * 0.08 * stain });
+    this.#wet.circle(point.x, point.y, radius * (0.66 + age * 0.018)).fill({ color: colorNumber(stroke.color), alpha: alpha * 0.1 * wetLife * this.tuning.wetness });
+    this.#wet.circle(point.x, point.y, radius * 0.34).fill({ color: 0xffffff, alpha: alpha * 0.024 * wetLife });
+  }
+
+  #drawRing(stroke: PaintingStroke, t: number, alpha: number, revealProgress: number, age: number): void {
     const point = this.#project(stroke.points[0] ?? this.#sourceCenter(), t);
     const radius = (stroke.radius ?? stroke.width * 8) * point.scale * (0.2 + 0.8 * revealProgress);
     const width = Math.max(1, stroke.width * this.tuning.strokeScale * point.scale);
-    this.#shadow.circle(point.x + 10, point.y + 7, radius).stroke({ color: 0x253525, width: width * 1.2, alpha: alpha * 0.1 });
-    this.#paint.circle(point.x, point.y, radius).stroke({ color: colorNumber(stroke.color), width, alpha: alpha * 0.8 });
-    this.#wet.circle(point.x, point.y, radius * 0.92).stroke({ color: 0xffffff, width: Math.max(0.7, width * 0.18), alpha: alpha * 0.18 * this.tuning.wetness });
+    const stain = stroke.stain ?? 0.58;
+    const wetLife = clamp(1 - age / 2.8, 0, 1);
+    this.#shadow.circle(point.x + 10, point.y + 7, radius).stroke({ color: 0x253525, width: width * 1.2, alpha: alpha * 0.08 * stain });
+    this.#paint.circle(point.x, point.y, radius * 0.98).stroke({ color: colorNumber(stroke.color), width: width * 0.52, alpha: alpha * 0.48 * stain });
+    this.#paint.circle(point.x, point.y, radius * 0.82).fill({ color: colorNumber(stroke.color), alpha: alpha * 0.026 * stain });
+    this.#drawCymaticRing(point, stroke, radius, alpha * 0.5 * stain, 0.45, age * 1.7 + (stroke.rotation ?? 0));
+    if (wetLife > 0) {
+      this.#wet.circle(point.x, point.y, radius * (0.92 + age * 0.12)).stroke({
+        color: 0xffffff,
+        width: Math.max(0.7, width * 0.18),
+        alpha: alpha * 0.22 * wetLife * this.tuning.wetness,
+      });
+    }
   }
 
-  #drawBloom(stroke: PaintingStroke, t: number, alpha: number, revealProgress: number): void {
-    const copies = stroke.kind === "stipple" ? 12 : stroke.kind === "splatter" ? 10 : 8;
+  #drawBloom(stroke: PaintingStroke, t: number, alpha: number, revealProgress: number, age: number): void {
+    const copies = Math.max(4, Math.round(stroke.symmetry ?? (stroke.kind === "stipple" ? 12 : stroke.kind === "splatter" ? 10 : 8)));
     const source = stroke.points[0] ?? this.#sourceCenter();
     const radius = (stroke.radius ?? stroke.width) * (0.35 + 0.65 * revealProgress) * this.tuning.strokeScale;
     const ringAlpha = alpha * (stroke.kind === "bloom" ? 0.2 : 0.28);
+    const stain = stroke.stain ?? 0.62;
+    const wetLife = clamp(1 - age / 3.6, 0, 1);
     for (const [index, copy] of this.#radialCopies(source, copies).entries()) {
       const point = this.#project(copy, t);
       const localRadius = radius * point.scale * (index % 2 === 0 ? 1 : 0.72);
       const shadowOffset = clamp(8 + point.z * 0.03, 4, 22);
       this.#shadow.ellipse(point.x + shadowOffset, point.y + shadowOffset * 0.56, localRadius * 0.96, localRadius * 0.46)
-        .fill({ color: 0x253525, alpha: alpha * 0.09 });
-      this.#paint.circle(point.x, point.y, localRadius).fill({ color: colorNumber(stroke.color), alpha: alpha * 0.34 });
+        .fill({ color: 0x253525, alpha: alpha * 0.07 * stain });
+      this.#paint.circle(point.x, point.y, localRadius * (1 + Math.min(age, 4) * 0.035)).fill({ color: colorNumber(stroke.color), alpha: alpha * 0.23 * stain });
       this.#paint.circle(point.x - localRadius * 0.16, point.y - localRadius * 0.18, localRadius * 0.52)
-        .fill({ color: colorNumber(stroke.color), alpha: alpha * 0.22 });
+        .fill({ color: colorNumber(stroke.color), alpha: alpha * 0.16 * stain });
+      for (let satellite = 0; satellite < 3; satellite += 1) {
+        const satAngle = (stroke.rotation ?? 0) + index * 0.74 + satellite * 2.094;
+        const satDist = localRadius * (1.25 + satellite * 0.52);
+        const satRadius = localRadius * (0.18 - satellite * 0.035);
+        this.#paint.circle(point.x + Math.cos(satAngle) * satDist, point.y + Math.sin(satAngle) * satDist, Math.max(1.2, satRadius))
+          .fill({ color: colorNumber(stroke.color), alpha: alpha * 0.11 * stain });
+      }
       this.#wet.circle(point.x, point.y, localRadius * 1.82).stroke({
         color: colorNumber(stroke.color),
         width: Math.max(0.8, stroke.width * 0.16 * point.scale),
-        alpha: ringAlpha,
+        alpha: ringAlpha * (0.38 + wetLife * 0.62),
       });
       if (stroke.kind === "splatter") {
         for (let dot = 0; dot < 3; dot += 1) {
           const angle = (stroke.rotation ?? 0) + dot * 2.094 + index * 0.31;
           const distance = localRadius * (1.25 + dot * 0.38);
           this.#wet.circle(point.x + Math.cos(angle) * distance, point.y + Math.sin(angle) * distance, Math.max(1.4, localRadius * 0.09))
-            .fill({ color: colorNumber(stroke.color), alpha: alpha * 0.2 });
+            .fill({ color: colorNumber(stroke.color), alpha: alpha * (0.08 * stain + 0.18 * wetLife) });
         }
       }
     }
@@ -191,16 +238,16 @@ export class PaintingScene {
     const alpha = stroke.alpha * Math.min(1, age / 0.18) * this.tuning.reveal;
     const points = partialPoints(stroke.points, revealProgress);
     if (stroke.kind === "ring") {
-      this.#drawRing(stroke, t, alpha, revealProgress);
+      this.#drawRing(stroke, t, alpha, revealProgress, age);
       return;
     }
     if (stroke.kind === "bloom") {
-      this.#drawBloom(stroke, t, alpha, revealProgress);
+      this.#drawBloom(stroke, t, alpha, revealProgress, age);
       return;
     }
     if (stroke.kind === "wash" || stroke.kind === "glaze") {
       if (points.length <= 1) {
-        this.#drawWashField(stroke, t, alpha, revealProgress);
+        this.#drawWashField(stroke, t, alpha, revealProgress, age);
         return;
       }
       if (points.length >= 3 && revealProgress >= 0.6) {
@@ -231,7 +278,7 @@ export class PaintingScene {
       return;
     }
     if (stroke.kind === "dab" || stroke.kind === "splatter" || stroke.kind === "stipple") {
-      this.#drawBloom(stroke, t, alpha, revealProgress);
+      this.#drawBloom(stroke, t, alpha, revealProgress, age);
       return;
     }
   }

@@ -79,6 +79,10 @@ function activityEvents(track: SongTrack): SongEvent[] {
   return track.events.filter((event) => event.kind === "onset" || event.kind === "note").sort((a, b) => a.t - b.t);
 }
 
+function lastActivityTime(tracks: SongTrack[]): number {
+  return Math.max(0, ...tracks.flatMap((track) => activityEvents(track).map((event) => event.t)));
+}
+
 function makeStroke(stroke: PaintingStroke): PaintingStroke {
   return stroke;
 }
@@ -99,6 +103,8 @@ function compileSketch(_song: Song, rng: Rng): PaintingStroke[] {
       radius: 110 + index * 64 + rng.float(-6, 6),
       points: [{ ...CENTER, z: -230 + index * 28 }],
       rotation: rng.float(-0.08, 0.08),
+      symmetry: 8 + index % 3 * 2,
+      stain: 0.4,
       roughness: 0.25,
     }));
   }
@@ -128,6 +134,8 @@ function compileWashes(song: Song, tracks: SongTrack[], palette: ReturnType<type
       width: 180 + energy * 120,
       radius,
       points: [{ ...CENTER, z: -300 + sectionIndex * 50 }],
+      symmetry: 10 + sectionIndex % 3 * 2,
+      stain: 0.34 + energy * 0.2,
       roughness: 0.9,
       label: section.name,
     }));
@@ -150,6 +158,8 @@ function compileWashes(song: Song, tracks: SongTrack[], palette: ReturnType<type
       width: 135,
       radius,
       points: [{ ...CENTER, z: -180 + trackIndex * 68 }],
+      symmetry: 8 + trackIndex % 4 * 2,
+      stain: 0.28,
       roughness: 0.95,
       label: track.name,
     }));
@@ -192,6 +202,8 @@ function compileTerrain(song: Song, tracks: SongTrack[], palette: ReturnType<typ
         width: 12 + (event.vel ?? 0.6) * 26,
         radius: pitchRadius(pitch, minPitch, maxPitch, 170, 475) + trackIndex * 18,
         points: [{ ...CENTER, z: 70 + energy * 130 }],
+        symmetry: 10 + eventIndex % 4 * 2,
+        stain: 0.52,
         roughness: 0.35,
       }));
     }
@@ -229,6 +241,8 @@ function compileRibbons(song: Song, tracks: SongTrack[], palette: ReturnType<typ
         radius: 16 + event.vel * 32 + clamp(Math.abs(interval), 0, 18) * 1.6,
         points: [point],
         rotation: timeAngle(song, event.t, trackOffset),
+        symmetry: 8 + index % 5,
+        stain: 0.68,
         roughness: 0.5,
       }));
     }
@@ -269,6 +283,8 @@ function compileRhythm(song: Song, tracks: SongTrack[], palette: ReturnType<type
         radius: kind === "stipple" ? 3 + event.vel * 5 : 18 + event.vel * 32 + energy * 20,
         points: [pos],
         rotation: eventRng.float(-Math.PI, Math.PI),
+        symmetry: kind === "stipple" ? 14 : kind === "splatter" ? 10 : 8,
+        stain: kind === "stipple" ? 0.36 : 0.72,
         roughness: 0.75,
       }));
     }
@@ -296,9 +312,63 @@ function compileGlaze(song: Song, tracks: SongTrack[], palette: ReturnType<typeo
       radius,
       points: [{ ...CENTER, z: 120 + index * 28 }],
       rotation: timeAngle(song, section.endSec, rng.float(-0.28, 0.28)),
+      symmetry: 12,
+      stain: 0.46,
       roughness: 0.8,
     });
   });
+}
+
+function compileTailStains(song: Song, tracks: SongTrack[], palette: ReturnType<typeof solvePalette>, rng: Rng): PaintingStroke[] {
+  const start = Math.max(lastActivityTime(tracks) + 0.16, song.meta.contentEndSec + 0.08);
+  const end = song.meta.durationSec - 0.18;
+  if (end <= start) return [];
+  const curve = song.master.energy;
+  const sourceColor = roleColor(palette, "percussion", "#bfe8d1");
+  const color = mixColor(sourceColor, "#ffffff", 0.22);
+  const peaks: Array<{ t: number; energy: number }> = [];
+  const first = Math.max(1, Math.floor((start - curve.t0) / curve.dt));
+  const last = Math.min(curve.values.length - 2, Math.ceil((end - curve.t0) / curve.dt));
+  for (let index = first; index <= last; index += 1) {
+    const energy = curve.values[index] ?? 0;
+    const previous = curve.values[index - 1] ?? 0;
+    const next = curve.values[index + 1] ?? 0;
+    if (energy > 0.08 && energy >= previous && energy >= next) {
+      peaks.push({ t: curve.t0 + index * curve.dt, energy });
+    }
+  }
+  if (!peaks.length) {
+    for (const t of song.grid.beats.filter((beat) => beat >= start && beat <= end)) peaks.push({ t, energy: sampleCurve(song.master.energy, t) });
+  }
+  return peaks
+    .sort((a, b) => b.energy - a.energy)
+    .slice(0, 5)
+    .sort((a, b) => a.t - b.t)
+    .map((peak, index) => {
+      const point = orbitalPoint(song, peak.t, 150 + peak.energy * 250 + index * 34, rng.fork(`tail:${index}`), {
+        offset: Math.PI * 0.5 + index * 0.42,
+        yScale: 0.8,
+        zScale: 220,
+        jitter: 16,
+      });
+      return makeStroke({
+        id: `tail:stain:${index}`,
+        t: peak.t,
+        tEnd: Math.min(song.meta.durationSec, peak.t + 1.2),
+        layer: "glaze",
+        kind: index % 2 === 0 ? "ring" : "bloom",
+        role: "master-tail",
+        color,
+        alpha: 0.28 + peak.energy * 0.26,
+        width: 10 + peak.energy * 22,
+        radius: 70 + peak.energy * 210,
+        points: [point],
+        rotation: timeAngle(song, peak.t, rng.float(-0.4, 0.4)),
+        symmetry: 12 + index % 3 * 2,
+        stain: 0.64,
+        roughness: 0.82,
+      });
+    });
 }
 
 function compileGrain(seed: string): PaintingStatics["grain"] {
@@ -341,6 +411,7 @@ export function compilePainting(song: Song): PaintingPerformance {
     ...compileRibbons(song, song.tracks, palette, rng.fork("ribbons"), min, max),
     ...compileRhythm(song, song.tracks, palette, rng.fork("rhythm")),
     ...compileGlaze(song, song.tracks, palette, rng.fork("glaze")),
+    ...compileTailStains(song, song.tracks, palette, rng.fork("tail")),
     compileSignature(song),
   ].sort((a, b) => a.t - b.t || LAYER_ORDER.indexOf(a.layer) - LAYER_ORDER.indexOf(b.layer) || a.id.localeCompare(b.id));
   const strokeCounts = Object.fromEntries(LAYER_ORDER.map((layer) => [layer, strokes.filter((stroke) => stroke.layer === layer).length])) as Record<PaintingLayer, number>;
@@ -377,7 +448,7 @@ export function compilePainting(song: Song): PaintingPerformance {
       signature: { text: song.meta.name, t: Math.max(0, song.meta.durationSec - 1.1), pos: { x: 100, y: H - 150 } },
       strokeCounts,
       compileLog,
-      compilerVersion: 2,
+      compilerVersion: 3,
     },
   };
   parsePerformance(performance);

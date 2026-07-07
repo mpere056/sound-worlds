@@ -7,7 +7,7 @@ describe("Painting compiler", () => {
     const song = buildFixtureSong({ name: "paint-me" });
     const output = compilePainting(song);
     expect(output.concept).toBe("painting");
-    expect(output.statics.compilerVersion).toBe(2);
+    expect(output.statics.compilerVersion).toBe(3);
     expect(output.statics.strokes.length).toBeGreaterThan(30);
     expect(output.statics.grain).toHaveLength(260);
     expect(output.statics.signature.text).toBe("paint-me");

@@ -18,6 +18,8 @@ export interface PaintingStroke {
   points: PaintingPoint[];
   radius?: number;
   rotation?: number;
+  symmetry?: number;
+  stain?: number;
   roughness: number;
   label?: string;
 }

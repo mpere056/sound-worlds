@@ -16,10 +16,16 @@ means the painting is not random: it encodes the composition.
 - **Style default:** centered cymatic impressionism: rings, blooms, glow fields,
   mirrored drops, water-ripple diffusion, canvas texture, and subtle impasto
   lighting.
+- **Creative references:** Chladni/cymatic nodal patterns, Faraday-wave-like
+  liquid ripples, fractal satellite droplets, and hyperbolic/spherical tiling
+  distortion. These are inspiration sources for geometry, not literal diagrams.
 - **Important art-direction rule:** avoid obvious left-to-right notation,
   terrain strips, staff-like lines, and melodic streaks. A circle around the
   center, a full-screen glow, a symmetric bloom, a drop, or a ripple can work;
   a line travelling across the canvas usually cannot.
+- **Paint permanence rule:** once paint lands, it can flow, spread, dry, or
+  become subtler, but it cannot vanish. Every landed event must leave a visible
+  stain on the canvas.
 - **Alt style presets:** sumi-e ink wash for sparse/minor songs; bold gouache
   poster for pop/electronic.
 - **Format:** 9:16 portrait canvas, full-bleed. Camera stays mostly full-canvas
@@ -40,11 +46,14 @@ in the order a painter would:
 | Hats | **Stipple orbit** | Fine speckle texture distributed around circular/radial bands; density = hat rate. |
 | FX / risers | **The field** | Temporarily brightens and expands existing glow/ripple fields during builds. |
 | Vocals | **Glaze aura** | A luminous semi-transparent centered pass following phrasing; adds light from within wherever the voice sits. |
+| Master tail | **Tail stains** | If the master WAV continues after the last extracted note/onset, residual master-energy peaks create late stains/ripples so the painting remains synchronized to what is heard. |
 
 ## The key mechanism: repetition becomes form
 
 - While a section plays, its marks stay wet: blooms diffuse, rings expand, and
   glow fields breathe. When the section ends, the layer dries into the canvas.
+- Wet motion and dry residue are separate states. The wet layer may animate and
+  fade, but the dry stain layer remains visible for the rest of the piece.
 - Repeated sections repaint their own geometry. Chorus 2 reinforces chorus 1's
   rings and blooms; chorus 3 is stronger still. The most-repeated material
   becomes the most defined form in the painting.
@@ -58,7 +67,7 @@ in the order a painter would:
 | Choruses | Saturation jumps; larger rings and stronger mirrored blooms; repainting/reinforcement pass. |
 | Bridge | Palette pivot; the one risk the painting takes. |
 | Drop | Splatter/ripple climax plus full-field surge. |
-| Outro | Marks taper; a varnish sheen pass sweeps once. |
+| Outro | Master-tail stains and residual ripples continue until the rendered audio ends; a varnish sheen pass sweeps once. |
 | Final chord | Camera pulls back; painted signature appears; hold the artifact. |
 
 ## Color system
@@ -79,12 +88,14 @@ in the order a painter would:
 
 - **Current implementation:** deterministic Pixi vector painting with centered
   rings, whole-canvas glow fields, symmetric note blooms, mirrored drops,
-  paper grain, wet highlights, varnish sweep, and final signature.
+  master-tail stains, dry stain persistence, wet diffusion, cymatic scalloped
+  rings, paper grain, wet highlights, varnish sweep, and final signature.
 - **Target renderer:** 2D WebGL accumulation buffer. Strokes are stamped splats
   into an FBO; a height channel drives cheap normal-mapped impasto lighting;
   wetness enables diffusion/advection.
 - **Compiler:** converts `song.json` into a deterministic mark list with
-  position/depth, layer, time, width, color, radius, and wet-life.
+  position/depth, layer, time, width, color, radius, symmetry, stain strength,
+  and wet-life.
 - **Anti-mud safeguards:** per-region coverage budget, per-section drying,
   palette solver, and a maximum number of wet layers.
 - Fully deterministic: the exact final painting is reproducible and exportable
@@ -111,6 +122,8 @@ onsets with velocity, FX automation, vocal RMS, key estimate, regions.
   unless a future style explicitly calls for them.
 - **Slow songs = sparse canvas:** mark size auto-scales inversely with note
   density so sparse songs paint big and bold.
+- **Silent-looking audio tail:** master-energy tail stains keep late audio
+  visibly active even when MIDI/note extraction ends earlier than the WAV.
 
 ## Open questions
 

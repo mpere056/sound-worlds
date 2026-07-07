@@ -31,10 +31,11 @@ Then open `http://127.0.0.1:5173/`.
   trains, station blooms, terminal/downbeat labels, separated parallel
   corridors, and a frontier-follow camera that pulls back for the complete
   map.
-- Painting P2: deterministic non-linear artifact-canvas rendering with paper
+- Painting P3: deterministic persistent non-linear artifact-canvas rendering with paper
   texture, centered construction rings, whole-canvas glow washes, low-note
-  ripple rings, symmetric note blooms, mirrored rhythm drops, varnish sweep,
-  and final song-title signature.
+  ripple rings, symmetric note blooms, mirrored rhythm drops, master-tail
+  stains, dry paint persistence, wet diffusion, varnish sweep, and final
+  song-title signature.
 - A separately labeled pipeline test pattern driven by master energy, beats,
   bars, and sections. It is not the Metro Map scene.
 - Beat sync flash, platform safe-area overlay, and live Tweakpane controls.

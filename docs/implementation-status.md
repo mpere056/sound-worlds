@@ -42,7 +42,7 @@ not a valid M4 chorus-ring fixture.
 | Analyzer foundation | Implemented | n/a | Package validation, musical grid and sections, MIDI passthrough, track RMS/centroid/gain, sample-accurate drum onsets, master waveform/energy, schema-valid `song.json` | Pitch/chord analysis, automatic segmentation, HTML report |
 | Shared TypeScript core/runtime | Implemented | n/a | Strict loaders, deterministic random streams, musical time, curve sampling, back-solving, palettes, fixtures, frame clock, seek-safe events, camera interpolation | Continue extending shared facilities only as concepts need them |
 | Preview/export shell | Implemented foundation | engineering-preview | Project/world discovery, WAV streaming, audio-clock playback, scrub, overlays, tuning, PNG and short H.264 preview export | Full-song orchestration, direct project-output writing, audio mux |
-| Painting P2 | Implemented | engineering-preview | Deterministic non-linear compiler and Pixi scene, centered construction rings, whole-canvas glow washes, bass/low-note ripple rings, symmetric note blooms, mirrored rhythm drops/splatters, paper grain, varnish sweep, signature reveal, preview app integration | True accumulation/FBO paint buffer, impasto lighting, anti-mud density budgets, chorus reinforcement repainting, 4x print export, human visual acceptance on a richer reference |
+| Painting P3 | Implemented | engineering-preview | Deterministic persistent non-linear compiler and Pixi scene, centered construction rings, whole-canvas glow washes, bass/low-note ripple rings, symmetric note blooms, mirrored rhythm drops/splatters, master-tail stains, dry paint persistence, wet diffusion, cymatic ring scalloping, paper grain, varnish sweep, signature reveal, preview app integration | True accumulation/FBO paint buffer, impasto lighting, anti-mud density budgets, chorus reinforcement repainting, 4x print export, human visual acceptance on a richer reference |
 | Waveform Runner R1 | Implemented | engineering-preview | Monotone `x(t)`, inverse `t(x)`, energy speed, slope-limited terrain, camera keys, stateless Pixi world | Richer bass-derived results need a MIDI/pitch-bearing export and the visual recovery pass |
 | Waveform Runner R2 | Implemented | engineering-preview | Budgeted musical landings, tempo-scaled closed-form jumps, clearance validation, deterministic boost fallback, takeoff/landing events | Double-jump mid-impulses, terrain-concession fallback, and beat/character polish |
 | Waveform Runner R3 | In progress | engineering-preview | MIDI melody glyphs, honest beat/activity fallback, role-colored exact-pose merge targets, note-timed route platforms, 300 ms beams, six-beam cap, overflow sparkles, merge ripples, section gates with `gate.open` spans, section palette shifts, compiled vocal-halo curve with silent fallback, conservative sustained-downlifter float spans, compiled step events for beat-locked gait, compiled track strata, compiled-camera scene framing, trajectory-sampled trail, palette-sourced background/terrain/runner/ripples, additive glow layers, no in-canvas debug title/status | Authored-song gate/palette/vocal/float acceptance, golden-frame visual verification |
@@ -105,11 +105,11 @@ MIDI glyphs and 48 corresponding merge events. Because the project has no
 dedicated lead role, those glyphs prove timing/collection behavior but should
 not be treated as a finished melody art direction.
 
-## Painting P2 non-linear artifact-canvas contract
+## Painting P3 persistent non-linear artifact-canvas contract
 
-Painting is now a first-class compiler/scene path. The P2 implementation is
-deliberately a non-linear artifact-canvas slice rather than a full fluid paint
-simulator:
+Painting is now a first-class compiler/scene path. The P3 implementation is
+deliberately a persistent non-linear artifact-canvas slice rather than a full
+fluid paint simulator:
 
 1. Compile deterministic paint marks from `song.json` into
    `performance.painting.json`.
@@ -124,16 +124,21 @@ simulator:
 6. Use drum/onset roles for mirrored dabs, splatter, stipple, and ripple marks;
    when no drums exist, create rhythm marks from prominent note/onset events so
    keys-only exports still produce texture.
-7. Render paper grain, wet highlights, a varnish sweep, and a final song-title
+7. Add master-energy tail stains after the last extracted note/onset when the
+   rendered master audio still has energy.
+8. Treat paint as permanent: wet highlights and diffusion can move/settle, but
+   every landed mark keeps a visible dry stain.
+9. Render paper grain, wet highlights, a varnish sweep, and a final song-title
    signature in the Pixi scene.
 
 On `untitled-project-6d2e04f7`, the current all-keys export compiles to
-Painting performance version 2 with 98 marks: 27 rings, 5 washes, 48 blooms, 16
-rhythm drops, 1 glaze, and 1 signature. Every compiled paint mark is a
-single-point field/drop/ring/bloom/signature anchor; the generated performance
-contains zero visible path-like ribbon, terrain, or guide strokes. This is a
-better fit for the user's current art direction than the earlier P1 slice,
-which still looked too much like plotted staff/timeline data.
+Painting performance version 3 with 103 marks: 30 rings, 5 washes, 50 blooms,
+16 rhythm drops, 1 glaze, and 1 signature. Five explicit `master-tail` stains
+land from 9.64 s through 9.96 s and their wet expansion runs to the 11.056 s
+audio end, so the canvas no longer goes inert while the master WAV is still
+playing. Every compiled paint mark remains a single-point field/drop/ring/bloom
+anchor; the generated performance still contains zero visible path-like ribbon,
+terrain, or guide strokes.
 
 ## Metro cartography implemented so far
 
@@ -199,11 +204,12 @@ The current implementation was verified on 2026-07-06:
   constant preview camera zoom of 1.35 through the full 11.056 s audio
   duration. The final poster pullback is now logged as deferred until a
   post-audio end-card hold exists.
-- That export compiled successfully to Painting performance version 2: 98
+- That export compiled successfully to Painting performance version 3: 103
   deterministic paint marks, 260 paper-grain marks, role fallback from four
-  `keys` tracks, 27 rings, 5 glow washes, 48 symmetric blooms, 16 mirrored
-  rhythm drops, 1 glaze, a final `Untitled Project` signature, and zero
-  path-like ribbon/terrain/guide marks in the generated performance.
+  `keys` tracks, 30 rings, 5 glow washes, 50 symmetric blooms, 16 mirrored
+  rhythm drops, 1 glaze, 5 master-tail stains spanning the post-MIDI audio tail,
+  a final `Untitled Project` signature, and zero path-like ribbon/terrain/guide
+  marks in the generated performance.
 - The dev server was restarted at `http://127.0.0.1:5173/` for local review.
   A follow-up human/browser watch-through should confirm the new visible tail
   pulses feel correctly synchronized in motion.
@@ -273,9 +279,10 @@ S0 math hygiene progress:
 - Added explicit Runner note-platform statics and scene rendering so every
   glyph/note timing produces a visible route pad on the terrain, with foot-level
   MIDI impact rings.
-- Reworked Painting from the P1 line-heavy artifact canvas into the P2 centered
+- Reworked Painting from the P1 line-heavy artifact canvas into the P3 centered
   cymatic language: construction rings, glow fields, bass/low-note ripples,
-  symmetric note blooms, mirrored drops/splatters, and renderer support for
+  symmetric note blooms, mirrored drops/splatters, master-tail stains, dry paint
+  persistence, wet diffusion, cymatic ring scalloping, and renderer support for
   depth-projected fields without compiled path strokes.
 
 Generated performance files are intentionally not committed. The compiler,
@@ -303,11 +310,11 @@ before starting another server.
 1. Author the reference song from
    [Song Authoring Guide](implementation/song-authoring-guide.md), because the
    current 11-second keys-only export starves both concepts.
-2. Review Painting P2 in the browser and judge the centered cymatic direction:
-   rings, glows, blooms, drops, and ripples should feel non-linear and
-   intentional. If yes, the next Painting slice should add accumulation/FBO-style
-   diffusion, softer watercolor/ink spread, and stronger final-frame composition
-   polish.
+2. Review Painting P3 in the browser and judge the centered cymatic direction:
+   rings, glows, blooms, drops, master-tail stains, and persistent paint should
+   feel non-linear and intentional. If yes, the next Painting slice should add
+   accumulation/FBO-style diffusion, softer watercolor/ink spread, and stronger
+   final-frame composition polish.
 3. Execute the early
    [Visual Recovery Plan](implementation/visual-recovery-plan.md) items:
    Runner glow/beat-gait/real-strata polish and Metro field/panel cleanup.
