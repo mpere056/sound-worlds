@@ -1,9 +1,9 @@
 import type { Performance } from "@reaper-viz/core";
 
-export interface PaintingPoint { x: number; y: number; }
+export interface PaintingPoint { x: number; y: number; z?: number; }
 
 export type PaintingLayer = "sketch" | "wash" | "terrain" | "subject" | "rhythm" | "texture" | "glaze" | "signature";
-export type PaintingStrokeKind = "guide" | "wash" | "ribbon" | "terrain" | "dab" | "splatter" | "stipple" | "glaze" | "signature";
+export type PaintingStrokeKind = "guide" | "wash" | "ring" | "bloom" | "ribbon" | "terrain" | "dab" | "splatter" | "stipple" | "glaze" | "signature";
 
 export interface PaintingStroke {
   id: string;

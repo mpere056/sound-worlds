@@ -1,114 +1,119 @@
 # The Song Paints a Painting
 
-**One-line pitch:** A blank canvas paints itself in timelapse — every track is a
-brush, every note a stroke — and the final frame is a finished artwork that
-*is* the song, different for every song.
+**One-line pitch:** A blank canvas paints itself in timelapse. Every track
+becomes a painterly force, and the final frame is a finished artwork that feels
+like the song rather than a plotted timeline.
 
 ## The hook
 
-The end-card is the whole game: "my song painted this." It's the strongest
-artifact-reveal of all the concepts — the viewer watches for the process, stays
-for the reveal, and the musician gets a poster/print they can actually sell.
-Repetition in the music becomes *form* in the image (see below), which means the
-painting isn't random — it genuinely encodes the composition.
+The end-card is the whole game: "my song painted this." The viewer watches for
+the process, stays for the reveal, and the musician gets a poster/print they
+can actually sell. Repetition in the music becomes form in the image, which
+means the painting is not random: it encodes the composition.
 
 ## Visual identity
 
-- **Style default:** flow-field impressionism — strokes advected along a curl-noise
-  field, wet-on-wet smearing, canvas texture, subtle impasto lighting (height from
-  accumulated paint). Van Gogh / Kandinsky energy (Kandinsky literally painted music).
-- **Alt style presets:** sumi-e ink wash (minor keys / sparse songs), bold
-  gouache poster (pop/electronic).
-- **Format:** 9:16 portrait canvas, full-bleed. Camera: mostly full-canvas with
-  2–3 slow push-ins on the active region, and one final pull-back reveal.
+- **Style default:** centered cymatic impressionism: rings, blooms, glow fields,
+  mirrored drops, water-ripple diffusion, canvas texture, and subtle impasto
+  lighting.
+- **Important art-direction rule:** avoid obvious left-to-right notation,
+  terrain strips, staff-like lines, and melodic streaks. A circle around the
+  center, a full-screen glow, a symmetric bloom, a drop, or a ripple can work;
+  a line travelling across the canvas usually cannot.
+- **Alt style presets:** sumi-e ink wash for sparse/minor songs; bold gouache
+  poster for pop/electronic.
+- **Format:** 9:16 portrait canvas, full-bleed. Camera stays mostly full-canvas
+  with 2-3 slow push-ins on active regions and one final pull-back reveal.
 
 ## Composition: roles own layers
 
-The painting reads as a composed image (not a data dump) because each role owns
-a compositional layer, painted in the order a painter would:
+The painting reads as a composed image because each role owns a layer, painted
+in the order a painter would:
 
 | Role | Layer | Stroke behavior |
 |---|---|---|
-| Keys / pads | **Background washes** | Broad translucent gradients; hue from chord root (circle of fifths → color wheel), brightness from spectral centroid. Chord changes tilt the wash direction. |
-| Bass | **Horizon / terrain** | Thick dark strokes across the lower third; pitch = elevation contour — the bassline literally draws the landscape's skyline. |
-| Lead | **The subject** | One continuous calligraphic ribbon in the upper-middle focal zone; y = pitch, width = velocity, curvature from interval jumps. The melody is the painting's protagonist. |
-| Kick | **Structure dabs** | Heavy impasto dabs at seeded anchor points near golden-ratio intersections — the painting's rhythm section, felt as texture. |
-| Snare | **Splatter** | Pollock flicks radiating from the current focal region; size from velocity. |
-| Hats | **Stipple** | Fine speckle texture in the currently active layer; density = hat rate. |
-| FX (risers) | **The wind** | Temporarily tightens the flow field's curl — existing wet paint visibly swirls during builds. |
-| Vocals | **Glaze** | A luminous semi-transparent pass following vocal phrasing; adds "light from within" wherever the voice sits. |
+| Keys / pads | **Glow fields** | Broad translucent full-canvas blooms; hue from chord/root estimate, brightness from energy. Chord changes shift the field, not a left-to-right wash. |
+| Bass | **Ripple rings** | Centered water-drop/cymatic rings; pitch and velocity control radius, width, and depth. No lower-third terrain/horizon line. |
+| Lead | **Symmetric subject blooms** | Notes create radial petals and mirrored blooms around the center; pitch = radius/depth, velocity = size. No calligraphic timeline ribbon. |
+| Kick | **Structure drops** | Heavy impasto drops mirrored around the center so rhythm feels architectural instead of scattered. |
+| Snare | **Splatter ripples** | Small splash clusters and expanding rings at symmetric positions; size from velocity. |
+| Hats | **Stipple orbit** | Fine speckle texture distributed around circular/radial bands; density = hat rate. |
+| FX / risers | **The field** | Temporarily brightens and expands existing glow/ripple fields during builds. |
+| Vocals | **Glaze aura** | A luminous semi-transparent centered pass following phrasing; adds light from within wherever the voice sits. |
 
 ## The key mechanism: repetition becomes form
 
-- While a section plays, its strokes stay **wet** — they advect and smear with
-  the flow field. When the section ends, the layer **dries** (locks) into a
-  stratum. Sections leave permanent geological layers of paint.
-- **Repeated sections repaint their own strokes.** Chorus 2 re-traces chorus 1's
-  geometry with bolder weight; chorus 3 bolder still. The most-repeated material
-  becomes the most defined form in the painting — the hook is literally the
-  focal point. This is what makes each painting *about* its song's structure.
+- While a section plays, its marks stay wet: blooms diffuse, rings expand, and
+  glow fields breathe. When the section ends, the layer dries into the canvas.
+- Repeated sections repaint their own geometry. Chorus 2 reinforces chorus 1's
+  rings and blooms; chorus 3 is stronger still. The most-repeated material
+  becomes the most defined form in the painting.
 
-## Song structure → painting arc
+## Song structure -> painting arc
 
 | Section | Painting act |
 |---|---|
-| Intro | Pencil construction lines fade in (light gray guides — later painted over but ghost-visible; storytelling: the song "sketches" first). |
-| Verses | Layer building — washes, terrain, first ribbon passes. |
-| Choruses | Saturation jumps; boldest strokes; repainting/reinforcement pass. |
-| Bridge | Palette pivot (relative-key hue rotation); the one "risk" the painting takes. |
-| Drop | Splatter climax + flow-field surge. |
-| Outro | Strokes taper; a varnish sheen pass sweeps once. |
-| Final chord | Camera pulls back; painted signature appears (song title + date in a corner, drawn stroke-by-stroke); hold the artifact 2s. |
+| Intro | Faint construction rings fade in; the song tunes the canvas before paint lands. |
+| Verses | Layer building: glow fields, bass ripples, first symmetric note blooms. |
+| Choruses | Saturation jumps; larger rings and stronger mirrored blooms; repainting/reinforcement pass. |
+| Bridge | Palette pivot; the one risk the painting takes. |
+| Drop | Splatter/ripple climax plus full-field surge. |
+| Outro | Marks taper; a varnish sheen pass sweeps once. |
+| Final chord | Camera pulls back; painted signature appears; hold the artifact. |
 
 ## Color system
 
-- Song **key** picks the base palette (major = warm/bright families, minor =
-  desaturated/cool); a small palette-solver assigns each role a fixed color
-  (triadic/complementary constraints) so any song is guaranteed harmonious.
-- Hue never fully free: all strokes sample from the solved palette ±10° —
-  the anti-mud rule.
+- Song key picks the base palette; a small palette solver assigns each role a
+  fixed color so the painting remains harmonious.
+- Hue never becomes fully free: marks sample from the solved palette with a
+  narrow variation range to avoid mud.
 
 ## Signature moments
 
-1. **The melody ribbon** drawing a fast run in one unbroken calligraphic gesture.
-2. **The build** — the whole wet canvas visibly swirling as the riser tightens the field.
-3. **The reveal** — pull-back + signature. The rewatch trigger.
+1. **The center ring** expanding exactly on a low-note/bass hit.
+2. **The build**: the whole wet canvas visibly brightening and swelling as the
+   riser tightens the field.
+3. **The reveal**: pull-back plus signature.
 
 ## Technical approach
 
-- **Renderer:** 2D WebGL (regl). Strokes are stamped splats into an accumulation
-  FBO; a height channel drives cheap normal-mapped impasto lighting; wetness is a
-  per-layer flag enabling advection by the curl-noise velocity field.
-- **Compiler:** converts `song.json` into a stroke list (position, layer, time,
-  width, color, wet-life). Anchor scatter and field seeds from project hash.
-- **Anti-mud safeguards:** per-region coverage budget (density map caps deposits),
-  per-section drying, palette solver, max 2 wet layers at once.
-- Fully deterministic → the exact final painting is reproducible and exportable
-  at print resolution (re-render at 4×).
+- **Current implementation:** deterministic Pixi vector painting with centered
+  rings, whole-canvas glow fields, symmetric note blooms, mirrored drops,
+  paper grain, wet highlights, varnish sweep, and final signature.
+- **Target renderer:** 2D WebGL accumulation buffer. Strokes are stamped splats
+  into an FBO; a height channel drives cheap normal-mapped impasto lighting;
+  wetness enables diffusion/advection.
+- **Compiler:** converts `song.json` into a deterministic mark list with
+  position/depth, layer, time, width, color, radius, and wet-life.
+- **Anti-mud safeguards:** per-region coverage budget, per-section drying,
+  palette solver, and a maximum number of wet layers.
+- Fully deterministic: the exact final painting is reproducible and exportable
+  at print resolution.
 
 ## Data requirements
 
-Chord track (MIDI keys or chromagram), bass pitch, lead pitch (MIDI ideal),
-drum onsets w/ velocity, FX automation, vocal RMS, key estimate, regions.
+Chord track or chromagram, bass pitch, lead/vocal pitch where available, drum
+onsets with velocity, FX automation, vocal RMS, key estimate, regions.
 
-## MVP → stretch
+## MVP -> stretch
 
-- **MVP:** flow field + 5 role layers (pads/bass/lead/kick/snare), drying,
-  palette solver, reveal + signature.
+- **MVP:** centered glow/ripple/bloom system plus 5 role layers
+  (pads/bass/lead/kick/snare), drying, palette solver, reveal, and signature.
 - **Stretch:** impasto lighting, style presets, chorus-reinforcement repainting,
-  4× print export, time-lapse-of-the-timelapse bonus clip (whole painting in 3s
-  for loops).
+  4x print export, and time-lapse-of-the-timelapse bonus clip.
 
-## Risks & mitigations
+## Risks and mitigations
 
-- **Mud** (the death mode) → budgets, drying, palette clamp (above).
-- **"Screensaver" accusations** → the repetition-becomes-form mechanism +
-  layer composition give it intent; the sketch-lines intro signals authorship.
-- **Slow songs = sparse canvas** → stroke width auto-scales inversely with note
+- **Mud:** budgets, drying, and palette clamp.
+- **Screensaver accusations:** repetition-becomes-form plus strong radial
+  composition gives the artifact intent.
+- **Linear-data relapse:** reject terrain strips, staff lines, and note ribbons
+  unless a future style explicitly calls for them.
+- **Slow songs = sparse canvas:** mark size auto-scales inversely with note
   density so sparse songs paint big and bold.
 
 ## Open questions
 
-- Portrait subject presets (landscape/abstract/figure silhouette) selectable per
-  song, or always abstract-landscape?
-- Signature: song title, artist name, or waveform glyph?
+- Should the centered form remain purely abstract, or should there be selectable
+  subject presets such as mandala, flower, planet, eye, or stained glass?
+- Signature: song title, artist name, waveform glyph, or project date?
