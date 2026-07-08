@@ -507,6 +507,10 @@ Current progress:
 - The Marble scene has begun the real 3D machine replacement with tube rails
   following compiled path segments, marble contact shadowing, target shadows,
   and damped target recoil/wobble tied to impact timing.
+- The 3D scene now includes more wall-mounted machine detail: frame geometry,
+  target backplates, screws/collars/brackets, hardware scaling on impacts, and
+  pose-driven camera parallax that follows marble tangent/depth without changing
+  synced marble timing.
 - Tests now protect exact impact poses, finite normalized quaternions, monotonic
   arc-length samples, and distance-based spin.
 

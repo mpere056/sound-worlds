@@ -42,11 +42,13 @@ export interface MarbleTuning {
 }
 
 interface TargetMeshes {
+  group: Group;
   base: Mesh<BoxGeometry | CylinderGeometry, MeshStandardMaterial>;
   home: Vector3;
   baseRotation: [number, number, number];
   glow: Mesh<SphereGeometry, MeshBasicLike>;
   shadow: Mesh<CircleGeometry, MeshBasicMaterial>;
+  hardware: Group;
 }
 
 type MeshBasicLike = MeshStandardMaterial | MeshPhysicalMaterial;
@@ -217,6 +219,46 @@ function targetMaterial(target: MarbleTarget): MeshStandardMaterial {
   if (target.material === "rubber") return new MeshStandardMaterial({ color, metalness: 0.1, roughness: 0.72 });
   if (target.material === "glow") return new MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.24, metalness: 0.18, roughness: 0.32 });
   return new MeshStandardMaterial({ color, metalness: 0.42, roughness: 0.36 });
+}
+
+function addTargetHardware(target: MarbleTarget, group: Group): Group {
+  const hardware = new Group();
+  const darkMetal = new MeshStandardMaterial({ color: 0x1d232b, metalness: 0.82, roughness: 0.23 });
+  const screwMetal = new MeshStandardMaterial({ color: 0xdcecf4, metalness: 0.66, roughness: 0.18 });
+  const accent = new MeshStandardMaterial({ color: hexNumber(target.color), emissive: hexNumber(target.color), emissiveIntensity: 0.16, metalness: 0.22, roughness: 0.3, transparent: true, opacity: 0.8 });
+  const backplate = new Mesh(new BoxGeometry(target.size[0] * 1.1, Math.max(0.035, target.size[1] * 0.35), target.size[2] * 1.16), darkMetal);
+  backplate.position.set(0, -target.size[1] * 0.58, -0.07);
+  hardware.add(backplate);
+
+  if (target.kind === "peg" || target.kind === "chime") {
+    const cap = new Mesh(new SphereGeometry(target.size[1] * 1.15, 18, 10), accent);
+    cap.position.set(0, 0.03, 0.02);
+    hardware.add(cap);
+    const collar = new Mesh(new CylinderGeometry(target.size[1] * 1.22, target.size[1] * 1.22, 0.035, 18), screwMetal);
+    collar.rotation.x = Math.PI / 2;
+    collar.position.set(0, 0, -0.025);
+    hardware.add(collar);
+  } else {
+    const screwOffsetX = target.size[0] * 0.38;
+    const screwOffsetZ = target.size[2] * 0.32;
+    for (const [x, z] of [[-screwOffsetX, -screwOffsetZ], [screwOffsetX, -screwOffsetZ], [-screwOffsetX, screwOffsetZ], [screwOffsetX, screwOffsetZ]] as const) {
+      const screw = new Mesh(new CylinderGeometry(0.045, 0.045, 0.025, 16), screwMetal.clone());
+      screw.rotation.x = Math.PI / 2;
+      screw.position.set(x, target.size[1] * 0.72, z);
+      hardware.add(screw);
+      const slot = new Mesh(new BoxGeometry(0.062, 0.01, 0.012), darkMetal.clone());
+      slot.position.set(x, target.size[1] * 0.737, z);
+      slot.rotation.y = (x + z) > 0 ? 0.6 : -0.6;
+      hardware.add(slot);
+    }
+  }
+
+  const bracket = new Mesh(new CylinderGeometry(0.018, 0.018, 0.52, 8), darkMetal.clone());
+  bracket.rotation.z = Math.PI / 2;
+  bracket.position.set(-target.size[0] * 0.55, -0.2, -0.22);
+  hardware.add(bracket);
+  group.add(hardware);
+  return hardware;
 }
 
 export class MarbleScene {
@@ -404,6 +446,16 @@ export class MarbleScene {
     );
     wall.position.set(0, 0, -0.42);
     this.#machine.add(wall);
+    const frameMaterial = new MeshStandardMaterial({ color: 0x263748, metalness: 0.34, roughness: 0.42 });
+    const top = new Mesh(new BoxGeometry(9.5, 0.08, 0.16), frameMaterial.clone());
+    top.position.set(0, 8.18, -0.34);
+    const bottom = new Mesh(new BoxGeometry(9.5, 0.08, 0.16), frameMaterial.clone());
+    bottom.position.set(0, -8.18, -0.34);
+    const left = new Mesh(new BoxGeometry(0.08, 16.4, 0.16), frameMaterial.clone());
+    left.position.set(-4.72, 0, -0.34);
+    const right = new Mesh(new BoxGeometry(0.08, 16.4, 0.16), frameMaterial.clone());
+    right.position.set(4.72, 0, -0.34);
+    this.#machine.add(top, bottom, left, right);
   }
 
   #addTargets(): void {
@@ -413,13 +465,16 @@ export class MarbleScene {
       this.#impactByTarget.set(impact.targetId, list);
     }
     for (const target of this.#performance.statics.targets) {
+      const group = new Group();
+      group.position.set(...target.pos);
+      group.rotation.set(target.rotation[0], target.rotation[1], target.rotation[2]);
       const base = new Mesh(targetGeometry(target), targetMaterial(target));
-      base.position.set(...target.pos);
-      base.rotation.set(target.rotation[0], target.rotation[1], target.rotation[2]);
       if (target.kind === "peg" || target.kind === "chime") base.rotation.z += Math.PI / 2;
+      const hardware = addTargetHardware(target, group);
+      group.add(base);
       const glowMaterial = new MeshStandardMaterial({ color: hexNumber(target.color), emissive: hexNumber(target.color), emissiveIntensity: 0, transparent: true, opacity: 0 });
       const glow = new Mesh(new SphereGeometry(0.42, 20, 12), glowMaterial);
-      glow.position.copy(base.position);
+      glow.position.copy(group.position);
       glow.scale.setScalar(1);
       const shadow = new Mesh(
         new CircleGeometry(0.42, 28),
@@ -427,8 +482,8 @@ export class MarbleScene {
       );
       shadow.position.set(target.pos[0] - 0.08, target.pos[1] - 0.1, -0.405);
       shadow.scale.set(1.4, 0.46, 1);
-      this.#targetMeshes.set(target.id, { base, home: base.position.clone(), baseRotation: [base.rotation.x, base.rotation.y, base.rotation.z], glow, shadow });
-      this.#machine.add(shadow, base, glow);
+      this.#targetMeshes.set(target.id, { group, base, home: group.position.clone(), baseRotation: [group.rotation.x, group.rotation.y, group.rotation.z], glow, shadow, hardware });
+      this.#machine.add(shadow, group, glow);
     }
   }
 
@@ -548,13 +603,14 @@ export class MarbleScene {
     for (const [targetId, meshes] of this.#targetMeshes) {
       const intensity = this.#targetIntensity(targetId, t);
       const recoil = this.#targetRecoil(targetId, t);
-      meshes.base.position.set(meshes.home.x, meshes.home.y, meshes.home.z + recoil);
-      meshes.base.scale.set(this.tuning.targetScale * (1 + intensity * 0.08), this.tuning.targetScale * (1 - Math.max(0, recoil) * 0.18), this.tuning.targetScale * (1 + intensity * 0.05));
-      meshes.base.rotation.set(
+      meshes.group.position.set(meshes.home.x, meshes.home.y, meshes.home.z + recoil);
+      meshes.group.rotation.set(
         meshes.baseRotation[0] + recoil * 0.35,
         meshes.baseRotation[1] - recoil * 0.22,
         meshes.baseRotation[2] + Math.sin(t * 20 + targetId.length) * intensity * 0.08,
       );
+      meshes.base.scale.set(this.tuning.targetScale * (1 + intensity * 0.08), this.tuning.targetScale * (1 - Math.max(0, recoil) * 0.18), this.tuning.targetScale * (1 + intensity * 0.05));
+      meshes.hardware.scale.setScalar(1 + intensity * 0.035);
       meshes.glow.material.opacity = clamp(intensity * 0.42, 0, 0.5);
       meshes.glow.material.emissiveIntensity = intensity * 1.8;
       meshes.glow.position.set(meshes.home.x, meshes.home.y, meshes.home.z + recoil * 0.6);
@@ -565,10 +621,21 @@ export class MarbleScene {
     }
     const cameraKey = sampleCamera(this.#performance.camera, t);
     const cameraLift = Math.sin(t * 0.33) * 0.08 * this.tuning.camera;
-    this.#camera.position.set(cameraKey.pos[0] + pose.pos[0] * 0.08, cameraKey.pos[1] + pose.pos[1] * 0.04 + cameraLift, cameraKey.pos[2] - this.tuning.camera * 0.34);
+    const orbit = Math.sin(t * 0.21) * 0.34 * this.tuning.camera;
+    const depthParallax = clamp(pose.pos[2], -1.2, 1.2) * 0.22 * this.tuning.camera;
+    const tangentLead = clamp(pose.speed / 12, 0, 0.32);
+    this.#camera.position.set(
+      cameraKey.pos[0] + pose.pos[0] * 0.1 + orbit - pose.tangent[2] * 0.18,
+      cameraKey.pos[1] + pose.pos[1] * 0.052 + cameraLift + pose.tangent[1] * tangentLead * 0.16,
+      cameraKey.pos[2] - this.tuning.camera * 0.34 + depthParallax,
+    );
     this.#camera.zoom = cameraKey.zoom * this.tuning.camera;
     this.#camera.updateProjectionMatrix();
-    this.#camera.lookAt(cameraKey.pos[0] * 0.22 + pose.pos[0] * 0.16, cameraKey.pos[1] * 0.32 + pose.pos[1] * 0.12, 0);
+    this.#camera.lookAt(
+      cameraKey.pos[0] * 0.2 + pose.pos[0] * 0.2 + pose.tangent[0] * tangentLead,
+      cameraKey.pos[1] * 0.3 + pose.pos[1] * 0.14 + pose.tangent[1] * tangentLead,
+      pose.pos[2] * 0.12,
+    );
     this.#renderer.render(this.#scene, this.#camera);
   }
 
