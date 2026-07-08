@@ -3,7 +3,10 @@ import {
   BoxGeometry,
   BufferGeometry,
   CanvasTexture,
+  CatmullRomCurve3,
+  CircleGeometry,
   Color,
+  CubicBezierCurve3,
   CylinderGeometry,
   DirectionalLight,
   Group,
@@ -11,6 +14,7 @@ import {
   LineBasicMaterial,
   Material,
   Mesh,
+  MeshBasicMaterial,
   MeshPhysicalMaterial,
   MeshStandardMaterial,
   Object3D,
@@ -21,11 +25,12 @@ import {
   SphereGeometry,
   SRGBColorSpace,
   Texture,
+  TubeGeometry,
   Vector3,
   WebGLRenderer,
 } from "three";
 import { sampleCurve, type CameraKeyframe } from "@reaper-viz/core";
-import { sampleMarblePose, type MarbleImpact, type MarblePerformance, type MarblePose, type MarbleTarget } from "@reaper-viz/compiler-marble";
+import { sampleMarblePose, type MarbleImpact, type MarblePathSegment, type MarblePerformance, type MarblePose, type MarbleTarget } from "@reaper-viz/compiler-marble";
 
 export type { MarblePerformance } from "@reaper-viz/compiler-marble";
 
@@ -38,8 +43,10 @@ export interface MarbleTuning {
 
 interface TargetMeshes {
   base: Mesh<BoxGeometry | CylinderGeometry, MeshStandardMaterial>;
-  baseRotationZ: number;
+  home: Vector3;
+  baseRotation: [number, number, number];
   glow: Mesh<SphereGeometry, MeshBasicLike>;
+  shadow: Mesh<CircleGeometry, MeshBasicMaterial>;
 }
 
 type MeshBasicLike = MeshStandardMaterial | MeshPhysicalMaterial;
@@ -77,6 +84,20 @@ function impactEnvelope(age: number, velocity: number): number {
 
 function smoothstep(value: number): number {
   return value * value * (3 - 2 * value);
+}
+
+function dampedResponse(age: number, velocity: number): number {
+  if (age < -1 / 90 || age > 0.55) return 0;
+  const t = Math.max(0, age);
+  const zeta = 0.56;
+  const omega0 = 25;
+  const decay = Math.exp(-zeta * omega0 * t);
+  const wobble = Math.sin(omega0 * Math.sqrt(1 - zeta * zeta) * t);
+  return decay * wobble * (0.08 + velocity * 0.18);
+}
+
+function v3(value: [number, number, number], zOffset = 0): Vector3 {
+  return new Vector3(value[0], value[1], value[2] + zOffset);
 }
 
 function sampleCamera(keys: readonly CameraKeyframe[], t: number): CameraKeyframe {
@@ -208,8 +229,10 @@ export class MarbleScene {
   readonly #targetMeshes = new Map<string, TargetMeshes>();
   readonly #impactByTarget = new Map<string, MarbleImpact[]>();
   readonly #machine = new Group();
+  readonly #rails = new Group();
   readonly #marble: Mesh<SphereGeometry, MeshPhysicalMaterial>;
   readonly #marbleGlow: PointLight;
+  readonly #marbleShadow: Mesh<CircleGeometry, MeshBasicMaterial>;
   readonly #pathLine: Line<BufferGeometry, LineBasicMaterial>;
   readonly #svg: SVGSVGElement;
   readonly #svgTargets = new Map<string, SvgTarget>();
@@ -243,14 +266,19 @@ export class MarbleScene {
     this.#addWall();
     this.#addTargets();
     this.#addRods();
+    this.#addRails();
     this.#pathLine = this.#makePathLine();
     this.#machine.add(this.#pathLine);
     this.#marble = new Mesh(
       new SphereGeometry(0.28, 36, 20),
       new MeshPhysicalMaterial({ color: 0xf5fcff, roughness: 0.08, metalness: 0.05, transmission: 0.2, thickness: 0.55, clearcoat: 1, clearcoatRoughness: 0.08 }),
     );
+    this.#marbleShadow = new Mesh(
+      new CircleGeometry(0.36, 36),
+      new MeshBasicMaterial({ color: 0x02080f, transparent: true, opacity: 0.22, depthWrite: false }),
+    );
     this.#marbleGlow = new PointLight(0x8df5ff, 1.1, 3.2);
-    this.#machine.add(this.#marble, this.#marbleGlow);
+    this.#machine.add(this.#marbleShadow, this.#marble, this.#marbleGlow);
   }
 
   #createSvgOverlay(canvas: HTMLCanvasElement): { svg: SVGSVGElement; marble: SVGGElement; marbleGlow: SVGCircleElement; marbleCore: SVGCircleElement } {
@@ -393,8 +421,14 @@ export class MarbleScene {
       const glow = new Mesh(new SphereGeometry(0.42, 20, 12), glowMaterial);
       glow.position.copy(base.position);
       glow.scale.setScalar(1);
-      this.#targetMeshes.set(target.id, { base, baseRotationZ: base.rotation.z, glow });
-      this.#machine.add(base, glow);
+      const shadow = new Mesh(
+        new CircleGeometry(0.42, 28),
+        new MeshBasicMaterial({ color: 0x020813, transparent: true, opacity: 0.2, depthWrite: false }),
+      );
+      shadow.position.set(target.pos[0] - 0.08, target.pos[1] - 0.1, -0.405);
+      shadow.scale.set(1.4, 0.46, 1);
+      this.#targetMeshes.set(target.id, { base, home: base.position.clone(), baseRotation: [base.rotation.x, base.rotation.y, base.rotation.z], glow, shadow });
+      this.#machine.add(shadow, base, glow);
     }
   }
 
@@ -409,10 +443,51 @@ export class MarbleScene {
     }
   }
 
+  #segmentPoints(segment: MarblePathSegment): Vector3[] {
+    const steps = segment.kind === "arc" ? 20 : 12;
+    const c0 = segment.control ? v3(segment.control, -0.18) : v3(segment.from, -0.18).lerp(v3(segment.to, -0.18), 1 / 3);
+    const c1 = segment.control2 ? v3(segment.control2, -0.18) : v3(segment.from, -0.18).lerp(v3(segment.to, -0.18), 2 / 3);
+    const curve = new CubicBezierCurve3(v3(segment.from, -0.18), c0, c1, v3(segment.to, -0.18));
+    const points: Vector3[] = [];
+    for (let index = 0; index <= steps; index += 1) {
+      const raw = index / steps;
+      const point = curve.getPoint(raw);
+      if (segment.kind === "arc") {
+        const lift = Math.sin(raw * Math.PI) * (segment.arcHeight ?? 0.32);
+        point.y += lift;
+        point.z += lift * 0.34;
+      }
+      points.push(point);
+    }
+    return points;
+  }
+
+  #addRails(): void {
+    const railMaterial = new MeshStandardMaterial({ color: 0x66d9f0, emissive: 0x17495c, emissiveIntensity: 0.32, metalness: 0.45, roughness: 0.28, transparent: true, opacity: 0.74 });
+    const supportMaterial = new MeshStandardMaterial({ color: 0x1b2028, metalness: 0.78, roughness: 0.24 });
+    for (const segment of this.#performance.statics.path) {
+      if (segment.kind === "hold" || segment.kind === "settle") continue;
+      const points = this.#segmentPoints(segment);
+      if (points.length < 2) continue;
+      const curve = new CatmullRomCurve3(points, false, "centripetal", 0.35);
+      const tube = new Mesh(new TubeGeometry(curve, Math.max(8, points.length * 3), segment.kind === "arc" ? 0.018 : 0.024, 8, false), railMaterial.clone());
+      this.#rails.add(tube);
+      const first = points[0]!;
+      const last = points[points.length - 1]!;
+      for (const point of [first, last]) {
+        const support = new Mesh(new CylinderGeometry(0.018, 0.018, Math.max(0.18, point.z + 0.42), 8), supportMaterial.clone());
+        support.position.set(point.x, point.y, (point.z - 0.42) / 2);
+        support.rotation.x = Math.PI / 2;
+        this.#rails.add(support);
+      }
+    }
+    this.#machine.add(this.#rails);
+  }
+
   #makePathLine(): Line<BufferGeometry, LineBasicMaterial> {
     const points = this.#performance.statics.targets.map((target) => new Vector3(target.pos[0], target.pos[1], target.pos[2] - 0.16));
     const geometry = new BufferGeometry().setFromPoints(points);
-    const material = new LineBasicMaterial({ color: 0x7ddcff, transparent: true, opacity: 0.22 });
+    const material = new LineBasicMaterial({ color: 0x7ddcff, transparent: true, opacity: 0.08 });
     return new Line(geometry, material);
   }
 
@@ -428,6 +503,13 @@ export class MarbleScene {
       intensity = Math.max(intensity, (1 - progress) * energy * this.tuning.tail * 0.55);
     }
     return intensity * this.tuning.glow;
+  }
+
+  #targetRecoil(targetId: string, t: number): number {
+    const impacts = this.#impactByTarget.get(targetId) ?? [];
+    let response = 0;
+    for (const impact of impacts) response += dampedResponse(t - impact.t, impact.velocity);
+    return clamp(response, -0.18, 0.26);
   }
 
   #renderSvg(t: number, pose: MarblePose, pulse: number): void {
@@ -450,6 +532,10 @@ export class MarbleScene {
     const pose = sampleMarblePose(this.#performance.statics.path, t);
     this.#marble.position.set(pose.pos[0], pose.pos[1], pose.pos[2] + 0.42);
     this.#marble.quaternion.set(pose.quat[0], pose.quat[1], pose.quat[2], pose.quat[3]);
+    const shadowScale = clamp(1.25 - (pose.pos[2] + 0.42) * 0.42, 0.46, 1.35);
+    this.#marbleShadow.position.set(pose.pos[0] - 0.08, pose.pos[1] - 0.12, -0.398);
+    this.#marbleShadow.scale.set(shadowScale * 1.25, shadowScale * 0.58, 1);
+    this.#marbleShadow.material.opacity = clamp(0.28 - (pose.pos[2] + 0.42) * 0.06 + (pose.contact ? 0.1 : 0), 0.06, 0.36);
     const currentImpact = this.#performance.statics.impacts.reduce((best, impact) => {
       const age = Math.abs(t - impact.t);
       return age < best.age ? { age, impact } : best;
@@ -461,11 +547,21 @@ export class MarbleScene {
     this.#marbleGlow.intensity = 0.6 + pulse * 2.4;
     for (const [targetId, meshes] of this.#targetMeshes) {
       const intensity = this.#targetIntensity(targetId, t);
-      meshes.base.scale.setScalar(this.tuning.targetScale * (1 + intensity * 0.1));
-      meshes.base.rotation.z = meshes.baseRotationZ + Math.sin(t * 20 + targetId.length) * intensity * 0.08;
+      const recoil = this.#targetRecoil(targetId, t);
+      meshes.base.position.set(meshes.home.x, meshes.home.y, meshes.home.z + recoil);
+      meshes.base.scale.set(this.tuning.targetScale * (1 + intensity * 0.08), this.tuning.targetScale * (1 - Math.max(0, recoil) * 0.18), this.tuning.targetScale * (1 + intensity * 0.05));
+      meshes.base.rotation.set(
+        meshes.baseRotation[0] + recoil * 0.35,
+        meshes.baseRotation[1] - recoil * 0.22,
+        meshes.baseRotation[2] + Math.sin(t * 20 + targetId.length) * intensity * 0.08,
+      );
       meshes.glow.material.opacity = clamp(intensity * 0.42, 0, 0.5);
       meshes.glow.material.emissiveIntensity = intensity * 1.8;
-      meshes.glow.scale.setScalar(0.9 + intensity * 1.2);
+      meshes.glow.position.set(meshes.home.x, meshes.home.y, meshes.home.z + recoil * 0.6);
+      meshes.glow.scale.setScalar(0.9 + intensity * 1.2 + Math.abs(recoil) * 1.8);
+      meshes.shadow.position.set(meshes.home.x - 0.08 - recoil * 0.25, meshes.home.y - 0.1 - recoil * 0.12, -0.405);
+      meshes.shadow.material.opacity = clamp(0.16 + intensity * 0.1, 0.08, 0.28);
+      meshes.shadow.scale.set(1.4 + Math.abs(recoil) * 2.2, 0.46 + Math.abs(recoil) * 0.42, 1);
     }
     const cameraKey = sampleCamera(this.#performance.camera, t);
     const cameraLift = Math.sin(t * 0.33) * 0.08 * this.tuning.camera;

@@ -504,6 +504,9 @@ Current progress:
   kind, and progress.
 - The Marble scene now consumes `sampleMarblePose` for marble orientation and
   SVG fallback spin, replacing time-based fake marble rotation.
+- The Marble scene has begun the real 3D machine replacement with tube rails
+  following compiled path segments, marble contact shadowing, target shadows,
+  and damped target recoil/wobble tied to impact timing.
 - Tests now protect exact impact poses, finite normalized quaternions, monotonic
   arc-length samples, and distance-based spin.
 
