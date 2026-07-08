@@ -122,6 +122,29 @@ The next slice should make the Three.js scene the primary visible layer and
 turn the SVG layer into either a temporary compatibility fallback or a debug
 overlay.
 
+### Browser review, 2026-07-08
+
+The first real 3D-machine pass is directionally good: the wall frame, target
+hardware, tube rails, shadows, damped target recoil, distance-based marble spin,
+and pose-driven parallax make the scene read more like a physical object than
+the original flat overlay.
+
+It is not yet through the M2.3 acceptance gate. In screenshots from
+`untitled-project-418cb58f` at 0 s, 5 s, and 10 s, the marble stays readable and
+the camera is mostly comfortable, but three issues remain obvious:
+
+- the fallback SVG/path-line language still makes the route read like a plotted
+  graph instead of a built rail system;
+- the board frame and glow can become over-bright in late-song frames, competing
+  with the marble and targets;
+- target hardware improves still frames, but the scene still needs a
+  watch-through with audio before sync-readability can be called good.
+
+Next visual work should therefore prioritize hiding or demoting the SVG overlay,
+replacing the faint route/path line with physically motivated rails/supports,
+clamping frame/glow brightness, and running a complete audio watch-through
+before adding more target types or secondary physics.
+
 ## Physics-feel principles
 
 ### 1. Arrival is sacred
@@ -454,6 +477,11 @@ the visual motion became music-owned rather than animation-owned.
   it lands exactly at its target time.
 - Preserve the current SVG/fallback layer only as temporary compatibility or
   debugging surface while the 3D layer is being replaced.
+- Keep visual helper geometry honest: visible lines must be rails, rods,
+  wires, shadows, or explicitly toggled debug overlays. A faint polyline that
+  only traces note order should not be part of the shipped art path.
+- Treat browser still-frame and audio watch-through reviews as phase gates.
+  Passing compiler tests is necessary, but not enough for M2.1/M2.2.
 
 ### Must not do
 
@@ -511,6 +539,11 @@ Current progress:
   target backplates, screws/collars/brackets, hardware scaling on impacts, and
   pose-driven camera parallax that follows marble tangent/depth without changing
   synced marble timing.
+- Browser still-frame review on `untitled-project-418cb58f` shows meaningful
+  visual progress, but also confirms the next scene slice should remove/demote
+  the fallback SVG route language, clamp over-bright frame/glow response, and
+  complete an audio watch-through before declaring the machine physically
+  satisfying.
 - Tests now protect exact impact poses, finite normalized quaternions, monotonic
   arc-length samples, and distance-based spin.
 
@@ -553,7 +586,9 @@ Replace the visible Marble layer with 3D geometry:
 - contact shadows and target glows.
 
 Acceptance: the scene reads as a wall-mounted 3D marble machine even when
-paused.
+paused. The SVG overlay and any order-tracing path line are hidden by default or
+clearly debug-only; visible guide geometry must be physically justified as rails,
+supports, rods, wires, shadows, or target hardware.
 
 ### Phase 3 - Physics-feel pass
 
@@ -632,7 +667,10 @@ This lets the scene render target physics without guessing from raw note data.
 - Render the real wall, plates, rails, rods, pegs, marble, shadows, and glow in
   Three.js.
 - Keep the SVG overlay hidden by default or remove it after the 3D layer is
-  reliable.
+  reliable. If retained, it must be toggled as a debug/sync diagnostic, not
+  visible in exported artwork.
+- Remove or replace the faint order polyline. The viewer should see built
+  machine geometry, not the compiler's note order.
 - Ensure `destroy()` disposes geometries, materials, textures, renderer, and any
   overlay nodes.
 
@@ -655,6 +693,14 @@ Use simple geometry first:
 - tubes along compiled rail curves;
 - small screws/brackets for scale;
 - target contact normals visible through tilt.
+
+Material/lighting guardrails from the browser review:
+
+- cap emissive/glow/frame brightness so the board frame never becomes the
+  brightest object except during an intentional final reveal;
+- make the marble and active target the local contrast peak at impact time;
+- keep rails visible enough to explain motion, but dim enough that they do not
+  read as a neon chart line.
 
 ### R3 - Marble physical rendering
 
@@ -693,6 +739,11 @@ Add compiler-authored camera anchors that can show depth:
 
 The camera remains sampled by absolute time.
 
+After the 2026-07-08 review, keep camera parallax modest until the route line is
+replaced. Extra orbit or depth motion currently makes the graph-like line more
+noticeable; physical rails/supports should land before more cinematic camera
+movement.
+
 ## Milestones
 
 ### M1.5 - Physical pose compiler
@@ -711,6 +762,7 @@ Done when:
 
 - the main visible Marble layer is Three.js 3D, not SVG;
 - plates, rails, rods, wall, and marble all exist as 3D geometry;
+- the route no longer reads as a plotted polyline;
 - camera movement reveals real depth/parallax;
 - target glow/wobble remains tied to impacts;
 - no WebGL leaks or stale overlays appear after hot reload/concept switching.
@@ -735,6 +787,14 @@ Done when the user can watch `untitled-project-418cb58f` and say:
 
 Only after that should work move to two-track Marble Music.
 
+Before this gate can pass, review at least:
+
+- 0 s, 5 s, and 10 s still frames with overlays off;
+- a continuous audio watch-through of the full 12.5 s fixture;
+- impact scrubs on several note hits;
+- one between-note scrub where the marble should be holding or preparing rather
+  than randomly drifting.
+
 ## Verification checklist
 
 - [ ] `corepack pnpm --filter @reaper-viz/compiler-marble test`
@@ -745,6 +805,8 @@ Only after that should work move to two-track Marble Music.
 - [ ] `corepack pnpm --filter @reaper-viz/app typecheck`
 - [ ] Full `corepack pnpm check`
 - [ ] Browser watch-through on `untitled-project-418cb58f`
+- [ ] Overlay-off still frames at 0 s, 5 s, and 10 s: no graph-like route line,
+      no over-bright frame, marble/active target remain the focal point
 - [ ] Scrub to every impact: marble is visibly at/near the correct target
 - [ ] Scrub between impacts: marble is either holding, preparing, or traveling
       for a musical reason
