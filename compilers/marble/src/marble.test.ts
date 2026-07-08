@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildFixtureSong } from "@reaper-viz/core";
-import { compileMarble, sampleMarblePath } from "./index.js";
+import { compileMarble, sampleMarblePath, sampleMarblePose } from "./index.js";
 
 describe("Marble Music compiler", () => {
   it("maps every selected note to an exact hit", () => {
@@ -53,6 +53,38 @@ describe("Marble Music compiler", () => {
     const secondPose = sampleMarblePath(performance.statics.path, secondImpact.t);
     const secondTarget = performance.statics.targets[1]!;
     secondPose.pos.forEach((value, index) => expect(value).toBeCloseTo(secondTarget.pos[index]!, 6));
+  });
+
+  it("samples exact impact poses with physical metadata", () => {
+    const song = buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [0, 1, 2, 3], pitch: 55, kind: "note" }] });
+    const performance = compileMarble(song);
+    for (const impact of performance.statics.impacts) {
+      const pose = sampleMarblePose(performance.statics.path, impact.t);
+      const target = performance.statics.targets.find((candidate) => candidate.id === impact.targetId)!;
+      pose.pos.forEach((value, index) => expect(value).toBeCloseTo(target.pos[index]!, 6));
+      expect(pose.contact).toBe(true);
+      expect(pose.quat.every(Number.isFinite)).toBe(true);
+      expect(pose.tangent.every(Number.isFinite)).toBe(true);
+      expect(pose.normal).toEqual([0, 0, 1]);
+      expect(Math.hypot(...pose.quat)).toBeCloseTo(1, 5);
+    }
+  });
+
+  it("adds monotonic arc-length samples and distance-based spin to moving segments", () => {
+    const song = buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [0, 1.5, 3], pitch: 55, kind: "note" }] });
+    const performance = compileMarble(song);
+    const moving = performance.statics.path.find((segment) => segment.kind === "arc" || segment.kind === "rail");
+    expect(moving).toBeDefined();
+    expect(moving!.arcLength).toBeGreaterThan(0);
+    expect(moving!.arcSamples?.length).toBeGreaterThan(4);
+    for (let index = 1; index < moving!.arcSamples!.length; index += 1) {
+      expect(moving!.arcSamples![index]).toBeGreaterThanOrEqual(moving!.arcSamples![index - 1]!);
+    }
+    const middlePose = sampleMarblePose(performance.statics.path, (moving!.t0 + moving!.t1) / 2);
+    const endPose = sampleMarblePose(performance.statics.path, moving!.t1);
+    expect(middlePose.spin).toBeGreaterThan(0);
+    expect(endPose.spin).toBeCloseTo((moving!.arcLength ?? 0) / 0.28, 4);
+    expect(middlePose.speed).toBeGreaterThan(0);
   });
 
   it("authors camera keys from selected target timing through the tail", () => {

@@ -72,6 +72,17 @@ export interface MarblePathSegment {
   kind: MarblePathKind;
   easing: MarbleEasing;
   control?: [number, number, number];
+  control2?: [number, number, number];
+  contactNormal?: [number, number, number];
+  tangentIn?: [number, number, number];
+  tangentOut?: [number, number, number];
+  railRadius?: number;
+  bank?: number;
+  gravityScale?: number;
+  restitution?: number;
+  arcHeight?: number;
+  arcLength?: number;
+  arcSamples?: number[];
   targetId?: string;
   clusterId?: string;
 }
@@ -93,6 +104,12 @@ export interface MarbleDiagnostics {
 
 export interface MarblePose {
   pos: [number, number, number];
+  quat: [number, number, number, number];
+  tangent: [number, number, number];
+  normal: [number, number, number];
+  speed: number;
+  spin: number;
+  contact: boolean;
   segmentId: string;
   kind: MarblePathKind;
   progress: number;

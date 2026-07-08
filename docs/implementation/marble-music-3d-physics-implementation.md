@@ -493,6 +493,20 @@ engine's kinematic-next-position APIs instead of teleporting bodies directly.
 
 ## Implementation phases
 
+Current progress:
+
+- Phase 0/1 foundation started in `@reaper-viz/compiler-marble`.
+- `MarblePathSegment` now carries physical metadata for compiled motion:
+  contact normals, tangents, secondary controls, arc-height/gravity hints,
+  arc-length samples, rail radius, banking, and restitution.
+- `sampleMarblePose` now returns a deterministic absolute-time pose with
+  position, quaternion, tangent, normal, speed, spin, contact state, segment id,
+  kind, and progress.
+- The Marble scene now consumes `sampleMarblePose` for marble orientation and
+  SVG fallback spin, replacing time-based fake marble rotation.
+- Tests now protect exact impact poses, finite normalized quaternions, monotonic
+  arc-length samples, and distance-based spin.
+
 ### Phase 0 - Math/reference sandbox
 
 Before replacing the scene, build the pure math layer with tests:

@@ -25,7 +25,7 @@ import {
   WebGLRenderer,
 } from "three";
 import { sampleCurve, type CameraKeyframe } from "@reaper-viz/core";
-import { sampleMarblePath, type MarbleImpact, type MarblePerformance, type MarbleTarget } from "@reaper-viz/compiler-marble";
+import { sampleMarblePose, type MarbleImpact, type MarblePerformance, type MarblePose, type MarbleTarget } from "@reaper-viz/compiler-marble";
 
 export type { MarblePerformance } from "@reaper-viz/compiler-marble";
 
@@ -430,9 +430,9 @@ export class MarbleScene {
     return intensity * this.tuning.glow;
   }
 
-  #renderSvg(t: number, pose: ReturnType<typeof sampleMarblePath>, pulse: number): void {
+  #renderSvg(t: number, pose: MarblePose, pulse: number): void {
     const [x, y] = worldToScreen([pose.pos[0], pose.pos[1], pose.pos[2] + 0.42]);
-    this.#svgMarble.setAttribute("transform", `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${(t * 210).toFixed(2)}) scale(${(1 + pulse * 0.18).toFixed(3)})`);
+    this.#svgMarble.setAttribute("transform", `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${(pose.spin * 57.2958).toFixed(2)}) scale(${(1 + pulse * 0.18).toFixed(3)})`);
     this.#svgMarbleGlow.setAttribute("opacity", String(clamp(0.26 + pulse * 0.48, 0.18, 0.85)));
     this.#svgMarbleCore.setAttribute("stroke-width", String(5 + pulse * 8));
     for (const [targetId, target] of this.#svgTargets) {
@@ -447,9 +447,9 @@ export class MarbleScene {
 
   renderFrame(t: number): void {
     if (this.#disposed) return;
-    const pose = sampleMarblePath(this.#performance.statics.path, t);
+    const pose = sampleMarblePose(this.#performance.statics.path, t);
     this.#marble.position.set(pose.pos[0], pose.pos[1], pose.pos[2] + 0.42);
-    this.#marble.rotation.set(t * 3.2, t * 1.7, -t * 2.4);
+    this.#marble.quaternion.set(pose.quat[0], pose.quat[1], pose.quat[2], pose.quat[3]);
     const currentImpact = this.#performance.statics.impacts.reduce((best, impact) => {
       const age = Math.abs(t - impact.t);
       return age < best.age ? { age, impact } : best;

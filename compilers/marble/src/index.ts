@@ -21,7 +21,12 @@ const DENSE_RATTLE = 0.09;
 const DENSE_CASCADE = 0.22;
 const NORMAL_TRAVEL = 0.7;
 const EPS = 1e-6;
+const MARBLE_RADIUS = 0.28;
+const ARC_SAMPLE_COUNT = 24;
 const PITCH_COLORS = ["#6ee7ff", "#8df5c8", "#f7d06a", "#ff9bd6", "#9ea7ff", "#f4fbff", "#7affd7", "#ffb86b", "#c2ff72", "#b9d8ff", "#ffd1f2", "#d8f6ff"];
+
+type Vec3 = [number, number, number];
+type Quat = [number, number, number, number];
 
 interface SelectedTrack {
   track: SongTrack;
@@ -32,6 +37,72 @@ interface SelectedTrack {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function round(value: number, places = 6): number {
+  return Number(value.toFixed(places));
+}
+
+function vecRound(value: Vec3, places = 6): Vec3 {
+  return [round(value[0], places), round(value[1], places), round(value[2], places)];
+}
+
+function vecAdd(a: Vec3, b: Vec3): Vec3 {
+  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+}
+
+function vecSub(a: Vec3, b: Vec3): Vec3 {
+  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+}
+
+function vecScale(a: Vec3, scalar: number): Vec3 {
+  return [a[0] * scalar, a[1] * scalar, a[2] * scalar];
+}
+
+function vecMix(a: Vec3, b: Vec3, amount: number): Vec3 {
+  return [a[0] + (b[0] - a[0]) * amount, a[1] + (b[1] - a[1]) * amount, a[2] + (b[2] - a[2]) * amount];
+}
+
+function vecDot(a: Vec3, b: Vec3): number {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function vecCross(a: Vec3, b: Vec3): Vec3 {
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+}
+
+function vecLength(a: Vec3): number {
+  return Math.hypot(a[0], a[1], a[2]);
+}
+
+function vecDistance(a: Vec3, b: Vec3): number {
+  return vecLength(vecSub(a, b));
+}
+
+function vecNormalize(a: Vec3, fallback: Vec3 = [1, 0, 0]): Vec3 {
+  const length = vecLength(a);
+  return length > EPS ? [a[0] / length, a[1] / length, a[2] / length] : fallback;
+}
+
+function quatFromAxisAngle(axis: Vec3, angle: number): Quat {
+  const normalized = vecNormalize(axis, [0, 0, 1]);
+  const half = angle / 2;
+  const sin = Math.sin(half);
+  return [normalized[0] * sin, normalized[1] * sin, normalized[2] * sin, Math.cos(half)];
+}
+
+function quatMultiply(a: Quat, b: Quat): Quat {
+  return [
+    a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+    a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+    a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+    a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
+  ];
+}
+
+function quatNormalize(q: Quat): Quat {
+  const length = Math.hypot(q[0], q[1], q[2], q[3]);
+  return length > EPS ? [q[0] / length, q[1] / length, q[2] / length, q[3] / length] : [0, 0, 0, 1];
 }
 
 function mean(values: readonly number[]): number | null {
@@ -163,7 +234,7 @@ function departureForNextNote(current: SongEvent, next: SongEvent, kind: MarbleP
 
 function pushHold(path: MarblePathSegment[], target: MarbleTarget, t0: number, t1: number): void {
   if (t1 <= t0 + EPS) return;
-  path.push({
+  path.push(enrichSegment({
     id: `path:${path.length}`,
     t0: Number(t0.toFixed(6)),
     t1: Number(t1.toFixed(6)),
@@ -171,8 +242,119 @@ function pushHold(path: MarblePathSegment[], target: MarbleTarget, t0: number, t
     to: target.pos,
     kind: "hold",
     easing: "easeOut",
+    contactNormal: [0, 0, 1],
+    tangentIn: [1, 0, 0],
+    tangentOut: [1, 0, 0],
     targetId: target.id,
-  });
+  }));
+}
+
+function easingProgress(segment: MarblePathSegment, raw: number): number {
+  const u = clamp(raw, 0, 1);
+  if (segment.easing === "smoothstep") return u * u * (3 - 2 * u);
+  if (segment.easing === "easeIn") return u * u;
+  if (segment.easing === "easeOut") return 1 - (1 - u) * (1 - u);
+  return u;
+}
+
+function cubicBezier(p0: Vec3, c0: Vec3, c1: Vec3, p1: Vec3, u: number): Vec3 {
+  const inv = 1 - u;
+  return [
+    inv ** 3 * p0[0] + 3 * inv * inv * u * c0[0] + 3 * inv * u * u * c1[0] + u ** 3 * p1[0],
+    inv ** 3 * p0[1] + 3 * inv * inv * u * c0[1] + 3 * inv * u * u * c1[1] + u ** 3 * p1[1],
+    inv ** 3 * p0[2] + 3 * inv * inv * u * c0[2] + 3 * inv * u * u * c1[2] + u ** 3 * p1[2],
+  ];
+}
+
+function segmentPoint(segment: MarblePathSegment, raw: number): Vec3 {
+  const u = easingProgress(segment, raw);
+  if (segment.kind === "hold") return segment.from;
+  const c0 = segment.control ?? vecMix(segment.from, segment.to, 1 / 3);
+  const c1 = segment.control2 ?? vecMix(segment.from, segment.to, 2 / 3);
+  const point = cubicBezier(segment.from, c0, c1, segment.to, u);
+  if (segment.easing === "ballistic") {
+    const lift = Math.sin(raw * Math.PI) * (segment.arcHeight ?? 0);
+    return [point[0], point[1] + lift, point[2] + lift * 0.34];
+  }
+  return point;
+}
+
+function buildArcSamples(segment: MarblePathSegment): { samples: number[]; length: number } {
+  const samples = [0];
+  let total = 0;
+  let previous = segmentPoint(segment, 0);
+  for (let index = 1; index <= ARC_SAMPLE_COUNT; index += 1) {
+    const point = segmentPoint(segment, index / ARC_SAMPLE_COUNT);
+    total += vecDistance(previous, point);
+    samples.push(round(total));
+    previous = point;
+  }
+  return { samples, length: round(total) };
+}
+
+function sampleArcDistance(segment: MarblePathSegment, raw: number): number {
+  const samples = segment.arcSamples;
+  if (!samples?.length) return (segment.arcLength ?? vecDistance(segment.from, segment.to)) * clamp(raw, 0, 1);
+  const scaled = clamp(raw, 0, 1) * (samples.length - 1);
+  const index = Math.floor(scaled);
+  const next = Math.min(samples.length - 1, index + 1);
+  const mix = scaled - index;
+  return samples[index]! + (samples[next]! - samples[index]!) * mix;
+}
+
+function tangentAt(segment: MarblePathSegment, raw: number): Vec3 {
+  const before = segmentPoint(segment, clamp(raw - 0.0025, 0, 1));
+  const after = segmentPoint(segment, clamp(raw + 0.0025, 0, 1));
+  const fallback = segment.tangentOut ?? vecNormalize(vecSub(segment.to, segment.from), [1, 0, 0]);
+  return vecNormalize(vecSub(after, before), fallback);
+}
+
+function bankForSegment(segment: MarblePathSegment): number {
+  if (segment.kind === "hold" || segment.kind === "settle") return 0;
+  const tangentIn = segment.tangentIn ?? vecNormalize(vecSub(segment.to, segment.from), [1, 0, 0]);
+  const tangentOut = segment.tangentOut ?? tangentIn;
+  const turn = Math.acos(clamp(vecDot(vecNormalize(tangentIn), vecNormalize(tangentOut)), -1, 1));
+  const radius = Math.max(0.55, (segment.arcLength ?? vecDistance(segment.from, segment.to)) / Math.max(turn, 0.08));
+  const duration = Math.max(EPS, segment.t1 - segment.t0);
+  const speed = (segment.arcLength ?? vecDistance(segment.from, segment.to)) / duration;
+  return round(clamp(Math.atan((speed * speed) / (radius * 9.8)) * 0.42, -0.314, 0.314), 6);
+}
+
+function enrichSegment(segment: MarblePathSegment): MarblePathSegment {
+  const direction = vecNormalize(vecSub(segment.to, segment.from), [1, 0, 0]);
+  const normal = segment.contactNormal ?? [0, 0, 1];
+  const tangentOut = segment.tangentOut ?? direction;
+  const tangentIn = segment.tangentIn ?? direction;
+  const distance = vecDistance(segment.from, segment.to);
+  const tension = clamp(distance * (segment.kind === "arc" ? 0.42 : 0.3), 0.08, segment.kind === "arc" ? 1.4 : 0.8);
+  const enriched: MarblePathSegment = {
+    ...segment,
+    from: vecRound(segment.from, 6),
+    to: vecRound(segment.to, 6),
+    contactNormal: vecRound(vecNormalize(normal, [0, 0, 1]), 6),
+    tangentIn: vecRound(vecNormalize(tangentIn, direction), 6),
+    tangentOut: vecRound(vecNormalize(tangentOut, direction), 6),
+  };
+  if (segment.kind !== "hold" && segment.kind !== "settle") {
+    enriched.control ??= vecRound(vecAdd(segment.from, vecScale(enriched.tangentOut!, tension)), 6);
+    enriched.control2 ??= vecRound(vecSub(segment.to, vecScale(enriched.tangentIn!, tension)), 6);
+  }
+  if (segment.kind === "arc") {
+    enriched.arcHeight ??= round(clamp(0.24 + distance * 0.16, 0.2, 0.65));
+    enriched.gravityScale ??= round(clamp((2 * enriched.arcHeight) / Math.max(EPS, (segment.t1 - segment.t0) ** 2), 6, 14));
+  }
+  if (segment.kind === "rail" || segment.kind === "arc" || segment.kind === "cascade" || segment.kind === "rattle") {
+    const arc = buildArcSamples(enriched);
+    enriched.arcSamples = arc.samples;
+    enriched.arcLength = arc.length;
+    enriched.bank ??= bankForSegment(enriched);
+    enriched.railRadius ??= round(Math.max(0.55, arc.length / Math.max(0.08, Math.abs(enriched.bank ?? 0.08))));
+  } else {
+    enriched.arcLength = 0;
+    enriched.arcSamples = [0, 0];
+    enriched.bank = 0;
+  }
+  return enriched;
 }
 
 function targetKind(kind: MarbleClusterKind, noteIndex: number): MarbleTarget["kind"] {
@@ -289,6 +471,11 @@ function compilePath(song: Song, notes: readonly SongEvent[], targets: readonly 
     }
     const departureT = departureForNextNote(currentNote, nextNote, kind);
     pushHold(path, from, currentNote.t, departureT);
+    const direction = vecNormalize(vecSub(to.pos, from.pos), [1, 0, 0]);
+    const previousDirection = index > 0 ? vecNormalize(vecSub(from.pos, targets[index - 1]!.pos), direction) : direction;
+    const nextDirection = index + 2 < targets.length ? vecNormalize(vecSub(targets[index + 2]!.pos, to.pos), direction) : direction;
+    const outgoing = vecNormalize(vecMix(direction, nextDirection, kind === "arc" ? 0.34 : 0.18), direction);
+    const incoming = vecNormalize(vecMix(direction, previousDirection, kind === "arc" ? 0.22 : 0.12), direction);
     const segment: MarblePathSegment = {
       id: `path:${path.length}`,
       t0: Number(departureT.toFixed(6)),
@@ -297,6 +484,10 @@ function compilePath(song: Song, notes: readonly SongEvent[], targets: readonly 
       to: to.pos,
       kind,
       easing: pathEasing(kind),
+      contactNormal: [0, 0, 1],
+      tangentOut: outgoing,
+      tangentIn: incoming,
+      restitution: kind === "arc" ? 0.48 : kind === "rail" ? 0.28 : 0.18,
       targetId: to.id,
     };
     const clusterId = clusterIdFor(clusters, index + 1);
@@ -306,8 +497,9 @@ function compilePath(song: Song, notes: readonly SongEvent[], targets: readonly 
       Number((Math.max(from.pos[1], to.pos[1]) + (kind === "arc" ? 1.1 : 0.24)).toFixed(4)),
       Number(((from.pos[2] + to.pos[2]) / 2 + (kind === "arc" ? 0.7 : 0.12)).toFixed(4)),
     ];
-    segment.control = mid;
-    path.push(segment);
+    segment.control = vecMix(vecAdd(from.pos, vecScale(outgoing, kind === "arc" ? 0.76 : 0.38)), mid, kind === "arc" ? 0.56 : 0.28);
+    segment.control2 = vecMix(vecSub(to.pos, vecScale(incoming, kind === "arc" ? 0.62 : 0.34)), mid, kind === "arc" ? 0.48 : 0.18);
+    path.push(enrichSegment(segment));
   }
   const last = targets[targets.length - 1]!;
   const lastNote = notes[notes.length - 1]!;
@@ -315,7 +507,7 @@ function compilePath(song: Song, notes: readonly SongEvent[], targets: readonly 
   pushHold(path, last, lastNote.t, lastReleaseT);
   const endT = Math.max(song.meta.durationSec, lastNote.t + 0.001);
   if (endT > lastReleaseT + EPS) {
-    path.push({
+    path.push(enrichSegment({
       id: `path:${path.length}`,
       t0: Number(lastReleaseT.toFixed(6)),
       t1: Number(endT.toFixed(6)),
@@ -323,11 +515,12 @@ function compilePath(song: Song, notes: readonly SongEvent[], targets: readonly 
       to: [Number((last.pos[0] + 0.18).toFixed(4)), Number((last.pos[1] - 0.34).toFixed(4)), last.pos[2]],
       kind: "settle",
       easing: pathEasing("settle"),
+      contactNormal: [0, 0, 1],
       targetId: last.id,
-    });
+    }));
   }
   if (path.length === 0) {
-    path.push({
+    path.push(enrichSegment({
       id: "path:0",
       t0: 0,
       t1: song.meta.durationSec,
@@ -335,8 +528,9 @@ function compilePath(song: Song, notes: readonly SongEvent[], targets: readonly 
       to: [last.pos[0], Number((last.pos[1] - 0.2).toFixed(4)), last.pos[2]],
       kind: "hold",
       easing: "easeOut",
+      contactNormal: [0, 0, 1],
       targetId: last.id,
-    });
+    }));
   }
   return path;
 }
@@ -433,25 +627,41 @@ function validateMarble(notes: readonly SongEvent[], impacts: readonly MarbleImp
   }
 }
 
-export function sampleMarblePath(path: readonly MarblePathSegment[], t: number): MarblePose {
-  if (!path.length) return { pos: [0, 0, 0], segmentId: "none", kind: "hold", progress: 0 };
+export function sampleMarblePose(path: readonly MarblePathSegment[], t: number): MarblePose {
+  if (!path.length) {
+    return {
+      pos: [0, 0, 0],
+      quat: [0, 0, 0, 1],
+      tangent: [1, 0, 0],
+      normal: [0, 0, 1],
+      speed: 0,
+      spin: 0,
+      contact: false,
+      segmentId: "none",
+      kind: "hold",
+      progress: 0,
+    };
+  }
   const segment = path.find((entry) => t >= entry.t0 && t <= entry.t1) ?? (t < path[0]!.t0 ? path[0]! : path[path.length - 1]!);
   const duration = Math.max(EPS, segment.t1 - segment.t0);
   const raw = clamp((t - segment.t0) / duration, 0, 1);
-  const progress = segment.easing === "smoothstep"
-    ? raw * raw * (3 - 2 * raw)
-    : segment.easing === "easeIn"
-      ? raw * raw
-      : segment.easing === "easeOut"
-        ? 1 - (1 - raw) * (1 - raw)
-        : raw;
-  const arcLift = segment.easing === "ballistic" ? Math.sin(progress * Math.PI) * 0.8 : 0;
-  const pos: [number, number, number] = [
-    segment.from[0] + (segment.to[0] - segment.from[0]) * progress,
-    segment.from[1] + (segment.to[1] - segment.from[1]) * progress + arcLift,
-    segment.from[2] + (segment.to[2] - segment.from[2]) * progress + arcLift * 0.35,
-  ];
-  return { pos, segmentId: segment.id, kind: segment.kind, progress };
+  const progress = easingProgress(segment, raw);
+  const pos = vecRound(segmentPoint(segment, raw), 6);
+  const tangent = vecRound(tangentAt(segment, raw), 6);
+  const normal = vecRound(vecNormalize(segment.contactNormal ?? [0, 0, 1], [0, 0, 1]), 6);
+  const speed = round((segment.arcLength ?? vecDistance(segment.from, segment.to)) / duration);
+  const distance = sampleArcDistance(segment, raw);
+  const spin = round(distance / MARBLE_RADIUS);
+  const spinAxis = vecNormalize(vecCross(normal, tangent), [0, 1, 0]);
+  const qRoll = quatFromAxisAngle(spinAxis, spin);
+  const qBank = quatFromAxisAngle(tangent, segment.bank ?? 0);
+  const quat = quatNormalize(quatMultiply(qBank, qRoll)).map((value) => round(value)) as Quat;
+  const contact = segment.kind === "hold" || raw < 0.035 || raw > 0.965;
+  return { pos, quat, tangent, normal, speed, spin, contact, segmentId: segment.id, kind: segment.kind, progress: round(progress) };
+}
+
+export function sampleMarblePath(path: readonly MarblePathSegment[], t: number): MarblePose {
+  return sampleMarblePose(path, t);
 }
 
 export function compileMarble(song: Song, options: CompileMarbleOptions = {}): MarblePerformance {
@@ -488,7 +698,7 @@ export function compileMarble(song: Song, options: CompileMarbleOptions = {}): M
     curves: { energy: song.master.energy },
     events: compileEvents(impacts, clusters, tail),
     statics: {
-      compilerVersion: 1,
+      compilerVersion: 2,
       source: {
         trackId: selected.track.id,
         trackName: selected.track.name,
