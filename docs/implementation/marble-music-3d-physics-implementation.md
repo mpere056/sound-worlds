@@ -544,6 +544,13 @@ Current progress:
   the fallback SVG route language, clamp over-bright frame/glow response, and
   complete an audio watch-through before declaring the machine physically
   satisfying.
+- The next scene slice now hides the SVG fallback overlay by default, removes
+  the non-physical target-order line from the Three.js art path, lowers
+  rail/target/marble glow intensity, and widens/damps the default camera so the
+  one-track fixture reads as a physical mechanism instead of a plotted diagram.
+  Browser still-frame checks at 0 s, 5 s, and 10 s on
+  `untitled-project-418cb58f` showed the graph-like overlay removed and no
+  console warnings; the full audio watch-through remains open.
 - Tests now protect exact impact poses, finite normalized quaternions, monotonic
   arc-length samples, and distance-based spin.
 

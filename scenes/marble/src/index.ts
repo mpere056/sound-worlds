@@ -1,7 +1,6 @@
 import {
   AmbientLight,
   BoxGeometry,
-  BufferGeometry,
   CanvasTexture,
   CatmullRomCurve3,
   CircleGeometry,
@@ -10,8 +9,6 @@ import {
   CylinderGeometry,
   DirectionalLight,
   Group,
-  Line,
-  LineBasicMaterial,
   Material,
   Mesh,
   MeshBasicMaterial,
@@ -263,7 +260,7 @@ function addTargetHardware(target: MarbleTarget, group: Group): Group {
 
 export class MarbleScene {
   readonly backendKind = "three";
-  readonly tuning: MarbleTuning = { glow: 0.86, camera: 1, targetScale: 1, tail: 0.8 };
+  readonly tuning: MarbleTuning = { glow: 0.78, camera: 0.88, targetScale: 1, tail: 0.8 };
   readonly #performance: MarblePerformance;
   readonly #renderer: WebGLRenderer;
   readonly #scene = new Scene();
@@ -275,7 +272,6 @@ export class MarbleScene {
   readonly #marble: Mesh<SphereGeometry, MeshPhysicalMaterial>;
   readonly #marbleGlow: PointLight;
   readonly #marbleShadow: Mesh<CircleGeometry, MeshBasicMaterial>;
-  readonly #pathLine: Line<BufferGeometry, LineBasicMaterial>;
   readonly #svg: SVGSVGElement;
   readonly #svgTargets = new Map<string, SvgTarget>();
   readonly #svgMarble: SVGGElement;
@@ -309,8 +305,6 @@ export class MarbleScene {
     this.#addTargets();
     this.#addRods();
     this.#addRails();
-    this.#pathLine = this.#makePathLine();
-    this.#machine.add(this.#pathLine);
     this.#marble = new Mesh(
       new SphereGeometry(0.28, 36, 20),
       new MeshPhysicalMaterial({ color: 0xf5fcff, roughness: 0.08, metalness: 0.05, transmission: 0.2, thickness: 0.55, clearcoat: 1, clearcoatRoughness: 0.08 }),
@@ -338,6 +332,7 @@ export class MarbleScene {
       height: "100%",
       pointerEvents: "none",
       zIndex: "1",
+      display: "none",
     });
 
     const defs = svgElement("defs");
@@ -371,17 +366,6 @@ export class MarbleScene {
     wall.setAttribute("stroke-width", "2");
     wall.setAttribute("opacity", "0.94");
     svg.append(wall);
-
-    const path = svgElement("polyline");
-    path.setAttribute("points", this.#performance.statics.targets.map((target) => worldToScreen(target.pos).join(",")).join(" "));
-    path.setAttribute("fill", "none");
-    path.setAttribute("stroke", "#7de7ff");
-    path.setAttribute("stroke-width", "5");
-    path.setAttribute("stroke-linecap", "round");
-    path.setAttribute("stroke-linejoin", "round");
-    path.setAttribute("opacity", "0.35");
-    path.setAttribute("filter", "url(#marble-svg-glow)");
-    svg.append(path);
 
     for (const target of this.#performance.statics.targets) {
       const [x, y] = worldToScreen(target.pos);
@@ -518,7 +502,7 @@ export class MarbleScene {
   }
 
   #addRails(): void {
-    const railMaterial = new MeshStandardMaterial({ color: 0x66d9f0, emissive: 0x17495c, emissiveIntensity: 0.32, metalness: 0.45, roughness: 0.28, transparent: true, opacity: 0.74 });
+    const railMaterial = new MeshStandardMaterial({ color: 0x74c9d8, emissive: 0x123544, emissiveIntensity: 0.16, metalness: 0.5, roughness: 0.34, transparent: true, opacity: 0.58 });
     const supportMaterial = new MeshStandardMaterial({ color: 0x1b2028, metalness: 0.78, roughness: 0.24 });
     for (const segment of this.#performance.statics.path) {
       if (segment.kind === "hold" || segment.kind === "settle") continue;
@@ -537,13 +521,6 @@ export class MarbleScene {
       }
     }
     this.#machine.add(this.#rails);
-  }
-
-  #makePathLine(): Line<BufferGeometry, LineBasicMaterial> {
-    const points = this.#performance.statics.targets.map((target) => new Vector3(target.pos[0], target.pos[1], target.pos[2] - 0.16));
-    const geometry = new BufferGeometry().setFromPoints(points);
-    const material = new LineBasicMaterial({ color: 0x7ddcff, transparent: true, opacity: 0.08 });
-    return new Line(geometry, material);
   }
 
   #targetIntensity(targetId: string, t: number): number {
@@ -577,7 +554,7 @@ export class MarbleScene {
       target.group.setAttribute("opacity", String(clamp(0.72 + intensity * 0.3, 0.65, 1)));
       target.group.setAttribute("transform", target.baseTransform);
       target.glow.setAttribute("r", String(44 + intensity * 24));
-      target.glow.setAttribute("opacity", String(clamp(0.08 + intensity * 0.58, 0.06, 0.78)));
+      target.glow.setAttribute("opacity", String(clamp(0.06 + intensity * 0.34, 0.04, 0.48)));
       target.base.setAttribute("stroke-width", String(2 + intensity * 4));
     }
   }
@@ -599,7 +576,7 @@ export class MarbleScene {
     this.#renderSvg(t, pose, pulse);
     this.#marble.scale.setScalar(1 + pulse * 0.16);
     this.#marbleGlow.position.copy(this.#marble.position);
-    this.#marbleGlow.intensity = 0.6 + pulse * 2.4;
+    this.#marbleGlow.intensity = 0.42 + pulse * 1.8;
     for (const [targetId, meshes] of this.#targetMeshes) {
       const intensity = this.#targetIntensity(targetId, t);
       const recoil = this.#targetRecoil(targetId, t);
@@ -611,8 +588,8 @@ export class MarbleScene {
       );
       meshes.base.scale.set(this.tuning.targetScale * (1 + intensity * 0.08), this.tuning.targetScale * (1 - Math.max(0, recoil) * 0.18), this.tuning.targetScale * (1 + intensity * 0.05));
       meshes.hardware.scale.setScalar(1 + intensity * 0.035);
-      meshes.glow.material.opacity = clamp(intensity * 0.42, 0, 0.5);
-      meshes.glow.material.emissiveIntensity = intensity * 1.8;
+      meshes.glow.material.opacity = clamp(intensity * 0.34, 0, 0.38);
+      meshes.glow.material.emissiveIntensity = intensity * 1.25;
       meshes.glow.position.set(meshes.home.x, meshes.home.y, meshes.home.z + recoil * 0.6);
       meshes.glow.scale.setScalar(0.9 + intensity * 1.2 + Math.abs(recoil) * 1.8);
       meshes.shadow.position.set(meshes.home.x - 0.08 - recoil * 0.25, meshes.home.y - 0.1 - recoil * 0.12, -0.405);
@@ -620,21 +597,21 @@ export class MarbleScene {
       meshes.shadow.scale.set(1.4 + Math.abs(recoil) * 2.2, 0.46 + Math.abs(recoil) * 0.42, 1);
     }
     const cameraKey = sampleCamera(this.#performance.camera, t);
-    const cameraLift = Math.sin(t * 0.33) * 0.08 * this.tuning.camera;
-    const orbit = Math.sin(t * 0.21) * 0.34 * this.tuning.camera;
-    const depthParallax = clamp(pose.pos[2], -1.2, 1.2) * 0.22 * this.tuning.camera;
-    const tangentLead = clamp(pose.speed / 12, 0, 0.32);
+    const cameraLift = Math.sin(t * 0.33) * 0.04 * this.tuning.camera;
+    const orbit = Math.sin(t * 0.21) * 0.12 * this.tuning.camera;
+    const depthParallax = clamp(pose.pos[2], -1.2, 1.2) * 0.12 * this.tuning.camera;
+    const tangentLead = clamp(pose.speed / 16, 0, 0.18);
     this.#camera.position.set(
-      cameraKey.pos[0] + pose.pos[0] * 0.1 + orbit - pose.tangent[2] * 0.18,
-      cameraKey.pos[1] + pose.pos[1] * 0.052 + cameraLift + pose.tangent[1] * tangentLead * 0.16,
+      cameraKey.pos[0] + pose.pos[0] * 0.055 + orbit - pose.tangent[2] * 0.08,
+      cameraKey.pos[1] + pose.pos[1] * 0.032 + cameraLift + pose.tangent[1] * tangentLead * 0.08,
       cameraKey.pos[2] - this.tuning.camera * 0.34 + depthParallax,
     );
-    this.#camera.zoom = cameraKey.zoom * this.tuning.camera;
+    this.#camera.zoom = cameraKey.zoom * this.tuning.camera * 0.82;
     this.#camera.updateProjectionMatrix();
     this.#camera.lookAt(
-      cameraKey.pos[0] * 0.2 + pose.pos[0] * 0.2 + pose.tangent[0] * tangentLead,
-      cameraKey.pos[1] * 0.3 + pose.pos[1] * 0.14 + pose.tangent[1] * tangentLead,
-      pose.pos[2] * 0.12,
+      cameraKey.pos[0] * 0.18 + pose.pos[0] * 0.12 + pose.tangent[0] * tangentLead,
+      cameraKey.pos[1] * 0.26 + pose.pos[1] * 0.08 + pose.tangent[1] * tangentLead,
+      pose.pos[2] * 0.08,
     );
     this.#renderer.render(this.#scene, this.#camera);
   }
