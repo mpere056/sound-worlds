@@ -99,6 +99,15 @@ function v3(value: [number, number, number], zOffset = 0): Vector3 {
   return new Vector3(value[0], value[1], value[2] + zOffset);
 }
 
+function railSideAt(points: readonly Vector3[], index: number): Vector3 {
+  const previous = points[Math.max(0, index - 1)] ?? points[index]!;
+  const next = points[Math.min(points.length - 1, index + 1)] ?? points[index]!;
+  const tangent = next.clone().sub(previous);
+  const side = new Vector3(-tangent.y, tangent.x, 0);
+  if (side.lengthSq() < 0.0001) return new Vector3(1, 0, 0);
+  return side.normalize();
+}
+
 function sampleCamera(keys: readonly CameraKeyframe[], t: number): CameraKeyframe {
   if (!keys.length) return { t, pos: [0, 0, 14], zoom: 1, anchor: [0.5, 0.5], ease: "smoothstep" };
   const first = keys[0]!;
@@ -502,22 +511,42 @@ export class MarbleScene {
   }
 
   #addRails(): void {
-    const railMaterial = new MeshStandardMaterial({ color: 0x74c9d8, emissive: 0x123544, emissiveIntensity: 0.16, metalness: 0.5, roughness: 0.34, transparent: true, opacity: 0.58 });
-    const supportMaterial = new MeshStandardMaterial({ color: 0x1b2028, metalness: 0.78, roughness: 0.24 });
+    const railMaterial = new MeshStandardMaterial({ color: 0x75c5d0, emissive: 0x0e2c36, emissiveIntensity: 0.12, metalness: 0.54, roughness: 0.38, transparent: true, opacity: 0.62 });
+    const supportMaterial = new MeshStandardMaterial({ color: 0x151a20, metalness: 0.8, roughness: 0.26 });
+    const tieMaterial = new MeshStandardMaterial({ color: 0x24323b, metalness: 0.38, roughness: 0.45 });
     for (const segment of this.#performance.statics.path) {
       if (segment.kind === "hold" || segment.kind === "settle") continue;
       const points = this.#segmentPoints(segment);
       if (points.length < 2) continue;
-      const curve = new CatmullRomCurve3(points, false, "centripetal", 0.35);
-      const tube = new Mesh(new TubeGeometry(curve, Math.max(8, points.length * 3), segment.kind === "arc" ? 0.018 : 0.024, 8, false), railMaterial.clone());
-      this.#rails.add(tube);
-      const first = points[0]!;
-      const last = points[points.length - 1]!;
-      for (const point of [first, last]) {
-        const support = new Mesh(new CylinderGeometry(0.018, 0.018, Math.max(0.18, point.z + 0.42), 8), supportMaterial.clone());
+      const railGap = segment.kind === "rattle" || segment.kind === "cascade" ? 0.085 : 0.115;
+      const leftPoints = points.map((point, index) => point.clone().add(railSideAt(points, index).multiplyScalar(railGap)));
+      const rightPoints = points.map((point, index) => point.clone().add(railSideAt(points, index).multiplyScalar(-railGap)));
+      for (const sidePoints of [leftPoints, rightPoints]) {
+        const curve = new CatmullRomCurve3(sidePoints, false, "centripetal", 0.35);
+        const tube = new Mesh(new TubeGeometry(curve, Math.max(8, sidePoints.length * 3), segment.kind === "arc" ? 0.014 : 0.018, 8, false), railMaterial.clone());
+        this.#rails.add(tube);
+      }
+      const tieStep = segment.kind === "arc" ? 5 : 4;
+      for (let index = 1; index < points.length - 1; index += tieStep) {
+        const point = points[index]!;
+        const side = railSideAt(points, index);
+        const tie = new Mesh(new CylinderGeometry(0.012, 0.012, railGap * 2.42, 6), tieMaterial.clone());
+        tie.position.copy(point);
+        tie.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), side);
+        this.#rails.add(tie);
+      }
+      const supportIndexes = Array.from(new Set([0, Math.floor(points.length / 2), points.length - 1]));
+      for (const index of supportIndexes) {
+        const point = points[index]!;
+        const supportLength = Math.max(0.18, point.z + 0.42);
+        const support = new Mesh(new CylinderGeometry(0.016, 0.016, supportLength, 8), supportMaterial.clone());
         support.position.set(point.x, point.y, (point.z - 0.42) / 2);
         support.rotation.x = Math.PI / 2;
         this.#rails.add(support);
+        const collar = new Mesh(new CylinderGeometry(0.038, 0.038, 0.018, 12), supportMaterial.clone());
+        collar.position.copy(point);
+        collar.rotation.x = Math.PI / 2;
+        this.#rails.add(collar);
       }
     }
     this.#machine.add(this.#rails);

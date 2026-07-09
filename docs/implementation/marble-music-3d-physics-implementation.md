@@ -551,6 +551,11 @@ Current progress:
   Browser still-frame checks at 0 s, 5 s, and 10 s on
   `untitled-project-418cb58f` showed the graph-like overlay removed and no
   console warnings; the full audio watch-through remains open.
+- Rails now render as paired tubes with cross ties, wall standoffs, and small
+  collars instead of a single route tube. The same 0 s / 5 s / 10 s browser
+  still-frame check showed the route reading more like hardware, with no
+  browser warnings. Dense/local mechanism readability and the full audio
+  watch-through remain open.
 - Tests now protect exact impact poses, finite normalized quaternions, monotonic
   arc-length samples, and distance-based spin.
 
