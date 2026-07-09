@@ -116,7 +116,7 @@ describe("Marble Music compiler", () => {
     const moving = performance.statics.path.filter((segment) => segment.kind !== "drop" && segment.kind !== "settle" && segment.kind !== "hold");
     const averageSpeeds = moving.map((segment) => (segment.arcLength ?? 0) / (segment.t1 - segment.t0));
     expect(Math.min(...averageSpeeds)).toBeGreaterThan(1.45);
-    expect(Math.max(...averageSpeeds)).toBeLessThan(3.1);
+    expect(Math.max(...averageSpeeds)).toBeLessThan(3.3);
     expect(Math.max(...averageSpeeds) / Math.min(...averageSpeeds)).toBeLessThan(2);
     for (const segment of moving) {
       expect(segment.gravityScale).toBeCloseTo(3.6, 6);
@@ -180,9 +180,9 @@ describe("Marble Music compiler", () => {
     const song = buildFixtureSong({ bars: 3, patterns: [{ role: "keys", beats: [0, 1.5, 3.5, 5.5, 7.5, 9.5], pitch: 52, kind: "note" }] });
     const performance = compileMarble(song);
     const depths = performance.statics.targets.map((target) => target.contactPos[2]);
-    expect(Math.max(...depths) - Math.min(...depths)).toBeGreaterThan(0.55);
-    expect(Math.min(...depths)).toBeGreaterThanOrEqual(0.15);
-    expect(Math.max(...depths)).toBeLessThanOrEqual(1.35);
+    expect(Math.max(...depths) - Math.min(...depths)).toBeGreaterThan(1.4);
+    expect(Math.min(...depths)).toBeGreaterThanOrEqual(0.25);
+    expect(Math.max(...depths)).toBeLessThanOrEqual(3.25);
     expect(performance.statics.targets.some((target) => Math.abs(target.rotation[0]) > 0.08)).toBe(true);
     for (const impact of performance.statics.impacts) {
       const target = performance.statics.targets[impact.noteIndex]!;

@@ -23,11 +23,11 @@ const EPS = 1e-6;
 const MARBLE_RADIUS = 0.28;
 const MARBLE_GRAVITY = 3.6;
 const MARBLE_HORIZONTAL_SPEED = 1.6;
-const MARBLE_DEPTH_SPEED = 0.72;
+const MARBLE_DEPTH_SPEED = 1;
 const MARBLE_INITIAL_DROP_SPEED = 1.6;
 const MARBLE_X_LIMIT = 3.1;
-const MARBLE_DEPTH_MIN = 0.15;
-const MARBLE_DEPTH_MAX = 1.35;
+const MARBLE_DEPTH_MIN = 0.25;
+const MARBLE_DEPTH_MAX = 3.25;
 const ARC_SAMPLE_COUNT = 24;
 const ROUTE_SAMPLE_RATE = 120;
 const ROUTE_CLEARANCE = 0.012;
@@ -497,7 +497,7 @@ function placeTarget(
 
 function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics): MarbleTarget[] {
   const span = Math.max(1, metrics.pitchRange);
-  const positions: Vec3[] = [[0, 5.65, 0.55]];
+  const positions: Vec3[] = [[0, 5.65, 0.7]];
   const outgoingVelocities: Vec3[] = [];
   let horizontalSign = -1;
   let depthSign = 1;
@@ -955,7 +955,7 @@ export function compileMarble(song: Song, options: CompileMarbleOptions = {}): M
     curves: { energy: song.master.energy },
     events: compileEvents(impacts, clusters, tail),
     statics: {
-      compilerVersion: 7,
+      compilerVersion: 8,
       source: {
         trackId: selected.track.id,
         trackName: selected.track.name,
