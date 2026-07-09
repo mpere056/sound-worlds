@@ -515,7 +515,7 @@ export class MarbleScene {
     const supportMaterial = new MeshStandardMaterial({ color: 0x151a20, metalness: 0.8, roughness: 0.26 });
     const tieMaterial = new MeshStandardMaterial({ color: 0x24323b, metalness: 0.38, roughness: 0.45 });
     for (const segment of this.#performance.statics.path) {
-      if (segment.kind === "hold" || segment.kind === "settle") continue;
+      if (segment.kind === "hold" || segment.kind === "settle" || segment.kind === "drop" || segment.kind === "arc") continue;
       const points = this.#segmentPoints(segment);
       if (points.length < 2) continue;
       const railGap = segment.kind === "rattle" || segment.kind === "cascade" ? 0.085 : 0.115;
@@ -523,10 +523,10 @@ export class MarbleScene {
       const rightPoints = points.map((point, index) => point.clone().add(railSideAt(points, index).multiplyScalar(-railGap)));
       for (const sidePoints of [leftPoints, rightPoints]) {
         const curve = new CatmullRomCurve3(sidePoints, false, "centripetal", 0.35);
-        const tube = new Mesh(new TubeGeometry(curve, Math.max(8, sidePoints.length * 3), segment.kind === "arc" ? 0.014 : 0.018, 8, false), railMaterial.clone());
+        const tube = new Mesh(new TubeGeometry(curve, Math.max(8, sidePoints.length * 3), 0.018, 8, false), railMaterial.clone());
         this.#rails.add(tube);
       }
-      const tieStep = segment.kind === "arc" ? 5 : 4;
+      const tieStep = 4;
       for (let index = 1; index < points.length - 1; index += tieStep) {
         const point = points[index]!;
         const side = railSideAt(points, index);

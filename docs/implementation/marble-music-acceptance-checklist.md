@@ -24,10 +24,10 @@ Pass only if all are true:
 - every selected note produces a visible impact or belongs to a visible dense
   cluster;
 - visible impacts land at the same moment as heard note attacks;
-- after an impact, the marble remains visually associated with that note while
-  it sustains whenever the next-note gap allows it;
-- travel to the next note is back-solved from the next note onset instead of
-  starting immediately after the previous onset by default;
+- after an impact, the target may resonate but the marble immediately continues
+  into the next physical segment;
+- travel occupies the complete interval between adjacent note onsets and never
+  collapses into a late sprint;
 - the user can perceive the sync without enabling debug overlays;
 - scrubbing to a hit time shows the marble contacting or activating the target;
 - no note is silently dropped;
@@ -40,7 +40,7 @@ Pass only if all are true:
 
 - the marble never teleports;
 - fast passages become rolls, rattles, cascades, or compact mechanisms;
-- long gaps show plausible travel, holding, or camera movement;
+- long gaps show plausible continuous travel and camera movement;
 - the marble has readable weight, spin, and contact;
 - the route reads as a designed kinetic machine rather than a plotted line.
 

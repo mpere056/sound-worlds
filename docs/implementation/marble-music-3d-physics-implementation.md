@@ -31,6 +31,18 @@ differences, or dense passages.
 
 Online references checked while planning this slice:
 
+- [AndrewB330/MusicMarbles](https://github.com/AndrewB330/MusicMarbles)
+  - advances a complete marble world in fixed 15 ms ticks with smaller physics
+    micro-steps, gravity integration, marble/plank collision impulses, and
+    penetration correction;
+  - its generator simulates forward to each requested note time, places a
+    collision plank at the predicted marble pose, and rewinds/backtracks when a
+    candidate would cause an earlier collision;
+  - the important lesson for this implementation is continuous world motion:
+    a note is a collision deadline, not a switch that starts movement;
+  - Marble Music keeps deterministic absolute-time sampling, but must preserve
+    the same continuous-motion invariant between every pair of impacts.
+
 - [Rapier JavaScript rigid bodies](https://rapier.rs/docs/user_guides/javascript/rigid_bodies/)
   and [colliders](https://rapier.rs/docs/user_guides/javascript/colliders/)
   - good if we later want dynamic secondary props, contact events, joints, or
@@ -158,16 +170,20 @@ sampleMarblePath(path, note.t).pos === target.pos + contactOffset
 The marble may arc, roll, bank, or bounce, but the final contact pose belongs
 to the note onset.
 
-### 2. Motion starts from the next impact
+### 2. Every impact immediately continues the motion
 
-Travel should be back-solved from the next note:
+The complete interval between adjacent impacts belongs to motion:
 
 ```text
-travelStart = nextHitT - travelDuration
+segment.t0 = currentHitT
+segment.t1 = nextHitT
 ```
 
-The previous note may hold/resonate until `travelStart` when possible. This is
-what made `untitled-project-418cb58f` feel mostly synced.
+The target may recoil and resonate after contact, but the hero marble must not
+remain pinned there because the source note has duration. Free-flight arcs use
+constant-acceleration parabolas; rail segments keep nonzero path velocity at
+their ends. Dense notes still use compact local mechanisms, but those
+mechanisms must also move continuously.
 
 ### 3. The viewer needs visible forces
 
@@ -804,8 +820,8 @@ Before this gate can pass, review at least:
 - 0 s, 5 s, and 10 s still frames with overlays off;
 - a continuous audio watch-through of the full 12.5 s fixture;
 - impact scrubs on several note hits;
-- one between-note scrub where the marble should be holding or preparing rather
-  than randomly drifting.
+- several between-note scrubs that prove the marble advances throughout the
+  interval rather than waiting and then sprinting into the next impact.
 
 ## Verification checklist
 
@@ -820,8 +836,10 @@ Before this gate can pass, review at least:
 - [ ] Overlay-off still frames at 0 s, 5 s, and 10 s: no graph-like route line,
       no over-bright frame, marble/active target remain the focal point
 - [ ] Scrub to every impact: marble is visibly at/near the correct target
-- [ ] Scrub between impacts: marble is either holding, preparing, or traveling
-      for a musical reason
+- [x] Compiler tests reject stationary holds between impacts and verify first
+      drop, full-interval travel, exact arrivals, and accumulated roll
+- [ ] Scrub between impacts: the marble visibly advances throughout the
+      interval with no late launch or target-to-target jump
 - [ ] Hot reload/concept switch: no frozen overlays, no growing platforms, no
       runaway memory
 

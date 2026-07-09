@@ -18,7 +18,7 @@ renderer/motion work order is
 
 ## Current implementation slice
 
-As of 2026-07-07, the first implementation slice exists:
+As of 2026-07-09, the first implementation slice exists:
 
 - `@reaper-viz/compiler-marble` compiles `song.json` to
   `performance.marble.json`;
@@ -28,14 +28,13 @@ As of 2026-07-07, the first implementation slice exists:
 - existing Pixi scenes declare `backendKind: "pixi"` and Marble declares
   `backendKind: "three"`;
 - camera keys are compiler-authored from the selected impacts, dense clusters,
-  and final hold, and the Three.js scene samples those keys directly;
+  and final settle, and the Three.js scene samples those keys directly;
 - `compile:marble -- projects\untitled-project-6d2e04f7` emits 20 low-track
   impacts, 0 dropped notes, 0 timing mismatches, 0 teleport segments, and a
   final tail resonance span.
 - the new one-track package `projects\untitled-project-418cb58f` compiles to
-  one-marble motion where note impacts remain exact, sustained notes create
-  hold segments, and travel to the next target is back-solved from the next
-  note onset.
+  one-marble motion where note impacts remain exact and every adjacent pair is
+  joined by a continuous full-interval trajectory with no stationary hold.
 
 This is an engineering-preview slice. It proves the compiler/app/Three.js path,
 but it does not yet satisfy the final aesthetic or human sync-readability gate.
@@ -56,15 +55,15 @@ Everything else exists to support that:
 If the viewer cannot connect heard notes to visible impacts without reading an
 overlay, the implementation is not done.
 
-The important 2026-07-07 sync finding is that impacts can be numerically exact
-while the motion still feels wrong. The marble must not leave a sustained note
-immediately just because the note attack already happened. For one-note-at-a-time
-tracks, the correct lifecycle is:
+The important 2026-07-09 sync finding is that impacts can be numerically exact
+while the motion still feels wrong. Holding the marble for most of a note gap
+and compressing travel into the final fraction of the interval reads as a
+teleport. For one-note-at-a-time tracks, the correct lifecycle is:
 
 ```text
 land exactly on note onset
-hold / resonate while the note sustains
-depart only when enough setup time remains
+let the struck target resonate independently
+continue moving immediately through the full note interval
 arrive exactly on the next note onset
 ```
 
@@ -147,7 +146,7 @@ The exact TypeScript may evolve, but these concepts should remain stable.
 interface MarblePerformance extends Performance {
   concept: "marble";
   statics: {
-    compilerVersion: 1;
+    compilerVersion: 3;
     source: MarbleSource;
     metrics: MarbleTrackMetrics;
     targets: MarbleTarget[];
@@ -279,22 +278,22 @@ The scene must not advance a physics simulation with `dt` and hope the marble
 arrives. Scrubbing to time `t` must produce the same frame as playing to time
 `t`.
 
-### Sustain-aware path timing
+### Continuous impact-to-impact path timing
 
-The compiler should treat a note as more than a point in time when the source
-event has a duration. For each pair of notes:
+The compiler treats each note onset as a collision deadline. Source duration
+may control target resonance, but it must not pin the hero marble in place. For
+each pair of notes:
 
 1. place the marble exactly at the current target on the current note onset;
-2. hold the marble on that target while the current note sustains, when the
-   next-note gap allows it;
-3. compute a travel duration from the path kind and available interval;
-4. depart at `nextHitT - travelDuration`;
-5. arrive exactly on `nextHitT`.
+2. launch the next path segment at that same onset;
+3. use the entire interval for rail motion, a gravity-shaped arc, or a compact
+   dense-note mechanism;
+4. arrive exactly on `nextHitT` without a zero-velocity easing stop.
 
-If there is not enough time to both hold and travel, travel may begin before the
-source note fully releases, but the next impact still owns the timing. Dense
-passages should become local rattle/cascade mechanisms instead of impossible
-large jumps.
+Dense passages should become local rattle/cascade mechanisms instead of
+impossible large jumps. A delayed first note receives a compiled accelerating
+drop so the marble enters the world before the first impact rather than
+appearing on its target.
 
 ### Frame-accuracy detail
 
@@ -379,7 +378,7 @@ Use these first thresholds:
 | `< 90 ms` | rattle | same local object, rapid peg/chime flashes |
 | `90-220 ms` | cascade | tight stepped peg/plate sequence |
 | `220-700 ms` | normal | rail, short arc, or drop |
-| `> 700 ms` | cinematic | longer travel, hold, camera drift, visible setup |
+| `> 700 ms` | cinematic | full-interval gravity arc, camera drift, visible setup |
 
 Dense notes are not a failure. They are an instruction to design a mechanism
 that can visibly articulate them.
@@ -408,7 +407,7 @@ For each note or cluster:
 - the segment ending at the target must end at the note hit time;
 - `segment.t1` must equal the impact time for that target;
 - segment lengths must be plausible for the available gap;
-- impossible transitions must be converted into rattle/cascade/hold logic,
+- impossible transitions must be converted into compact rattle/cascade logic,
   never teleportation.
 
 Path sampling must be pure:
@@ -442,7 +441,7 @@ by the scene as part of the performance contract:
 - deterministic follow on the marble;
 - brief hit emphasis on important notes or clusters;
 - no frantic cuts for dense passages;
-- final hold frames the completed sculpture.
+- final settle frames the completed sculpture while the audio tail decays.
 
 The current implementation creates keys from the first selected impact, dense
 cluster starts, regular note groups, the final selected impact, and the audio

@@ -39,20 +39,50 @@ describe("Marble Music compiler", () => {
     expect(performance.statics.tail.audioEndT).toBe(performance.durationSec);
   });
 
-  it("holds the marble on sustained notes before traveling to the next impact", () => {
+  it("moves continuously after an impact even when the note is sustained", () => {
     const song = buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [0, 3], pitch: 55, kind: "note" }] });
     song.tracks[0]!.events[0]!.dur = 1.1;
     const performance = compileMarble(song);
     const firstTarget = performance.statics.targets[0]!;
-    const firstHold = performance.statics.path.find((segment) => segment.kind === "hold" && segment.targetId === firstTarget.id && segment.t1 > 0.5);
-    expect(firstHold).toBeDefined();
+    const travel = performance.statics.path.find((segment) => segment.targetId === performance.statics.targets[1]!.id && segment.kind !== "settle");
+    expect(travel?.t0).toBe(performance.statics.impacts[0]!.t);
+    expect(travel?.t1).toBe(performance.statics.impacts[1]!.t);
     const pose = sampleMarblePath(performance.statics.path, 0.9);
-    expect(pose.kind).toBe("hold");
-    expect(pose.pos).toEqual(firstTarget.pos);
+    expect(pose.kind).toBe("arc");
+    expect(pose.pos).not.toEqual(firstTarget.pos);
     const secondImpact = performance.statics.impacts[1]!;
     const secondPose = sampleMarblePath(performance.statics.path, secondImpact.t);
     const secondTarget = performance.statics.targets[1]!;
     secondPose.pos.forEach((value, index) => expect(value).toBeCloseTo(secondTarget.pos[index]!, 6));
+  });
+
+  it("drops into a delayed first note instead of appearing on its target", () => {
+    const song = buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [1, 2], pitch: 60, kind: "note" }] });
+    const performance = compileMarble(song);
+    const drop = performance.statics.path[0]!;
+    expect(drop.kind).toBe("drop");
+    expect(drop.t0).toBe(0);
+    expect(drop.t1).toBe(performance.statics.impacts[0]!.t);
+    const middle = sampleMarblePose(performance.statics.path, drop.t1 / 2);
+    expect(middle.pos[1]).toBeGreaterThan(drop.to[1]);
+    expect(middle.pos[1]).toBeLessThan(drop.from[1]);
+    const impact = sampleMarblePose(performance.statics.path, drop.t1);
+    expect(impact.pos).toEqual(drop.to);
+  });
+
+  it("does not insert stationary holds between note impacts", () => {
+    const song = buildFixtureSong({ bars: 2, patterns: [{ role: "keys", beats: [0, 1, 3, 6], pitch: 55, kind: "note" }] });
+    const performance = compileMarble(song);
+    expect(performance.statics.path.some((segment) => segment.kind === "hold")).toBe(false);
+    for (let index = 0; index < performance.statics.impacts.length - 1; index += 1) {
+      const current = performance.statics.impacts[index]!;
+      const next = performance.statics.impacts[index + 1]!;
+      const segment = performance.statics.path.find((entry) => entry.t0 === current.t && entry.t1 === next.t);
+      expect(segment).toBeDefined();
+      const quarter = sampleMarblePose(performance.statics.path, current.t + (next.t - current.t) * 0.25);
+      const threeQuarter = sampleMarblePose(performance.statics.path, current.t + (next.t - current.t) * 0.75);
+      expect(quarter.pos).not.toEqual(threeQuarter.pos);
+    }
   });
 
   it("samples exact impact poses with physical metadata", () => {
@@ -85,6 +115,16 @@ describe("Marble Music compiler", () => {
     expect(middlePose.spin).toBeGreaterThan(0);
     expect(endPose.spin).toBeCloseTo((moving!.arcLength ?? 0) / 0.28, 4);
     expect(middlePose.speed).toBeGreaterThan(0);
+  });
+
+  it("keeps accumulated roll continuous across impacts", () => {
+    const song = buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [0, 1, 2], pitch: 55, kind: "note" }] });
+    const performance = compileMarble(song);
+    const impactT = performance.statics.impacts[1]!.t;
+    const before = sampleMarblePose(performance.statics.path, impactT - 0.0001);
+    const after = sampleMarblePose(performance.statics.path, impactT + 0.0001);
+    expect(after.spin).toBeGreaterThanOrEqual(before.spin);
+    expect(after.spin - before.spin).toBeLessThan(0.02);
   });
 
   it("authors camera keys from selected target timing through the tail", () => {
