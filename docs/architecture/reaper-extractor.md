@@ -214,4 +214,6 @@ Never silently omit selected material.
 
 If a realtime visualizer is later desired, build a separate telemetry path
 (for example track meters or dedicated analyzer effects). It should complement,
-not replace, this offline extractor.
+not replace, this offline extractor. The first recorded use case is
+[Realtime Marble Music](../implementation/realtime-marble-music.md), which
+turns live REAPER MIDI notes into collision platforms beneath a falling marble.

@@ -41,6 +41,12 @@ depth while preserving exact compiled note arrivals. After the one-track
 generator feels satisfying, extend to a two-track marble duet, then larger
 arrangements.
 
+A separate [Realtime Marble Music future plan](realtime-marble-music.md) is now
+recorded for a later live-performance mode. It uses a continuously falling
+marble, a dedicated low-latency REAPER MIDI telemetry path, and note-spawned
+physics platforms whose angle and restitution respond to pitch and velocity.
+It starts only after offline one-track Marble Music passes its human gate.
+
 Metro-specific consequence: that export can validate MIDI station timing,
 train arrivals, line identity, and fallback honesty, but it cannot validate
 M4 chorus rings/laps. M4 must be judged on a region-bearing reference song with

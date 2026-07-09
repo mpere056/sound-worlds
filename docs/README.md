@@ -46,6 +46,10 @@ what works today, what was verified, and what should be built next.
 - [Marble Music acceptance checklist](implementation/marble-music-acceptance-checklist.md)
   - the sync, motion, visual, and tail gates before moving from one-track to
   two-track Marble Music.
+- [Realtime Marble Music future plan](implementation/realtime-marble-music.md)
+  - a later live-performance mode using REAPER MIDI telemetry, a continuously
+  falling marble, and note-spawned physics platforms; not part of the current
+  offline implementation.
 - [Waveform Runner implementation](implementation/waveform-runner-implementation.md)
   - the compiled runner architecture and R1-R5 build order.
 - [Metro Map implementation](implementation/metro-map-implementation.md) - the
