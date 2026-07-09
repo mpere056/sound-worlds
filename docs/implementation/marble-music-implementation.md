@@ -146,7 +146,7 @@ The exact TypeScript may evolve, but these concepts should remain stable.
 interface MarblePerformance extends Performance {
   concept: "marble";
   statics: {
-    compilerVersion: 3;
+    compilerVersion: 4;
     source: MarbleSource;
     metrics: MarbleTrackMetrics;
     targets: MarbleTarget[];
@@ -389,16 +389,19 @@ Target placement should read as a physical wall sculpture, not a chart.
 
 Rules:
 
-- time generally progresses downward and/or around a central route;
-- pitch controls vertical/lateral offset within a bounded wall area;
-- repeated pitches reuse nearby `familyId` positions;
+- simulate one controlled launch velocity under one gravity constant from each
+  impact to the next note time;
+- place the next target at that predicted collision position;
+- timing controls route geometry; pitch must not change travel distance or
+  force a different marble speed;
 - pitch class can choose material/color family;
 - low pitches should feel heavier/larger;
 - high pitches can use smaller/brighter targets;
 - dense clusters should become compact arrays, not spread-out zigzags.
 
-The compiler may use a deterministic relaxation pass to avoid overlaps, but it
-must preserve note order and readable route flow.
+The compiler may reflect the horizontal launch direction at board bounds, but
+must preserve launch-speed and gravity invariants. Platform rotation should be
+derived from the incoming-to-outgoing collision impulse.
 
 ### 5. Back-solve path segments
 
@@ -423,7 +426,8 @@ Recommended path-solver constraints:
 - `t0 < t1` for every moving segment;
 - adjacent segments must connect within a small epsilon, e.g. `0.001` world
   units;
-- long travel should prefer rails/arcs over sudden straight-line interpolation;
+- average travel speed must remain inside the configured physical band; longer
+  gaps should move the next platform instead of accelerating the marble;
 - extremely short gaps should collapse into local mechanisms, not high-speed
   travel;
 - each impossible transition should be logged in `diagnostics.impossibleGaps`
@@ -433,21 +437,21 @@ Recommended path-solver constraints:
 
 ### 6. Compile camera
 
-The first camera can be simple but must be authored by the compiler and sampled
-by the scene as part of the performance contract:
+The first camera is deliberately simple: x/y follows the sampled marble pose,
+while compiler keys retain depth/zoom and later composition options:
 
+- the marble must remain inside the viewport at every sampled time;
+- start with the marble near center; fancier anticipation can come later;
 - close enough to see contact;
-- wide enough to understand the next few targets;
+- wide enough to understand nearby targets, not the complete sculpture;
 - deterministic follow on the marble;
 - brief hit emphasis on important notes or clusters;
 - no frantic cuts for dense passages;
 - final settle frames the completed sculpture while the audio tail decays.
 
-The current implementation creates keys from the first selected impact, dense
-cluster starts, regular note groups, the final selected impact, and the audio
-end. This is still an engineering-preview camera, but it establishes the
-important rule: camera motion is compiled from song/target timing rather than
-free-running in the renderer.
+The current implementation follows the marble directly and samples compiled
+keys for depth/zoom. It is an engineering-preview camera whose first invariant
+is subject visibility; cinematic framing remains deferred.
 
 ### 7. Compile tail resonance
 

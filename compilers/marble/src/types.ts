@@ -73,6 +73,7 @@ export interface MarblePathSegment {
   easing: MarbleEasing;
   control?: [number, number, number];
   control2?: [number, number, number];
+  contactNormalStart?: [number, number, number];
   contactNormal?: [number, number, number];
   tangentIn?: [number, number, number];
   tangentOut?: [number, number, number];

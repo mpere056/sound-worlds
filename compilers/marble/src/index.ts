@@ -19,9 +19,12 @@ const W = 1080;
 const H = 1920;
 const DENSE_RATTLE = 0.09;
 const DENSE_CASCADE = 0.22;
-const NORMAL_TRAVEL = 0.7;
 const EPS = 1e-6;
 const MARBLE_RADIUS = 0.28;
+const MARBLE_GRAVITY = 3.6;
+const MARBLE_HORIZONTAL_SPEED = 1.6;
+const MARBLE_INITIAL_DROP_SPEED = 1.6;
+const MARBLE_X_LIMIT = 3.1;
 const ARC_SAMPLE_COUNT = 24;
 const PITCH_COLORS = ["#6ee7ff", "#8df5c8", "#f7d06a", "#ff9bd6", "#9ea7ff", "#f4fbff", "#7affd7", "#ffb86b", "#c2ff72", "#b9d8ff", "#ffd1f2", "#d8f6ff"];
 
@@ -205,13 +208,15 @@ function clusterKind(gap: number | null): MarbleClusterKind {
 function pathKind(gap: number): MarblePathKind {
   if (gap < DENSE_RATTLE) return "rattle";
   if (gap < DENSE_CASCADE) return "cascade";
-  if (gap < NORMAL_TRAVEL) return "rail";
   return "arc";
 }
 
+function isBallisticPath(kind: MarblePathKind): boolean {
+  return kind === "arc" || kind === "rattle" || kind === "cascade";
+}
+
 function pathEasing(kind: MarblePathKind): MarblePathSegment["easing"] {
-  if (kind === "arc") return "ballistic";
-  if (kind === "drop") return "easeIn";
+  if (isBallisticPath(kind) || kind === "drop") return "ballistic";
   if (kind === "rail") return "linear";
   if (kind === "settle" || kind === "hold") return "easeOut";
   return "linear";
@@ -237,8 +242,16 @@ function cubicBezier(p0: Vec3, c0: Vec3, c1: Vec3, p1: Vec3, u: number): Vec3 {
 function segmentPoint(segment: MarblePathSegment, raw: number): Vec3 {
   const u = easingProgress(segment, raw);
   if (segment.kind === "hold") return segment.from;
-  if (segment.kind === "drop") return vecMix(segment.from, segment.to, u);
-  if (segment.kind === "arc") {
+  if (segment.kind === "drop") {
+    const duration = Math.max(EPS, segment.t1 - segment.t0);
+    const elapsed = clamp(raw, 0, 1) * duration;
+    const gravity = segment.gravityScale ?? MARBLE_GRAVITY;
+    const velocityY = (segment.to[1] - segment.from[1] + 0.5 * gravity * duration * duration) / duration;
+    const point = vecMix(segment.from, segment.to, raw);
+    point[1] = segment.from[1] + velocityY * elapsed - 0.5 * gravity * elapsed * elapsed;
+    return point;
+  }
+  if (isBallisticPath(segment.kind)) {
     const point = vecMix(segment.from, segment.to, raw);
     point[1] += 4 * (segment.arcHeight ?? 0) * raw * (1 - raw);
     return point;
@@ -304,14 +317,15 @@ function enrichSegment(segment: MarblePathSegment): MarblePathSegment {
     tangentIn: vecRound(vecNormalize(tangentIn, direction), 6),
     tangentOut: vecRound(vecNormalize(tangentOut, direction), 6),
   };
+  if (segment.contactNormalStart) enriched.contactNormalStart = vecRound(vecNormalize(segment.contactNormalStart, [0, 0, 1]), 6);
   if (segment.kind !== "hold" && segment.kind !== "settle") {
     enriched.control ??= vecRound(vecAdd(segment.from, vecScale(enriched.tangentOut!, tension)), 6);
     enriched.control2 ??= vecRound(vecSub(segment.to, vecScale(enriched.tangentIn!, tension)), 6);
   }
-  if (segment.kind === "arc") {
+  if (isBallisticPath(segment.kind)) {
     const duration = Math.max(EPS, segment.t1 - segment.t0);
-    enriched.arcHeight ??= round(clamp((9.8 * duration * duration) / 8, 0.18, 1.4));
-    enriched.gravityScale ??= round((8 * enriched.arcHeight) / (duration * duration));
+    enriched.gravityScale ??= MARBLE_GRAVITY;
+    enriched.arcHeight ??= round((enriched.gravityScale * duration * duration) / 8);
   }
   if (segment.kind !== "hold") {
     const arc = buildArcSamples(enriched);
@@ -334,30 +348,59 @@ function targetKind(kind: MarbleClusterKind, noteIndex: number): MarbleTarget["k
   return noteIndex % 5 === 4 ? "resonator" : "plate";
 }
 
+function targetSurfaceNormal(rotation: number): Vec3 {
+  return [-Math.sin(rotation), Math.cos(rotation), 0];
+}
+
 function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics): MarbleTarget[] {
   const span = Math.max(1, metrics.pitchRange);
-  const byPitch = new Map<number, number>();
+  const positions: Vec3[] = [[0, 5.65, 0]];
+  const outgoingVelocities: Vec3[] = [];
+  let horizontalSign = -1;
+
+  for (let index = 0; index < notes.length - 1; index += 1) {
+    const gap = Math.max(EPS, notes[index + 1]!.t - notes[index]!.t);
+    const from = positions[index]!;
+    let velocityX = horizontalSign * MARBLE_HORIZONTAL_SPEED;
+    if (Math.abs(from[0] + velocityX * gap) > MARBLE_X_LIMIT) {
+      horizontalSign *= -1;
+      velocityX = horizontalSign * MARBLE_HORIZONTAL_SPEED;
+    }
+    const velocityZ = Math.sin((index + 1) * 0.83) * 0.16;
+    const velocity: Vec3 = [velocityX, 0, velocityZ];
+    outgoingVelocities.push(velocity);
+    positions.push([
+      from[0] + velocityX * gap,
+      from[1] - 0.5 * MARBLE_GRAVITY * gap * gap,
+      from[2] + velocityZ * gap,
+    ]);
+    if ((index + 1) % 2 === 0) horizontalSign *= -1;
+  }
+
   return notes.map((note, index) => {
     const pitch = note.pitch ?? metrics.pitchMin;
     const pitchNorm = (pitch - metrics.pitchMin) / span;
-    const timeNorm = notes.length <= 1 ? 0.5 : index / (notes.length - 1);
     const gap = index > 0 ? note.t - notes[index - 1]!.t : null;
     const kind = clusterKind(gap);
-    const repeated = byPitch.get(pitch) ?? 0;
-    byPitch.set(pitch, repeated + 1);
-    const side = index % 2 === 0 ? -1 : 1;
-    const clusterCompact = kind === "rattle" || kind === "cascade";
-    const x = (pitchNorm - 0.5) * 5.4 + side * (clusterCompact ? 0.12 : 0.55) + Math.sin(index * 1.7) * 0.22 + repeated * 0.08;
-    const y = 7.2 - timeNorm * 13.6 + (pitchNorm - 0.5) * 1.1;
-    const z = Math.sin(index * 0.91) * 0.34 + (clusterCompact ? 0.12 : 0);
+    const incoming = index === 0
+      ? [0, -(MARBLE_INITIAL_DROP_SPEED + MARBLE_GRAVITY * Math.max(0, note.t)), 0] as Vec3
+      : [
+          outgoingVelocities[index - 1]![0],
+          -MARBLE_GRAVITY * Math.max(EPS, note.t - notes[index - 1]!.t),
+          outgoingVelocities[index - 1]![2],
+        ] as Vec3;
+    const outgoing = outgoingVelocities[index] ?? [incoming[0] * 0.35, -0.35, incoming[2] * 0.35] as Vec3;
+    const impulse = vecNormalize(vecSub(outgoing, incoming), [0, 1, 0]);
+    const tangent: Vec3 = [impulse[1], -impulse[0], 0];
+    const rotation = clamp(Math.atan2(tangent[1], tangent[0]), -1.05, 1.05);
     const pitchClass = ((pitch % 12) + 12) % 12;
     const target: MarbleTarget = {
       id: `target:${index}`,
       kind: targetKind(kind, index),
       pitch,
       pitchClass,
-      pos: [Number(x.toFixed(4)), Number(y.toFixed(4)), Number(z.toFixed(4))],
-      rotation: [0, 0, Number((side * 0.16 + Math.sin(index) * 0.08).toFixed(4))],
+      pos: vecRound(positions[index]!, 4),
+      rotation: [0, 0, round(rotation, 4)],
       size: [
         Number((0.7 + (1 - pitchNorm) * 0.36 + note.vel * 0.18).toFixed(4)),
         Number((0.16 + note.vel * 0.08).toFixed(4)),
@@ -425,7 +468,7 @@ function compilePath(song: Song, notes: readonly SongEvent[], targets: readonly 
   const first = targets[0]!;
   const firstNote = notes[0]!;
   if (firstNote.t > EPS) {
-    const dropHeight = clamp(1.2 + firstNote.t * 2.4, 1.2, 3.2);
+    const dropHeight = MARBLE_INITIAL_DROP_SPEED * firstNote.t + 0.5 * MARBLE_GRAVITY * firstNote.t * firstNote.t;
     path.push(enrichSegment({
       id: `path:${path.length}`,
       t0: 0,
@@ -434,7 +477,9 @@ function compilePath(song: Song, notes: readonly SongEvent[], targets: readonly 
       to: first.pos,
       kind: "drop",
       easing: pathEasing("drop"),
-      contactNormal: [0, 0, 1],
+      gravityScale: MARBLE_GRAVITY,
+      contactNormalStart: [0, 0, 1],
+      contactNormal: targetSurfaceNormal(first.rotation[2]),
       tangentIn: [0, -1, 0],
       tangentOut: [0, -1, 0],
       targetId: first.id,
@@ -455,10 +500,12 @@ function compilePath(song: Song, notes: readonly SongEvent[], targets: readonly 
       diagnostics.impossibleGaps.push({ noteIndex: index + 1, gap, resolution: `${kind} local mechanism` });
     }
     const direction = vecNormalize(vecSub(to.pos, from.pos), [1, 0, 0]);
-    const previousDirection = index > 0 ? vecNormalize(vecSub(from.pos, targets[index - 1]!.pos), direction) : direction;
-    const nextDirection = index + 2 < targets.length ? vecNormalize(vecSub(targets[index + 2]!.pos, to.pos), direction) : direction;
-    const outgoing = vecNormalize(vecMix(direction, nextDirection, kind === "arc" ? 0.34 : 0.18), direction);
-    const incoming = vecNormalize(vecMix(direction, previousDirection, kind === "arc" ? 0.22 : 0.12), direction);
+    const startVelocity: Vec3 = [
+      (to.pos[0] - from.pos[0]) / gap,
+      (to.pos[1] - from.pos[1] + 0.5 * MARBLE_GRAVITY * gap * gap) / gap,
+      (to.pos[2] - from.pos[2]) / gap,
+    ];
+    const endVelocity: Vec3 = [startVelocity[0], startVelocity[1] - MARBLE_GRAVITY * gap, startVelocity[2]];
     const segment: MarblePathSegment = {
       id: `path:${path.length}`,
       t0: Number(currentNote.t.toFixed(6)),
@@ -467,21 +514,15 @@ function compilePath(song: Song, notes: readonly SongEvent[], targets: readonly 
       to: to.pos,
       kind,
       easing: pathEasing(kind),
-      contactNormal: [0, 0, 1],
-      tangentOut: outgoing,
-      tangentIn: incoming,
+      contactNormalStart: targetSurfaceNormal(from.rotation[2]),
+      contactNormal: targetSurfaceNormal(to.rotation[2]),
+      tangentOut: vecNormalize(startVelocity, direction),
+      tangentIn: vecNormalize(endVelocity, direction),
       restitution: kind === "arc" ? 0.48 : kind === "rail" ? 0.28 : 0.18,
       targetId: to.id,
     };
     const clusterId = clusterIdFor(clusters, index + 1);
     if (clusterId) segment.clusterId = clusterId;
-    const mid: [number, number, number] = [
-      Number(((from.pos[0] + to.pos[0]) / 2).toFixed(4)),
-      Number((Math.max(from.pos[1], to.pos[1]) + (kind === "arc" ? 1.1 : 0.24)).toFixed(4)),
-      Number(((from.pos[2] + to.pos[2]) / 2 + (kind === "arc" ? 0.7 : 0.12)).toFixed(4)),
-    ];
-    segment.control = vecMix(vecAdd(from.pos, vecScale(outgoing, kind === "arc" ? 0.76 : 0.38)), mid, kind === "arc" ? 0.56 : 0.28);
-    segment.control2 = vecMix(vecSub(to.pos, vecScale(incoming, kind === "arc" ? 0.62 : 0.34)), mid, kind === "arc" ? 0.48 : 0.18);
     path.push(enrichSegment(segment));
   }
   const last = targets[targets.length - 1]!;
@@ -632,7 +673,12 @@ export function sampleMarblePose(path: readonly MarblePathSegment[], t: number):
   const progress = easingProgress(segment, raw);
   const pos = vecRound(segmentPoint(segment, raw), 6);
   const tangent = vecRound(tangentAt(segment, raw), 6);
-  const normal = vecRound(vecNormalize(segment.contactNormal ?? [0, 0, 1], [0, 0, 1]), 6);
+  const contactNormal = raw < 0.018
+    ? segment.contactNormalStart ?? segment.contactNormal
+    : raw > 0.982
+      ? segment.contactNormal
+      : [0, 0, 1] as Vec3;
+  const normal = vecRound(vecNormalize(contactNormal ?? [0, 0, 1], [0, 0, 1]), 6);
   const speedWindow = 0.004;
   const speedStart = clamp(raw - speedWindow, 0, 1);
   const speedEnd = clamp(raw + speedWindow, 0, 1);
@@ -669,6 +715,7 @@ export function compileMarble(song: Song, options: CompileMarbleOptions = {}): M
       `notes: ${selected.notes.length}`,
       `pitch: ${metrics.pitchMin}-${metrics.pitchMax}`,
       "motion: continuous impact-to-impact trajectories",
+      `physics: gravity ${MARBLE_GRAVITY}, horizontal launch speed ${MARBLE_HORIZONTAL_SPEED}`,
     ],
   };
   const path = compilePath(song, selected.notes, targets, clusters, diagnostics);
@@ -687,7 +734,7 @@ export function compileMarble(song: Song, options: CompileMarbleOptions = {}): M
     curves: { energy: song.master.energy },
     events: compileEvents(impacts, clusters, tail),
     statics: {
-      compilerVersion: 3,
+      compilerVersion: 4,
       source: {
         trackId: selected.track.id,
         trackName: selected.track.name,

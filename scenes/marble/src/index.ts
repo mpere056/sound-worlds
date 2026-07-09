@@ -515,10 +515,10 @@ export class MarbleScene {
     const supportMaterial = new MeshStandardMaterial({ color: 0x151a20, metalness: 0.8, roughness: 0.26 });
     const tieMaterial = new MeshStandardMaterial({ color: 0x24323b, metalness: 0.38, roughness: 0.45 });
     for (const segment of this.#performance.statics.path) {
-      if (segment.kind === "hold" || segment.kind === "settle" || segment.kind === "drop" || segment.kind === "arc") continue;
+      if (segment.kind !== "rail") continue;
       const points = this.#segmentPoints(segment);
       if (points.length < 2) continue;
-      const railGap = segment.kind === "rattle" || segment.kind === "cascade" ? 0.085 : 0.115;
+      const railGap = 0.115;
       const leftPoints = points.map((point, index) => point.clone().add(railSideAt(points, index).multiplyScalar(railGap)));
       const rightPoints = points.map((point, index) => point.clone().add(railSideAt(points, index).multiplyScalar(-railGap)));
       for (const sidePoints of [leftPoints, rightPoints]) {
@@ -631,16 +631,16 @@ export class MarbleScene {
     const depthParallax = clamp(pose.pos[2], -1.2, 1.2) * 0.12 * this.tuning.camera;
     const tangentLead = clamp(pose.speed / 16, 0, 0.18);
     this.#camera.position.set(
-      cameraKey.pos[0] + pose.pos[0] * 0.055 + orbit - pose.tangent[2] * 0.08,
-      cameraKey.pos[1] + pose.pos[1] * 0.032 + cameraLift + pose.tangent[1] * tangentLead * 0.08,
+      pose.pos[0] + orbit - pose.tangent[2] * 0.08,
+      pose.pos[1] + cameraLift + 0.12,
       cameraKey.pos[2] - this.tuning.camera * 0.34 + depthParallax,
     );
-    this.#camera.zoom = cameraKey.zoom * this.tuning.camera * 0.82;
+    this.#camera.zoom = clamp(cameraKey.zoom * (0.9 + this.tuning.camera * 0.24), 0.96, 1.28);
     this.#camera.updateProjectionMatrix();
     this.#camera.lookAt(
-      cameraKey.pos[0] * 0.18 + pose.pos[0] * 0.12 + pose.tangent[0] * tangentLead,
-      cameraKey.pos[1] * 0.26 + pose.pos[1] * 0.08 + pose.tangent[1] * tangentLead,
-      pose.pos[2] * 0.08,
+      pose.pos[0] + pose.tangent[0] * tangentLead,
+      pose.pos[1] + pose.tangent[1] * tangentLead * 0.35,
+      pose.pos[2],
     );
     this.#renderer.render(this.#scene, this.#camera);
   }

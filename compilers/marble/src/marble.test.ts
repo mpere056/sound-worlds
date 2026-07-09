@@ -95,9 +95,34 @@ describe("Marble Music compiler", () => {
       expect(pose.contact).toBe(true);
       expect(pose.quat.every(Number.isFinite)).toBe(true);
       expect(pose.tangent.every(Number.isFinite)).toBe(true);
-      expect(pose.normal).toEqual([0, 0, 1]);
+      const expectedNormal = [-Math.sin(target.rotation[2]), Math.cos(target.rotation[2]), 0];
+      pose.normal.forEach((value, index) => expect(value).toBeCloseTo(expectedNormal[index]!, 4));
+      expect(Math.hypot(...pose.normal)).toBeCloseTo(1, 5);
       expect(Math.hypot(...pose.quat)).toBeCloseTo(1, 5);
     }
+  });
+
+  it("places platforms from one bounded gravity model", () => {
+    const song = buildFixtureSong({ bars: 3, patterns: [{ role: "keys", beats: [0, 0.4, 1.2, 2.7, 4.9, 6.1, 8.8], pitch: 55, kind: "note" }] });
+    const performance = compileMarble(song);
+    const moving = performance.statics.path.filter((segment) => segment.kind !== "drop" && segment.kind !== "settle" && segment.kind !== "hold");
+    const averageSpeeds = moving.map((segment) => (segment.arcLength ?? 0) / (segment.t1 - segment.t0));
+    expect(Math.min(...averageSpeeds)).toBeGreaterThan(1.45);
+    expect(Math.max(...averageSpeeds)).toBeLessThan(3.1);
+    expect(Math.max(...averageSpeeds) / Math.min(...averageSpeeds)).toBeLessThan(2);
+    for (const segment of moving) {
+      expect(segment.gravityScale).toBeCloseTo(3.6, 6);
+      expect(segment.kind === "arc" || segment.kind === "rattle" || segment.kind === "cascade").toBe(true);
+    }
+  });
+
+  it("keeps route geometry independent from pitch", () => {
+    const low = buildFixtureSong({ bars: 2, patterns: [{ role: "keys", beats: [0, 1, 2.5, 4, 6], pitch: 49, kind: "note" }] });
+    const high = buildFixtureSong({ bars: 2, patterns: [{ role: "keys", beats: [0, 1, 2.5, 4, 6], pitch: 76, kind: "note" }] });
+    const lowPerformance = compileMarble(low);
+    const highPerformance = compileMarble(high);
+    expect(highPerformance.statics.targets.map((target) => target.pos)).toEqual(lowPerformance.statics.targets.map((target) => target.pos));
+    expect(highPerformance.statics.targets.map((target) => target.pitch)).not.toEqual(lowPerformance.statics.targets.map((target) => target.pitch));
   });
 
   it("adds monotonic arc-length samples and distance-based spin to moving segments", () => {

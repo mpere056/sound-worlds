@@ -41,7 +41,10 @@ Online references checked while planning this slice:
   - the important lesson for this implementation is continuous world motion:
     a note is a collision deadline, not a switch that starts movement;
   - Marble Music keeps deterministic absolute-time sampling, but must preserve
-    the same continuous-motion invariant between every pair of impacts.
+    the same continuous-motion invariant between every pair of impacts;
+  - target placement must therefore be solved from velocity, gravity, and note
+    timing. Placing targets from pitch first and stretching motion afterward is
+    explicitly rejected because it creates arbitrary speed changes.
 
 - [Rapier JavaScript rigid bodies](https://rapier.rs/docs/user_guides/javascript/rigid_bodies/)
   and [colliders](https://rapier.rs/docs/user_guides/javascript/colliders/)
@@ -372,7 +375,9 @@ vy0 = (y1 - y0 + 0.5 * g * T^2) / T
 tau = t - t0
 ```
 
-Interpolate horizontal/depth position separately with eased Hermite control.
+Interpolate horizontal/depth position from the constant launch velocity. Target
+placement uses the same equation forward, so the solved vertical launch speed
+does not vary merely because decorative target positions changed.
 
 If the solved arc is too flat or too high, clamp it into a visual range and
 change the segment kind to rail/cascade instead of producing an ugly jump.
@@ -652,6 +657,9 @@ adding sync risk, remove the spike.
   - arc-length samples are monotonic;
   - no segment exceeds configured max visual speed unless it is classified as
     rattle/cascade.
+  - target positions are unchanged when only pitch changes;
+  - fixture average speeds stay within the configured physical band and the
+    fastest/slowest ratio remains bounded.
 
 ### P2 - Add `sampleMarblePose`
 
@@ -758,8 +766,12 @@ This response must peak at the compiled `hitT`.
 
 ### R5 - Camera parallax
 
-Add compiler-authored camera anchors that can show depth:
+Start with deterministic pose-follow framing, then add compiler-authored camera
+anchors that can show depth without violating visibility:
 
+- marble remains in-frame for the complete sampled timeline;
+- current M1.5 camera centers the marble and uses compiled keys only for
+  depth/zoom;
 - close follow during sparse passages;
 - slightly wider view before dense mechanisms;
 - no camera cut that hides a note impact;
@@ -767,10 +779,9 @@ Add compiler-authored camera anchors that can show depth:
 
 The camera remains sampled by absolute time.
 
-After the 2026-07-08 review, keep camera parallax modest until the route line is
-replaced. Extra orbit or depth motion currently makes the graph-like line more
-noticeable; physical rails/supports should land before more cinematic camera
-movement.
+After the 2026-07-09 review, subject visibility outranks sculpture overview.
+Do not restore wide-board framing until an automated viewport projection check
+proves the marble remains visible at every sampled time.
 
 ## Milestones
 
@@ -838,8 +849,14 @@ Before this gate can pass, review at least:
 - [ ] Scrub to every impact: marble is visibly at/near the correct target
 - [x] Compiler tests reject stationary holds between impacts and verify first
       drop, full-interval travel, exact arrivals, and accumulated roll
+- [x] Compiler tests bound average speed and prove pitch does not change route
+      geometry
+- [x] Initial browser frame keeps the marble clearly visible with nearby
+      platform context and no console warnings
 - [ ] Scrub between impacts: the marble visibly advances throughout the
       interval with no late launch or target-to-target jump
+- [ ] Add automated full-timeline viewport projection coverage before adding
+      cinematic camera offsets
 - [ ] Hot reload/concept switch: no frozen overlays, no growing platforms, no
       runaway memory
 

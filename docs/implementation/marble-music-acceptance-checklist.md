@@ -28,6 +28,8 @@ Pass only if all are true:
   into the next physical segment;
 - travel occupies the complete interval between adjacent note onsets and never
   collapses into a late sprint;
+- target placement is solved from note timing, launch velocity, and gravity;
+  pitch affects target identity but not route distance;
 - the user can perceive the sync without enabling debug overlays;
 - scrubbing to a hit time shows the marble contacting or activating the target;
 - no note is silently dropped;
@@ -41,6 +43,8 @@ Pass only if all are true:
 - the marble never teleports;
 - fast passages become rolls, rattles, cascades, or compact mechanisms;
 - long gaps show plausible continuous travel and camera movement;
+- average segment speeds stay within the configured physical band, with faster
+  motion arising from gravity rather than arbitrary target spacing;
 - the marble has readable weight, spin, and contact;
 - the route reads as a designed kinetic machine rather than a plotted line.
 
@@ -49,6 +53,8 @@ Pass only if all are true:
 Pass only if all are true:
 
 - the scene feels 3D and tactile;
+- the marble remains visible throughout playback; wide sculpture overviews may
+  not put the subject off-screen;
 - the wall, rods, plates, pegs, and marble have depth and shadows;
 - repeated pitches look visually related;
 - low and high pitches feel meaningfully different;
