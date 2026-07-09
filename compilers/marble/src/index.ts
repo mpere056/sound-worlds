@@ -23,8 +23,11 @@ const EPS = 1e-6;
 const MARBLE_RADIUS = 0.28;
 const MARBLE_GRAVITY = 3.6;
 const MARBLE_HORIZONTAL_SPEED = 1.6;
+const MARBLE_DEPTH_SPEED = 0.72;
 const MARBLE_INITIAL_DROP_SPEED = 1.6;
 const MARBLE_X_LIMIT = 3.1;
+const MARBLE_DEPTH_MIN = 0.15;
+const MARBLE_DEPTH_MAX = 1.35;
 const ARC_SAMPLE_COUNT = 24;
 const ROUTE_SAMPLE_RATE = 120;
 const ROUTE_CLEARANCE = 0.012;
@@ -350,16 +353,32 @@ function targetKind(kind: MarbleClusterKind, noteIndex: number): MarbleTarget["k
   return noteIndex % 5 === 4 ? "resonator" : "plate";
 }
 
-function targetSurfaceNormal(rotation: number): Vec3 {
-  return [-Math.sin(rotation), Math.cos(rotation), 0];
+interface TargetBasis {
+  tangent: Vec3;
+  normal: Vec3;
+  binormal: Vec3;
+}
+
+function targetBasis(rotation: number, depthTilt = 0): TargetBasis {
+  const sinRotation = Math.sin(rotation);
+  const cosRotation = Math.cos(rotation);
+  const sinTilt = Math.sin(depthTilt);
+  const cosTilt = Math.cos(depthTilt);
+  return {
+    tangent: [cosRotation, sinRotation, 0],
+    normal: [-sinRotation * cosTilt, cosRotation * cosTilt, sinTilt],
+    binormal: [sinRotation * sinTilt, -cosRotation * sinTilt, cosTilt],
+  };
+}
+
+function targetSurfaceNormal(rotation: number, depthTilt = 0): Vec3 {
+  return targetBasis(rotation, depthTilt).normal;
 }
 
 interface TargetFootprint {
   center: Vec3;
-  tangent: Vec3;
-  normal: Vec3;
-  halfLength: number;
-  halfThickness: number;
+  axes: [Vec3, Vec3, Vec3];
+  halfExtents: [number, number, number];
 }
 
 function targetHalfThickness(kind: MarbleTarget["kind"], size: Vec3): number {
@@ -367,22 +386,19 @@ function targetHalfThickness(kind: MarbleTarget["kind"], size: Vec3): number {
 }
 
 function targetFootprint(target: MarbleTarget): TargetFootprint {
-  const rotation = target.rotation[2];
+  const basis = targetBasis(target.rotation[2], target.rotation[0]);
   return {
     center: target.pos,
-    tangent: [Math.cos(rotation), Math.sin(rotation), 0],
-    normal: targetSurfaceNormal(rotation),
-    halfLength: target.size[0] / 2,
-    halfThickness: targetHalfThickness(target.kind, target.size),
+    axes: [basis.tangent, basis.normal, basis.binormal],
+    halfExtents: [target.size[0] / 2, targetHalfThickness(target.kind, target.size), target.size[2] / 2],
   };
 }
 
 export function marbleTargetClearance(target: MarbleTarget, marbleCenter: Vec3): number {
   const footprint = targetFootprint(target);
   const delta = vecSub(marbleCenter, footprint.center);
-  const tangentDistance = Math.max(0, Math.abs(vecDot(delta, footprint.tangent)) - footprint.halfLength);
-  const normalDistance = Math.max(0, Math.abs(vecDot(delta, footprint.normal)) - footprint.halfThickness);
-  return Math.hypot(tangentDistance, normalDistance) - MARBLE_RADIUS;
+  const distances = footprint.axes.map((axis, index) => Math.max(0, Math.abs(vecDot(delta, axis)) - footprint.halfExtents[index]!));
+  return Math.hypot(...distances) - MARBLE_RADIUS;
 }
 
 function samplePlannedRoute(notes: readonly SongEvent[], positions: readonly Vec3[]): Vec3[] {
@@ -430,15 +446,21 @@ function minimumTargetRouteClearance(target: MarbleTarget, route: readonly Vec3[
 }
 
 function footprintProjectionRadius(footprint: TargetFootprint, axis: Vec3): number {
-  return footprint.halfLength * Math.abs(vecDot(footprint.tangent, axis))
-    + footprint.halfThickness * Math.abs(vecDot(footprint.normal, axis));
+  return footprint.axes.reduce((radius, footprintAxis, index) => radius + footprint.halfExtents[index]! * Math.abs(vecDot(footprintAxis, axis)), 0);
 }
 
 export function marbleTargetsOverlap(a: MarbleTarget, b: MarbleTarget, padding = 0.055): boolean {
   const left = targetFootprint(a);
   const right = targetFootprint(b);
   const delta = vecSub(right.center, left.center);
-  for (const axis of [left.tangent, left.normal, right.tangent, right.normal]) {
+  const axes = [...left.axes, ...right.axes];
+  for (const leftAxis of left.axes) {
+    for (const rightAxis of right.axes) {
+      const cross = vecCross(leftAxis, rightAxis);
+      if (vecLength(cross) > EPS) axes.push(vecNormalize(cross));
+    }
+  }
+  for (const axis of axes) {
     const distance = Math.abs(vecDot(delta, axis));
     if (distance >= footprintProjectionRadius(left, axis) + footprintProjectionRadius(right, axis) + padding) return false;
   }
@@ -452,10 +474,11 @@ function placeTarget(
   pitchClass: number,
   contactPos: Vec3,
   rotation: number,
+  depthTilt: number,
   size: Vec3,
   material: MarbleTarget["material"],
 ): MarbleTarget {
-  const normal = targetSurfaceNormal(rotation);
+  const normal = targetSurfaceNormal(rotation, depthTilt);
   const surfaceOffset = MARBLE_RADIUS + targetHalfThickness(kind, size) + 0.018;
   return {
     id,
@@ -464,7 +487,7 @@ function placeTarget(
     pitchClass,
     pos: vecRound(vecSub(contactPos, vecScale(normal, surfaceOffset)), 4),
     contactPos: vecRound(contactPos, 4),
-    rotation: [0, 0, round(rotation, 4)],
+    rotation: [round(depthTilt, 4), 0, round(rotation, 4)],
     size: vecRound(size, 4),
     color: PITCH_COLORS[pitchClass] ?? "#d8f6ff",
     material,
@@ -474,32 +497,32 @@ function placeTarget(
 
 function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics): MarbleTarget[] {
   const span = Math.max(1, metrics.pitchRange);
-  const positions: Vec3[] = [[0, 5.65, 0]];
+  const positions: Vec3[] = [[0, 5.65, 0.55]];
   const outgoingVelocities: Vec3[] = [];
   let horizontalSign = -1;
+  let depthSign = 1;
 
   for (let index = 0; index < notes.length - 1; index += 1) {
     const gap = Math.max(EPS, notes[index + 1]!.t - notes[index]!.t);
     const from = positions[index]!;
-    const choices = [horizontalSign, -horizontalSign].map((sign) => {
+    const choices = [horizontalSign, -horizontalSign].flatMap((sign) => [depthSign, -depthSign].map((candidateDepthSign) => {
       const velocityX = sign * MARBLE_HORIZONTAL_SPEED;
-      const candidate: Vec3 = [
-        from[0] + velocityX * gap,
-        from[1] - 0.5 * MARBLE_GRAVITY * gap * gap,
-        from[2] + Math.sin((index + 1) * 0.83) * 0.16 * gap,
-      ];
+      const candidateZ = clamp(from[2] + candidateDepthSign * MARBLE_DEPTH_SPEED * gap, MARBLE_DEPTH_MIN, MARBLE_DEPTH_MAX);
+      const velocityZ = (candidateZ - from[2]) / gap;
+      const candidate: Vec3 = [from[0] + velocityX * gap, from[1] - 0.5 * MARBLE_GRAVITY * gap * gap, candidateZ];
       const clearance = positions.slice(0, Math.max(0, positions.length - 1)).reduce((nearest, position) => Math.min(nearest, vecDistance(candidate, position)), Number.POSITIVE_INFINITY);
-      return { sign, velocityX, candidate, clearance, inBounds: Math.abs(candidate[0]) <= MARBLE_X_LIMIT };
-    });
-    const viable = choices.filter((choice) => choice.inBounds).sort((a, b) => b.clearance - a.clearance);
+      return { sign, depthSign: candidateDepthSign, velocityX, velocityZ, candidate, clearance, depthTravel: Math.abs(candidateZ - from[2]), inBounds: Math.abs(candidate[0]) <= MARBLE_X_LIMIT };
+    }));
+    const viable = choices.filter((choice) => choice.inBounds).sort((a, b) => b.clearance - a.clearance || b.depthTravel - a.depthTravel);
     const chosen = viable[0] ?? choices.sort((a, b) => Math.abs(a.candidate[0]) - Math.abs(b.candidate[0]))[0]!;
     horizontalSign = chosen.sign;
+    depthSign = chosen.depthSign;
     const velocityX = chosen.velocityX;
-    const velocityZ = Math.sin((index + 1) * 0.83) * 0.16;
-    const velocity: Vec3 = [velocityX, 0, velocityZ];
+    const velocity: Vec3 = [velocityX, 0, chosen.velocityZ];
     outgoingVelocities.push(velocity);
     positions.push(chosen.candidate);
     if ((index + 1) % 2 === 0) horizontalSign *= -1;
+    if ((index + 1) % 3 === 0 || chosen.candidate[2] <= MARBLE_DEPTH_MIN + 0.02 || chosen.candidate[2] >= MARBLE_DEPTH_MAX - 0.02) depthSign *= -1;
   }
 
   const routeSamples = samplePlannedRoute(notes, positions);
@@ -520,8 +543,8 @@ function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics
         ] as Vec3;
     const outgoing = outgoingVelocities[index] ?? [incoming[0] * 0.35, -0.35, incoming[2] * 0.35] as Vec3;
     const impulse = vecNormalize(vecSub(outgoing, incoming), [0, 1, 0]);
-    const tangent: Vec3 = [impulse[1], -impulse[0], 0];
-    const rotation = Math.atan2(tangent[1], tangent[0]);
+    const rotation = Math.atan2(-impulse[0], impulse[1]);
+    const depthTilt = Math.asin(clamp(impulse[2], -0.72, 0.72));
     const pitchClass = ((pitch % 12) + 12) % 12;
     const contactPos = positions[index]!;
     const nearestContact = positions.reduce((nearest, position, candidateIndex) => {
@@ -537,6 +560,7 @@ function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics
     let bestTarget: MarbleTarget | undefined;
     let bestClearance = Number.NEGATIVE_INFINITY;
     const rotationOffsets = [0, 0.16, -0.16, 0.32, -0.32, 0.5, -0.5, 0.72, -0.72];
+    const depthTiltOffsets = [0, 0.12, -0.12, 0.24, -0.24];
     const variants: Array<{ kind: MarbleTarget["kind"]; material: MarbleTarget["material"]; size: Vec3; scales: number[] }> = [
       { kind: chosenKind, material, size: chosenKind === "peg" || chosenKind === "chime" ? compactSize : fullSize, scales: [1, 0.84, 0.7, 0.56, 0.44] },
       { kind: index % 2 === 0 ? "peg" : "chime", material: "rubber", size: compactSize, scales: [1, 0.82, 0.66, 0.5, 0.36, 0.24, 0.16] },
@@ -546,19 +570,22 @@ function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics
         const size: Vec3 = [variant.size[0] * scale, variant.size[1] * scale, variant.size[2] * scale];
         for (const offset of rotationOffsets) {
           const candidateRotation = rotation + offset;
-          const candidateNormal = targetSurfaceNormal(candidateRotation);
-          if (vecDot(incoming, candidateNormal) > -0.005 || vecDot(outgoing, candidateNormal) < 0.005) continue;
-          const candidate = placeTarget(`target:${index}`, variant.kind, pitch, pitchClass, contactPos, candidateRotation, size, variant.material);
-          if (targets.some((previous) => marbleTargetsOverlap(candidate, previous))) continue;
-          const routeClearance = minimumTargetRouteClearance(candidate, routeSamples);
-          if (routeClearance > bestClearance) {
-            bestTarget = candidate;
-            bestClearance = routeClearance;
+          for (const tiltOffset of depthTiltOffsets) {
+            const candidateDepthTilt = clamp(depthTilt + tiltOffset, -0.82, 0.82);
+            const candidateNormal = targetSurfaceNormal(candidateRotation, candidateDepthTilt);
+            if (vecDot(incoming, candidateNormal) > -0.005 || vecDot(outgoing, candidateNormal) < 0.005) continue;
+            const candidate = placeTarget(`target:${index}`, variant.kind, pitch, pitchClass, contactPos, candidateRotation, candidateDepthTilt, size, variant.material);
+            if (targets.some((previous) => marbleTargetsOverlap(candidate, previous))) continue;
+            const routeClearance = minimumTargetRouteClearance(candidate, routeSamples);
+            if (routeClearance > bestClearance) {
+              bestTarget = candidate;
+              bestClearance = routeClearance;
+            }
+            if (routeClearance < ROUTE_CLEARANCE) continue;
+            chosenKind = variant.kind;
+            target = candidate;
+            break findCandidate;
           }
-          if (routeClearance < ROUTE_CLEARANCE) continue;
-          chosenKind = variant.kind;
-          target = candidate;
-          break findCandidate;
         }
       }
     }
@@ -569,22 +596,25 @@ function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics
         const size: Vec3 = [0.3 * scale, 0.09 * scale, 0.22 * scale];
         for (const offset of rotationOffsets) {
           const candidateRotation = rotation + offset;
-          const candidateNormal = targetSurfaceNormal(candidateRotation);
-          if (vecDot(incoming, candidateNormal) > -0.005 || vecDot(outgoing, candidateNormal) < 0.005) continue;
-          const candidate = placeTarget(`target:${index}`, fallbackKind, pitch, pitchClass, contactPos, candidateRotation, size, "rubber");
-          if (targets.some((previous) => marbleTargetsOverlap(candidate, previous, 0))) continue;
-          const routeClearance = minimumTargetRouteClearance(candidate, routeSamples);
-          if (routeClearance > bestClearance) {
-            bestTarget = candidate;
-            bestClearance = routeClearance;
+          for (const tiltOffset of depthTiltOffsets) {
+            const candidateDepthTilt = clamp(depthTilt + tiltOffset, -0.82, 0.82);
+            const candidateNormal = targetSurfaceNormal(candidateRotation, candidateDepthTilt);
+            if (vecDot(incoming, candidateNormal) > -0.005 || vecDot(outgoing, candidateNormal) < 0.005) continue;
+            const candidate = placeTarget(`target:${index}`, fallbackKind, pitch, pitchClass, contactPos, candidateRotation, candidateDepthTilt, size, "rubber");
+            if (targets.some((previous) => marbleTargetsOverlap(candidate, previous, 0))) continue;
+            const routeClearance = minimumTargetRouteClearance(candidate, routeSamples);
+            if (routeClearance > bestClearance) {
+              bestTarget = candidate;
+              bestClearance = routeClearance;
+            }
+            if (routeClearance < ROUTE_CLEARANCE) continue;
+            target = candidate;
+            break fallbackCandidate;
           }
-          if (routeClearance < ROUTE_CLEARANCE) continue;
-          target = candidate;
-          break fallbackCandidate;
         }
       }
     }
-    target ??= bestTarget ?? placeTarget(`target:${index}`, chosenKind, pitch, pitchClass, contactPos, rotation, [0.048, 0.024, 0.048], "rubber");
+    target ??= bestTarget ?? placeTarget(`target:${index}`, chosenKind, pitch, pitchClass, contactPos, rotation, depthTilt, [0.048, 0.024, 0.048], "rubber");
     targets.push(target);
   }
   return targets;
@@ -668,7 +698,7 @@ function compilePath(song: Song, notes: readonly SongEvent[], targets: readonly 
       easing: pathEasing("drop"),
       gravityScale: MARBLE_GRAVITY,
       contactNormalStart: [0, 0, 1],
-      contactNormal: targetSurfaceNormal(first.rotation[2]),
+      contactNormal: targetSurfaceNormal(first.rotation[2], first.rotation[0]),
       tangentIn: [0, -1, 0],
       tangentOut: [0, -1, 0],
       targetId: first.id,
@@ -703,8 +733,8 @@ function compilePath(song: Song, notes: readonly SongEvent[], targets: readonly 
       to: to.contactPos,
       kind,
       easing: pathEasing(kind),
-      contactNormalStart: targetSurfaceNormal(from.rotation[2]),
-      contactNormal: targetSurfaceNormal(to.rotation[2]),
+      contactNormalStart: targetSurfaceNormal(from.rotation[2], from.rotation[0]),
+      contactNormal: targetSurfaceNormal(to.rotation[2], to.rotation[0]),
       tangentOut: vecNormalize(startVelocity, direction),
       tangentIn: vecNormalize(endVelocity, direction),
       restitution: kind === "arc" ? 0.48 : kind === "rail" ? 0.28 : 0.18,
@@ -905,7 +935,7 @@ export function compileMarble(song: Song, options: CompileMarbleOptions = {}): M
       `notes: ${selected.notes.length}`,
       `pitch: ${metrics.pitchMin}-${metrics.pitchMax}`,
       "motion: continuous impact-to-impact trajectories",
-      `physics: gravity ${MARBLE_GRAVITY}, horizontal launch speed ${MARBLE_HORIZONTAL_SPEED}`,
+      `physics: gravity ${MARBLE_GRAVITY}, horizontal launch speed ${MARBLE_HORIZONTAL_SPEED}, depth launch speed ${MARBLE_DEPTH_SPEED}`,
       "collision: radius-offset contact poses and non-overlapping target footprints",
     ],
   };
@@ -925,7 +955,7 @@ export function compileMarble(song: Song, options: CompileMarbleOptions = {}): M
     curves: { energy: song.master.energy },
     events: compileEvents(impacts, clusters, tail),
     statics: {
-      compilerVersion: 6,
+      compilerVersion: 7,
       source: {
         trackId: selected.track.id,
         trackName: selected.track.name,

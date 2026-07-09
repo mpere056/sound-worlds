@@ -95,7 +95,11 @@ describe("Marble Music compiler", () => {
       expect(pose.contact).toBe(true);
       expect(pose.quat.every(Number.isFinite)).toBe(true);
       expect(pose.tangent.every(Number.isFinite)).toBe(true);
-      const expectedNormal = [-Math.sin(target.rotation[2]), Math.cos(target.rotation[2]), 0];
+      const expectedNormal = [
+        -Math.sin(target.rotation[2]) * Math.cos(target.rotation[0]),
+        Math.cos(target.rotation[2]) * Math.cos(target.rotation[0]),
+        Math.sin(target.rotation[0]),
+      ];
       pose.normal.forEach((value, index) => expect(value).toBeCloseTo(expectedNormal[index]!, 4));
       const centerToContact = target.contactPos.map((value, index) => value - target.pos[index]!) as [number, number, number];
       const signedClearance = centerToContact.reduce((sum, value, index) => sum + value * expectedNormal[index]!, 0);
@@ -144,7 +148,11 @@ describe("Marble Music compiler", () => {
     const performance = compileMarble(song);
     for (const impact of performance.statics.impacts) {
       const target = performance.statics.targets[impact.noteIndex]!;
-      const normal = [-Math.sin(target.rotation[2]), Math.cos(target.rotation[2]), 0];
+      const normal = [
+        -Math.sin(target.rotation[2]) * Math.cos(target.rotation[0]),
+        Math.cos(target.rotation[2]) * Math.cos(target.rotation[0]),
+        Math.sin(target.rotation[0]),
+      ];
       const halfThickness = target.kind === "peg" || target.kind === "chime" ? target.size[1] * 0.9 : target.size[1] / 2;
       for (const offset of [-0.01, 0, 0.01]) {
         const pose = sampleMarblePose(performance.statics.path, Math.max(0, impact.t + offset));
@@ -165,6 +173,22 @@ describe("Marble Music compiler", () => {
           expect(marbleTargetClearance(target, pose.pos)).toBeGreaterThanOrEqual(-0.001);
         }
       }
+    }
+  });
+
+  it("authors bounded front-back travel and three-dimensional platform normals", () => {
+    const song = buildFixtureSong({ bars: 3, patterns: [{ role: "keys", beats: [0, 1.5, 3.5, 5.5, 7.5, 9.5], pitch: 52, kind: "note" }] });
+    const performance = compileMarble(song);
+    const depths = performance.statics.targets.map((target) => target.contactPos[2]);
+    expect(Math.max(...depths) - Math.min(...depths)).toBeGreaterThan(0.55);
+    expect(Math.min(...depths)).toBeGreaterThanOrEqual(0.15);
+    expect(Math.max(...depths)).toBeLessThanOrEqual(1.35);
+    expect(performance.statics.targets.some((target) => Math.abs(target.rotation[0]) > 0.08)).toBe(true);
+    for (const impact of performance.statics.impacts) {
+      const target = performance.statics.targets[impact.noteIndex]!;
+      const arrivingSegment = performance.statics.path.find((segment) => segment.targetId === target.id && segment.t1 === impact.t);
+      if (arrivingSegment) expect(Math.abs(arrivingSegment.contactNormal![2])).toBeCloseTo(Math.abs(Math.sin(target.rotation[0])), 4);
+      expect(marbleTargetClearance(target, target.contactPos)).toBeCloseTo(0.018, 3);
     }
   });
 

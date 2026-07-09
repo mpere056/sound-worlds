@@ -113,7 +113,7 @@ export function sampleMarbleCamera(path: readonly MarblePathSegment[], t: number
   const orbit = Math.sin(t * 0.21) * 0.035 * cameraTuning;
   const distance = 12.15 - (cameraTuning - 0.88) * 0.45;
   return {
-    position: [focus.x + orbit, focus.y + cameraLift + 0.12, focus.z + distance],
+    position: [focus.x + 0.68 + orbit, focus.y + cameraLift + 0.24, focus.z + distance],
     lookAt: [focus.x + lead.x, focus.y + lead.y * 0.35, focus.z + lead.z],
     zoom: clamp(1.06 + (cameraTuning - 0.88) * 0.08, 1, 1.12),
   };
@@ -574,7 +574,7 @@ export class MarbleScene {
   }
 
   #renderSvg(t: number, pose: MarblePose, pulse: number): void {
-    const [x, y] = worldToScreen([pose.pos[0], pose.pos[1], pose.pos[2] + 0.42]);
+    const [x, y] = worldToScreen(pose.pos);
     this.#svgMarble.setAttribute("transform", `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${(pose.spin * 57.2958).toFixed(2)}) scale(${(1 + pulse * 0.18).toFixed(3)})`);
     this.#svgMarbleGlow.setAttribute("opacity", String(clamp(0.26 + pulse * 0.48, 0.18, 0.85)));
     this.#svgMarbleCore.setAttribute("stroke-width", String(5 + pulse * 8));
@@ -591,12 +591,12 @@ export class MarbleScene {
   renderFrame(t: number): void {
     if (this.#disposed) return;
     const pose = sampleMarblePose(this.#performance.statics.path, t);
-    this.#marble.position.set(pose.pos[0], pose.pos[1], pose.pos[2] + 0.42);
+    this.#marble.position.set(...pose.pos);
     this.#marble.quaternion.set(pose.quat[0], pose.quat[1], pose.quat[2], pose.quat[3]);
-    const shadowScale = clamp(1.25 - (pose.pos[2] + 0.42) * 0.42, 0.46, 1.35);
+    const shadowScale = clamp(1.25 - pose.pos[2] * 0.42, 0.46, 1.35);
     this.#marbleShadow.position.set(pose.pos[0] - 0.08, pose.pos[1] - 0.12, -0.398);
     this.#marbleShadow.scale.set(shadowScale * 1.25, shadowScale * 0.58, 1);
-    this.#marbleShadow.material.opacity = clamp(0.28 - (pose.pos[2] + 0.42) * 0.06 + (pose.contact ? 0.1 : 0), 0.06, 0.36);
+    this.#marbleShadow.material.opacity = clamp(0.28 - pose.pos[2] * 0.06 + (pose.contact ? 0.1 : 0), 0.06, 0.36);
     const currentImpact = this.#performance.statics.impacts.reduce((best, impact) => {
       const age = Math.abs(t - impact.t);
       return age < best.age ? { age, impact } : best;
