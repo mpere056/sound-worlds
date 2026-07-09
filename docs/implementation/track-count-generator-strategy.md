@@ -41,6 +41,11 @@ Goal: one source track becomes one satisfying object.
 
 First concept: [Marble Music](../marble-music.md).
 
+Future concept: [Music-Synced Brick Breaker](brick-breaker-implementation.md),
+where a selected note track determines the exact destructible brick count and
+the compiler coordinates one continuous ball through brick, wall, and paddle
+contacts until the final-note final hit.
+
 Acceptance:
 
 - every note has a visible hit or dense-cluster hit;

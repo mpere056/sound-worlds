@@ -50,6 +50,9 @@ what works today, what was verified, and what should be built next.
   - a later live-performance mode using REAPER MIDI telemetry, a continuously
   falling marble, and note-spawned physics platforms; not part of the current
   offline implementation.
+- [Music-Synced Brick Breaker future plan](implementation/brick-breaker-implementation.md)
+  - a deterministic one-ball generator that compiles exact note-time brick
+  destruction, legal brick/wall/paddle itineraries, and a final-note final hit.
 - [Waveform Runner implementation](implementation/waveform-runner-implementation.md)
   - the compiled runner architecture and R1-R5 build order.
 - [Metro Map implementation](implementation/metro-map-implementation.md) - the
