@@ -26,7 +26,7 @@ import {
   Vector3,
   WebGLRenderer,
 } from "three";
-import { sampleCurve, type CameraKeyframe } from "@reaper-viz/core";
+import { sampleCurve } from "@reaper-viz/core";
 import { sampleMarblePose, type MarbleImpact, type MarblePathSegment, type MarblePerformance, type MarblePose, type MarbleTarget } from "@reaper-viz/compiler-marble";
 
 export type { MarblePerformance } from "@reaper-viz/compiler-marble";
@@ -36,6 +36,12 @@ export interface MarbleTuning {
   camera: number;
   targetScale: number;
   tail: number;
+}
+
+export interface MarbleCameraPose {
+  position: [number, number, number];
+  lookAt: [number, number, number];
+  zoom: number;
 }
 
 interface TargetMeshes {
@@ -81,10 +87,6 @@ function impactEnvelope(age: number, velocity: number): number {
   return (1 - adjusted / 0.22) * (0.45 + velocity * 0.75);
 }
 
-function smoothstep(value: number): number {
-  return value * value * (3 - 2 * value);
-}
-
 function dampedResponse(age: number, velocity: number): number {
   if (age < -1 / 90 || age > 0.55) return 0;
   const t = Math.max(0, age);
@@ -93,6 +95,28 @@ function dampedResponse(age: number, velocity: number): number {
   const decay = Math.exp(-zeta * omega0 * t);
   const wobble = Math.sin(omega0 * Math.sqrt(1 - zeta * zeta) * t);
   return decay * wobble * (0.08 + velocity * 0.18);
+}
+
+export function sampleMarbleCamera(path: readonly MarblePathSegment[], t: number, cameraTuning: number): MarbleCameraPose {
+  const offsets = [-0.24, -0.12, 0, 0.12, 0.24] as const;
+  const weights = [1, 2, 3, 2, 1] as const;
+  const focus = new Vector3();
+  for (let index = 0; index < offsets.length; index += 1) {
+    const sample = sampleMarblePose(path, t + offsets[index]!);
+    focus.add(new Vector3(...sample.pos).multiplyScalar(weights[index]!));
+  }
+  focus.multiplyScalar(1 / weights.reduce((sum, weight) => sum + weight, 0));
+  const behind = sampleMarblePose(path, t - 0.18).pos;
+  const ahead = sampleMarblePose(path, t + 0.18).pos;
+  const lead = new Vector3(ahead[0] - behind[0], ahead[1] - behind[1], ahead[2] - behind[2]).multiplyScalar(0.08);
+  const cameraLift = Math.sin(t * 0.33) * 0.04 * cameraTuning;
+  const orbit = Math.sin(t * 0.21) * 0.035 * cameraTuning;
+  const distance = 12.15 - (cameraTuning - 0.88) * 0.45;
+  return {
+    position: [focus.x + orbit, focus.y + cameraLift + 0.12, focus.z + distance],
+    lookAt: [focus.x + lead.x, focus.y + lead.y * 0.35, focus.z + lead.z],
+    zoom: clamp(1.06 + (cameraTuning - 0.88) * 0.08, 1, 1.12),
+  };
 }
 
 function v3(value: [number, number, number], zOffset = 0): Vector3 {
@@ -106,33 +130,6 @@ function railSideAt(points: readonly Vector3[], index: number): Vector3 {
   const side = new Vector3(-tangent.y, tangent.x, 0);
   if (side.lengthSq() < 0.0001) return new Vector3(1, 0, 0);
   return side.normalize();
-}
-
-function sampleCamera(keys: readonly CameraKeyframe[], t: number): CameraKeyframe {
-  if (!keys.length) return { t, pos: [0, 0, 14], zoom: 1, anchor: [0.5, 0.5], ease: "smoothstep" };
-  const first = keys[0]!;
-  if (t <= first.t) return first;
-  const last = keys[keys.length - 1]!;
-  if (t >= last.t) return last;
-  const nextIndex = keys.findIndex((key) => key.t >= t);
-  const to = keys[nextIndex]!;
-  const from = keys[Math.max(0, nextIndex - 1)]!;
-  const raw = clamp((t - from.t) / Math.max(0.001, to.t - from.t), 0, 1);
-  const mix = from.ease === "smoothstep" || to.ease === "smoothstep" ? smoothstep(raw) : raw;
-  const sampled: CameraKeyframe = {
-    t,
-    pos: [
-      from.pos[0] + (to.pos[0] - from.pos[0]) * mix,
-      from.pos[1] + (to.pos[1] - from.pos[1]) * mix,
-      from.pos[2] + (to.pos[2] - from.pos[2]) * mix,
-    ],
-    zoom: from.zoom + (to.zoom - from.zoom) * mix,
-  };
-  const anchor = to.anchor ?? from.anchor;
-  if (anchor) sampled.anchor = anchor;
-  const ease = to.ease ?? from.ease;
-  if (ease) sampled.ease = ease;
-  return sampled;
 }
 
 function makeNoiseTexture(): CanvasTexture {
@@ -628,23 +625,11 @@ export class MarbleScene {
       meshes.shadow.material.opacity = clamp(0.16 + intensity * 0.1, 0.08, 0.28);
       meshes.shadow.scale.set(1.4 + Math.abs(recoil) * 2.2, 0.46 + Math.abs(recoil) * 0.42, 1);
     }
-    const cameraKey = sampleCamera(this.#performance.camera, t);
-    const cameraLift = Math.sin(t * 0.33) * 0.04 * this.tuning.camera;
-    const orbit = Math.sin(t * 0.21) * 0.12 * this.tuning.camera;
-    const depthParallax = clamp(pose.pos[2], -1.2, 1.2) * 0.12 * this.tuning.camera;
-    const tangentLead = clamp(pose.speed / 16, 0, 0.18);
-    this.#camera.position.set(
-      pose.pos[0] + orbit - pose.tangent[2] * 0.08,
-      pose.pos[1] + cameraLift + 0.12,
-      cameraKey.pos[2] - this.tuning.camera * 0.34 + depthParallax,
-    );
-    this.#camera.zoom = clamp(cameraKey.zoom * (0.9 + this.tuning.camera * 0.24), 0.96, 1.28);
+    const cameraPose = sampleMarbleCamera(this.#performance.statics.path, t, this.tuning.camera);
+    this.#camera.position.set(...cameraPose.position);
+    this.#camera.zoom = cameraPose.zoom;
     this.#camera.updateProjectionMatrix();
-    this.#camera.lookAt(
-      pose.pos[0] + pose.tangent[0] * tangentLead,
-      pose.pos[1] + pose.tangent[1] * tangentLead * 0.35,
-      pose.pos[2],
-    );
+    this.#camera.lookAt(...cameraPose.lookAt);
     this.#renderer.render(this.#scene, this.#camera);
   }
 

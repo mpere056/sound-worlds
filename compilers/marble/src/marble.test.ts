@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildFixtureSong } from "@reaper-viz/core";
-import { compileMarble, marbleTargetsOverlap, sampleMarblePath, sampleMarblePose } from "./index.js";
+import { compileMarble, marbleTargetClearance, marbleTargetsOverlap, sampleMarblePath, sampleMarblePose } from "./index.js";
 
 describe("Marble Music compiler", () => {
   it("maps every selected note to an exact hit", () => {
@@ -134,7 +134,7 @@ describe("Marble Music compiler", () => {
     const targets = compileMarble(song).statics.targets;
     for (let left = 0; left < targets.length; left += 1) {
       for (let right = left + 1; right < targets.length; right += 1) {
-        expect(marbleTargetsOverlap(targets[left]!, targets[right]!)).toBe(false);
+        expect(marbleTargetsOverlap(targets[left]!, targets[right]!, 0)).toBe(false);
       }
     }
   });
@@ -150,6 +150,20 @@ describe("Marble Music compiler", () => {
         const pose = sampleMarblePose(performance.statics.path, Math.max(0, impact.t + offset));
         const signedDistance = pose.pos.reduce((sum, value, index) => sum + (value - target.pos[index]!) * normal[index]!, 0);
         expect(signedDistance).toBeGreaterThanOrEqual(0.28 + halfThickness - 0.01);
+      }
+    }
+  });
+
+  it("keeps the full marble route clear of every platform", () => {
+    const song = buildFixtureSong({ bars: 3, patterns: [{ role: "keys", beats: [0, 2, 4, 6, 8, 10], pitch: 48, kind: "note" }] });
+    const performance = compileMarble(song);
+    for (const segment of performance.statics.path.filter((entry) => entry.kind !== "settle" && entry.kind !== "hold")) {
+      const steps = Math.max(1, Math.ceil((segment.t1 - segment.t0) * 120));
+      for (let step = 0; step <= steps; step += 1) {
+        const pose = sampleMarblePose(performance.statics.path, segment.t0 + (segment.t1 - segment.t0) * step / steps);
+        for (const target of performance.statics.targets) {
+          expect(marbleTargetClearance(target, pose.pos)).toBeGreaterThanOrEqual(-0.001);
+        }
       }
     }
   });

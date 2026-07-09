@@ -860,8 +860,11 @@ Before this gate can pass, review at least:
       drop, full-interval travel, exact arrivals, and accumulated roll
 - [x] Compiler tests bound average speed and prove pitch does not change route
       geometry
-- [x] Compiler v5 separates platform centers from marble contact poses, samples
-      pre/contact/post clearance, and rejects overlapping oriented footprints
+- [x] Compiler v6 separates platform centers from marble contact poses, samples
+      pre/contact/post clearance, rejects overlapping oriented footprints, and
+      ranks target candidates against a 120 Hz sample of the full marble route
+- [x] Pose-follow camera uses a weighted time window and stable relative
+      distance/zoom; continuity tests cover both sides of every impact tangent
 - [x] `untitled-project-418cb58f` compiles 19 targets with zero footprint
       intersections; dense hardware is converted to compact pegs/chimes
 - [x] Initial browser frame keeps the marble clearly visible with nearby
