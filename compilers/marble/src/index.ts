@@ -21,13 +21,13 @@ const DENSE_RATTLE = 0.09;
 const DENSE_CASCADE = 0.22;
 const EPS = 1e-6;
 const MARBLE_RADIUS = 0.28;
-const MARBLE_GRAVITY = 3.6;
-const MARBLE_HORIZONTAL_SPEED = 1.6;
-const MARBLE_DEPTH_SPEED = 1;
+const MARBLE_GRAVITY = 3;
+const MARBLE_HORIZONTAL_SPEED = 0.75;
+const MARBLE_DEPTH_SPEED = 1.4;
 const MARBLE_INITIAL_DROP_SPEED = 1.6;
 const MARBLE_X_LIMIT = 3.1;
 const MARBLE_DEPTH_MIN = 0.25;
-const MARBLE_DEPTH_MAX = 3.25;
+const MARBLE_DEPTH_MAX = 4.25;
 const ARC_SAMPLE_COUNT = 24;
 const ROUTE_SAMPLE_RATE = 120;
 const ROUTE_CLEARANCE = 0.012;
@@ -497,7 +497,7 @@ function placeTarget(
 
 function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics): MarbleTarget[] {
   const span = Math.max(1, metrics.pitchRange);
-  const positions: Vec3[] = [[0, 5.65, 0.7]];
+  const positions: Vec3[] = [[0, 5.65, 0.75]];
   const outgoingVelocities: Vec3[] = [];
   let horizontalSign = -1;
   let depthSign = 1;
@@ -513,8 +513,11 @@ function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics
       const clearance = positions.slice(0, Math.max(0, positions.length - 1)).reduce((nearest, position) => Math.min(nearest, vecDistance(candidate, position)), Number.POSITIVE_INFINITY);
       return { sign, depthSign: candidateDepthSign, velocityX, velocityZ, candidate, clearance, depthTravel: Math.abs(candidateZ - from[2]), inBounds: Math.abs(candidate[0]) <= MARBLE_X_LIMIT };
     }));
-    const viable = choices.filter((choice) => choice.inBounds).sort((a, b) => b.clearance - a.clearance || b.depthTravel - a.depthTravel);
-    const chosen = viable[0] ?? choices.sort((a, b) => Math.abs(a.candidate[0]) - Math.abs(b.candidate[0]))[0]!;
+    const viable = choices.filter((choice) => choice.inBounds);
+    const minimumDepthTravel = Math.min(0.12, MARBLE_DEPTH_SPEED * gap * 0.45);
+    const depthMoving = viable.filter((choice) => choice.depthTravel >= minimumDepthTravel);
+    const chosen = (depthMoving.length ? depthMoving : viable).sort((a, b) => b.clearance - a.clearance || b.depthTravel - a.depthTravel)[0]
+      ?? choices.sort((a, b) => Math.abs(a.candidate[0]) - Math.abs(b.candidate[0]))[0]!;
     horizontalSign = chosen.sign;
     depthSign = chosen.depthSign;
     const velocityX = chosen.velocityX;
@@ -955,7 +958,7 @@ export function compileMarble(song: Song, options: CompileMarbleOptions = {}): M
     curves: { energy: song.master.energy },
     events: compileEvents(impacts, clusters, tail),
     statics: {
-      compilerVersion: 8,
+      compilerVersion: 9,
       source: {
         trackId: selected.track.id,
         trackName: selected.track.name,

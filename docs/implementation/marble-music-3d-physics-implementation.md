@@ -860,7 +860,7 @@ Before this gate can pass, review at least:
       drop, full-interval travel, exact arrivals, and accumulated roll
 - [x] Compiler tests bound average speed and prove pitch does not change route
       geometry
-- [x] Compiler v8 separates platform centers from marble contact poses, samples
+- [x] Compiler v9 separates platform centers from marble contact poses, samples
       pre/contact/post clearance, ranks target candidates against a 120 Hz
       sample of the full route, and validates sphere-to-3D-oriented-box
       clearance plus full 3D platform separating axes
@@ -868,6 +868,9 @@ Before this gate can pass, review at least:
       platform depth tilt follows the 3D collision normal and an elevated camera
       with a stable depth anchor reveals approach/recede motion through position,
       parallax, foreshortening, and a tested 15% minimum apparent-scale change
+- [x] Projected-axis audit measures the reference fixture at 46% lateral, 25%
+      vertical, and 29% front/back contribution; regression tests require at
+      least 22% depth and no more than 58% lateral contribution
 - [x] Pose-follow camera uses a weighted time window and stable relative
       distance/zoom; continuity tests cover both sides of every impact tangent
 - [x] `untitled-project-418cb58f` compiles 19 targets with zero footprint
