@@ -167,11 +167,17 @@ before adding more target types or secondary physics.
 For every selected note:
 
 ```text
-sampleMarblePath(path, note.t).pos === target.pos + contactOffset
+sampleMarblePath(path, note.t).pos === target.contactPos
+target.contactPos = target.pos + normal * (marbleRadius + halfThickness + clearance)
 ```
 
 The marble may arc, roll, bank, or bounce, but the final contact pose belongs
 to the note onset.
+
+The path must never use the platform mesh center as the marble-center impact
+position. Validate signed distance from the platform surface immediately before,
+at, and after contact so a correct exact frame cannot hide penetration on
+adjacent frames.
 
 ### 2. Every impact immediately continues the motion
 
@@ -660,6 +666,9 @@ adding sync risk, remove the spike.
   - target positions are unchanged when only pitch changes;
   - fixture average speeds stay within the configured physical band and the
     fastest/slowest ratio remains bounded.
+  - marble center stays at least one radius plus target half-thickness outside
+    the platform around impact;
+  - inflated oriented target footprints never intersect.
 
 ### P2 - Add `sampleMarblePose`
 
@@ -851,6 +860,10 @@ Before this gate can pass, review at least:
       drop, full-interval travel, exact arrivals, and accumulated roll
 - [x] Compiler tests bound average speed and prove pitch does not change route
       geometry
+- [x] Compiler v5 separates platform centers from marble contact poses, samples
+      pre/contact/post clearance, and rejects overlapping oriented footprints
+- [x] `untitled-project-418cb58f` compiles 19 targets with zero footprint
+      intersections; dense hardware is converted to compact pegs/chimes
 - [x] Initial browser frame keeps the marble clearly visible with nearby
       platform context and no console warnings
 - [ ] Scrub between impacts: the marble visibly advances throughout the

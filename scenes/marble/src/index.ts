@@ -259,9 +259,11 @@ function addTargetHardware(target: MarbleTarget, group: Group): Group {
     }
   }
 
-  const bracket = new Mesh(new CylinderGeometry(0.018, 0.018, 0.52, 8), darkMetal.clone());
+  const compact = target.kind === "peg" || target.kind === "chime";
+  const bracketLength = compact ? 0.18 : 0.52;
+  const bracket = new Mesh(new CylinderGeometry(0.018, 0.018, bracketLength, 8), darkMetal.clone());
   bracket.rotation.z = Math.PI / 2;
-  bracket.position.set(-target.size[0] * 0.55, -0.2, -0.22);
+  bracket.position.set(-target.size[0] * 0.55, compact ? -0.08 : -0.2, compact ? -0.12 : -0.22);
   hardware.add(bracket);
   group.add(hardware);
   return hardware;
@@ -484,6 +486,7 @@ export class MarbleScene {
     const targets = this.#performance.statics.targets;
     const rodMaterial = new MeshStandardMaterial({ color: 0x1b1d23, metalness: 0.75, roughness: 0.26 });
     for (const target of targets) {
+      if (target.kind === "peg" || target.kind === "chime") continue;
       const rod = new Mesh(new CylinderGeometry(0.026, 0.026, 0.86, 10), rodMaterial);
       rod.position.set(target.pos[0] - 0.44, target.pos[1] - 0.18, target.pos[2] - 0.18);
       rod.rotation.z = Math.PI / 2 + target.rotation[2] * 0.45;
@@ -617,10 +620,10 @@ export class MarbleScene {
       );
       meshes.base.scale.set(this.tuning.targetScale * (1 + intensity * 0.08), this.tuning.targetScale * (1 - Math.max(0, recoil) * 0.18), this.tuning.targetScale * (1 + intensity * 0.05));
       meshes.hardware.scale.setScalar(1 + intensity * 0.035);
-      meshes.glow.material.opacity = clamp(intensity * 0.34, 0, 0.38);
+      meshes.glow.material.opacity = clamp(intensity * 0.18, 0, 0.16);
       meshes.glow.material.emissiveIntensity = intensity * 1.25;
       meshes.glow.position.set(meshes.home.x, meshes.home.y, meshes.home.z + recoil * 0.6);
-      meshes.glow.scale.setScalar(0.9 + intensity * 1.2 + Math.abs(recoil) * 1.8);
+      meshes.glow.scale.setScalar(0.48 + intensity * 0.45 + Math.abs(recoil) * 0.7);
       meshes.shadow.position.set(meshes.home.x - 0.08 - recoil * 0.25, meshes.home.y - 0.1 - recoil * 0.12, -0.405);
       meshes.shadow.material.opacity = clamp(0.16 + intensity * 0.1, 0.08, 0.28);
       meshes.shadow.scale.set(1.4 + Math.abs(recoil) * 2.2, 0.46 + Math.abs(recoil) * 0.42, 1);

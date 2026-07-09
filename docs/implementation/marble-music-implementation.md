@@ -146,7 +146,7 @@ The exact TypeScript may evolve, but these concepts should remain stable.
 interface MarblePerformance extends Performance {
   concept: "marble";
   statics: {
-    compilerVersion: 4;
+    compilerVersion: 5;
     source: MarbleSource;
     metrics: MarbleTrackMetrics;
     targets: MarbleTarget[];
@@ -392,6 +392,8 @@ Rules:
 - simulate one controlled launch velocity under one gravity constant from each
   impact to the next note time;
 - place the next target at that predicted collision position;
+- store the marble-center collision point separately from the platform center;
+  offset the platform by marble radius plus target half-thickness and clearance;
 - timing controls route geometry; pitch must not change travel distance or
   force a different marble speed;
 - pitch class can choose material/color family;
@@ -401,7 +403,10 @@ Rules:
 
 The compiler may reflect the horizontal launch direction at board bounds, but
 must preserve launch-speed and gravity invariants. Platform rotation should be
-derived from the incoming-to-outgoing collision impulse.
+derived from the incoming-to-outgoing collision impulse. Candidate launch
+directions should prefer unoccupied regions, and oriented target footprints
+must pass a separating-axis overlap test. Crowded passages may shrink or become
+compact peg/chime mechanisms, but platforms may not intersect.
 
 ### 5. Back-solve path segments
 
@@ -426,6 +431,10 @@ Recommended path-solver constraints:
 - `t0 < t1` for every moving segment;
 - adjacent segments must connect within a small epsilon, e.g. `0.001` world
   units;
+- impact pose must equal `target.contactPos`, never the rendered platform
+  center;
+- samples immediately before and after impact must remain outside platform
+  volume;
 - average travel speed must remain inside the configured physical band; longer
   gaps should move the next platform instead of accelerating the marble;
 - extremely short gaps should collapse into local mechanisms, not high-speed

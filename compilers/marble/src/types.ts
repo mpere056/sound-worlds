@@ -36,6 +36,7 @@ export interface MarbleTarget {
   pitch: number;
   pitchClass: number;
   pos: [number, number, number];
+  contactPos: [number, number, number];
   rotation: [number, number, number];
   size: [number, number, number];
   color: string;

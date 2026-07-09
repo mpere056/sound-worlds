@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildFixtureSong } from "@reaper-viz/core";
-import { compileMarble, sampleMarblePath, sampleMarblePose } from "./index.js";
+import { compileMarble, marbleTargetsOverlap, sampleMarblePath, sampleMarblePose } from "./index.js";
 
 describe("Marble Music compiler", () => {
   it("maps every selected note to an exact hit", () => {
@@ -49,11 +49,11 @@ describe("Marble Music compiler", () => {
     expect(travel?.t1).toBe(performance.statics.impacts[1]!.t);
     const pose = sampleMarblePath(performance.statics.path, 0.9);
     expect(pose.kind).toBe("arc");
-    expect(pose.pos).not.toEqual(firstTarget.pos);
+    expect(pose.pos).not.toEqual(firstTarget.contactPos);
     const secondImpact = performance.statics.impacts[1]!;
     const secondPose = sampleMarblePath(performance.statics.path, secondImpact.t);
     const secondTarget = performance.statics.targets[1]!;
-    secondPose.pos.forEach((value, index) => expect(value).toBeCloseTo(secondTarget.pos[index]!, 6));
+    secondPose.pos.forEach((value, index) => expect(value).toBeCloseTo(secondTarget.contactPos[index]!, 6));
   });
 
   it("drops into a delayed first note instead of appearing on its target", () => {
@@ -91,12 +91,16 @@ describe("Marble Music compiler", () => {
     for (const impact of performance.statics.impacts) {
       const pose = sampleMarblePose(performance.statics.path, impact.t);
       const target = performance.statics.targets.find((candidate) => candidate.id === impact.targetId)!;
-      pose.pos.forEach((value, index) => expect(value).toBeCloseTo(target.pos[index]!, 6));
+      pose.pos.forEach((value, index) => expect(value).toBeCloseTo(target.contactPos[index]!, 6));
       expect(pose.contact).toBe(true);
       expect(pose.quat.every(Number.isFinite)).toBe(true);
       expect(pose.tangent.every(Number.isFinite)).toBe(true);
       const expectedNormal = [-Math.sin(target.rotation[2]), Math.cos(target.rotation[2]), 0];
       pose.normal.forEach((value, index) => expect(value).toBeCloseTo(expectedNormal[index]!, 4));
+      const centerToContact = target.contactPos.map((value, index) => value - target.pos[index]!) as [number, number, number];
+      const signedClearance = centerToContact.reduce((sum, value, index) => sum + value * expectedNormal[index]!, 0);
+      const halfThickness = target.kind === "peg" || target.kind === "chime" ? target.size[1] * 0.9 : target.size[1] / 2;
+      expect(signedClearance).toBeCloseTo(0.28 + halfThickness + 0.018, 3);
       expect(Math.hypot(...pose.normal)).toBeCloseTo(1, 5);
       expect(Math.hypot(...pose.quat)).toBeCloseTo(1, 5);
     }
@@ -121,8 +125,33 @@ describe("Marble Music compiler", () => {
     const high = buildFixtureSong({ bars: 2, patterns: [{ role: "keys", beats: [0, 1, 2.5, 4, 6], pitch: 76, kind: "note" }] });
     const lowPerformance = compileMarble(low);
     const highPerformance = compileMarble(high);
-    expect(highPerformance.statics.targets.map((target) => target.pos)).toEqual(lowPerformance.statics.targets.map((target) => target.pos));
+    expect(highPerformance.statics.targets.map((target) => target.contactPos)).toEqual(lowPerformance.statics.targets.map((target) => target.contactPos));
     expect(highPerformance.statics.targets.map((target) => target.pitch)).not.toEqual(lowPerformance.statics.targets.map((target) => target.pitch));
+  });
+
+  it("emits non-overlapping target footprints", () => {
+    const song = buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [0, 0.35, 0.72, 1.05, 1.3, 1.48, 1.65, 2.2, 3.6], pitch: 58, kind: "note" }] });
+    const targets = compileMarble(song).statics.targets;
+    for (let left = 0; left < targets.length; left += 1) {
+      for (let right = left + 1; right < targets.length; right += 1) {
+        expect(marbleTargetsOverlap(targets[left]!, targets[right]!)).toBe(false);
+      }
+    }
+  });
+
+  it("keeps the marble outside platform volume around impacts", () => {
+    const song = buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [0, 1, 2, 3], pitch: 55, kind: "note" }] });
+    const performance = compileMarble(song);
+    for (const impact of performance.statics.impacts) {
+      const target = performance.statics.targets[impact.noteIndex]!;
+      const normal = [-Math.sin(target.rotation[2]), Math.cos(target.rotation[2]), 0];
+      const halfThickness = target.kind === "peg" || target.kind === "chime" ? target.size[1] * 0.9 : target.size[1] / 2;
+      for (const offset of [-0.01, 0, 0.01]) {
+        const pose = sampleMarblePose(performance.statics.path, Math.max(0, impact.t + offset));
+        const signedDistance = pose.pos.reduce((sum, value, index) => sum + (value - target.pos[index]!) * normal[index]!, 0);
+        expect(signedDistance).toBeGreaterThanOrEqual(0.28 + halfThickness - 0.01);
+      }
+    }
   });
 
   it("adds monotonic arc-length samples and distance-based spin to moving segments", () => {

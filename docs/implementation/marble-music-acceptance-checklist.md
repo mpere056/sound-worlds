@@ -32,6 +32,8 @@ Pass only if all are true:
   pitch affects target identity but not route distance;
 - the user can perceive the sync without enabling debug overlays;
 - scrubbing to a hit time shows the marble contacting or activating the target;
+- only the marble edge touches a platform: its center never enters the target
+  volume before, during, or after impact;
 - no note is silently dropped;
 - no impact appears without a musical reason unless it is clearly tail
   resonance, not a new hit.
@@ -47,6 +49,8 @@ Pass only if all are true:
   motion arising from gravity rather than arbitrary target spacing;
 - the marble has readable weight, spin, and contact;
 - the route reads as a designed kinetic machine rather than a plotted line.
+- no platform, resonator, peg, or chime footprint intersects another; crowded
+  notes must be rerouted, shortened, or converted to compact mechanisms.
 
 ## Visual checklist
 
