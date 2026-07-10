@@ -1,5 +1,5 @@
 import { parsePerformance, parseSong, type Song } from "@reaper-viz/core";
-import { compileMarble, type MarbleCompileProfile, type MarbleMotionMix } from "@reaper-viz/compiler-marble";
+import type { MarbleCompileProfile, MarbleMotionMix } from "@reaper-viz/compiler-marble";
 import { captureCanvasPng, exportCanvasMp4, PixiBackend, supportsCanvasMp4 } from "@reaper-viz/render";
 import { MarbleScene, type MarblePerformance, type MarbleSceneProfileSnapshot, type MarbleTuning } from "@reaper-viz/scene-marble";
 import { MetroScene, type MetroPerformance } from "@reaper-viz/scene-metro";
@@ -7,6 +7,8 @@ import { PaintingScene, type PaintingPerformance } from "@reaper-viz/scene-paint
 import { RunnerScene, type RunnerPerformance } from "@reaper-viz/scene-runner";
 import { TestPatternScene } from "@reaper-viz/scene-testpattern";
 import { Pane } from "tweakpane";
+import { MarblePlannerClient } from "./marble-planner-client.js";
+import type { MarblePlannerSuccess } from "./marble-planner-protocol.js";
 import "./styles.css";
 
 interface ProjectSummary { id: string; name: string; durationSec: number; concepts: string[]; }
@@ -26,6 +28,7 @@ interface HotImportMeta extends ImportMeta {
 interface MarbleBrowserSwapProfile {
   mix: MarbleMotionMix;
   compileMs: number;
+  plannerRoundTripMs: number;
   sceneReplacementMs: number;
   firstRenderMs: number;
   compiler?: MarbleCompileProfile;
@@ -82,6 +85,7 @@ const exportPng = document.querySelector<HTMLButtonElement>("#export-png")!;
 const exportProgress = document.querySelector<HTMLDivElement>("#export-progress")!;
 const sceneLabel = document.querySelector<HTMLSpanElement>("#scene-label")!;
 const metroAudit = document.querySelector<HTMLDivElement>("#metro-audit")!;
+const tweakpaneContainer = document.querySelector<HTMLDivElement>("#tweakpane")!;
 
 let backend: PixiBackend | undefined;
 let scene: ActiveScene | undefined;
@@ -102,6 +106,26 @@ const marbleProfilingEnabled = new URLSearchParams(window.location.search).has("
 const marbleBrowserProfile: MarbleBrowserProfile = { frameIntervalsMs: [], renderMs: [], longTasks: [], swaps: [] };
 let previousAnimationFrameAt: number | undefined;
 let profilePublishFrame = 0;
+let marblePlannerRequestedAt = 0;
+let marbleLastInputAt = 0;
+let marbleActivationTimer: number | undefined;
+const marblePlanner = new MarblePlannerClient(
+  new Worker(new URL("./marble-planner.worker.ts", import.meta.url), { type: "module" }),
+  {
+    planned: (result) => applyPlannedMarble(result),
+    failed: (error) => reportMarblePlanningFailure(error),
+  },
+);
+
+for (const eventName of ["pointerdown", "keydown", "input"]) {
+  tweakpaneContainer.addEventListener(eventName, () => {
+    if (conceptSelect.value !== "marble") return;
+    marbleLastInputAt = performance.now();
+    if (marbleActivationTimer !== undefined) window.clearTimeout(marbleActivationTimer);
+    marbleActivationTimer = undefined;
+    marblePlanner.invalidate();
+  }, { capture: true });
+}
 
 if (marbleProfilingEnabled) {
   (globalThis as typeof globalThis & { __marbleLiveProfile?: MarbleBrowserProfile }).__marbleLiveProfile = marbleBrowserProfile;
@@ -275,44 +299,56 @@ function rebuildMarbleScene(): void {
   if (!song || conceptSelect.value !== "marble") return;
   statusTitle.textContent = "Rebalancing marble world";
   statusDetail.textContent = `${marbleMotionMix.leftRight}% left/right | ${marbleMotionMix.upDown}% up/down | ${marbleMotionMix.frontBack}% front/back`;
-  try {
-    let compilerProfile: MarbleCompileProfile | undefined;
-    const compileStartedAt = marbleProfilingEnabled ? performance.now() : 0;
-    const compiledPerformance = compileMarble(song, {
-      ...(marbleSourceTrackId ? { sourceTrackId: marbleSourceTrackId } : {}),
-      motionMix: marbleMotionMix,
-      ...(marbleProfilingEnabled ? {
-        instrumentation: {
-          now: () => performance.now(),
-          report: (result: MarbleCompileProfile) => { compilerProfile = result; },
-        },
-      } : {}),
-    });
-    const compileMs = marbleProfilingEnabled ? performance.now() - compileStartedAt : 0;
-    const replacementStartedAt = marbleProfilingEnabled ? performance.now() : 0;
-    destroyActiveScene();
-    scene = new MarbleScene(canvas, compiledPerformance, marbleTuning);
-    const sceneReplacementMs = marbleProfilingEnabled ? performance.now() - replacementStartedAt : 0;
-    previousBeat = -1;
-    const firstRenderStartedAt = marbleProfilingEnabled ? performance.now() : 0;
-    renderAt(audio.currentTime);
-    if (marbleProfilingEnabled) {
-      pushBounded(marbleBrowserProfile.swaps, {
-        mix: { ...marbleMotionMix },
-        compileMs,
-        sceneReplacementMs,
-        firstRenderMs: performance.now() - firstRenderStartedAt,
-        ...(compilerProfile ? { compiler: compilerProfile } : {}),
-        ...(scene.profileSnapshot ? { resources: scene.profileSnapshot() } : {}),
-      }, 400);
-      publishMarbleProfile();
-    }
-    statusTitle.textContent = "Marble Music | live motion mix";
-    statusDetail.textContent = marbleStatus(compiledPerformance);
-  } catch (error) {
-    statusTitle.textContent = "Motion mix unavailable";
-    statusDetail.textContent = error instanceof Error ? error.message : "The route could not be rebuilt";
+  marblePlannerRequestedAt = performance.now();
+  marblePlanner.request(marbleMotionMix, {
+    profile: marbleProfilingEnabled,
+    ...(marbleSourceTrackId ? { sourceTrackId: marbleSourceTrackId } : {}),
+  });
+}
+
+function applyPlannedMarble(result: MarblePlannerSuccess): void {
+  if (!song || conceptSelect.value !== "marble") return;
+  const remainingQuietMs = 250 - (performance.now() - marbleLastInputAt);
+  if (remainingQuietMs > 0) {
+    if (marbleActivationTimer !== undefined) window.clearTimeout(marbleActivationTimer);
+    marbleActivationTimer = window.setTimeout(() => {
+      marbleActivationTimer = undefined;
+      applyPlannedMarble(result);
+    }, remainingQuietMs);
+    return;
   }
+  const plannedMix = result.performance.statics.motionMix;
+  if (plannedMix.leftRight !== marbleMotionMix.leftRight
+    || plannedMix.upDown !== marbleMotionMix.upDown
+    || plannedMix.frontBack !== marbleMotionMix.frontBack) return;
+  const replacementStartedAt = marbleProfilingEnabled ? performance.now() : 0;
+  destroyActiveScene();
+  const nextScene = new MarbleScene(canvas, result.performance, marbleTuning);
+  scene = nextScene;
+  const sceneReplacementMs = marbleProfilingEnabled ? performance.now() - replacementStartedAt : 0;
+  previousBeat = -1;
+  const firstRenderStartedAt = marbleProfilingEnabled ? performance.now() : 0;
+  renderAt(audio.currentTime);
+  if (marbleProfilingEnabled) {
+    pushBounded(marbleBrowserProfile.swaps, {
+      mix: { ...result.performance.statics.motionMix },
+      compileMs: result.compileProfile?.totalMs ?? 0,
+      plannerRoundTripMs: performance.now() - marblePlannerRequestedAt,
+      sceneReplacementMs,
+      firstRenderMs: performance.now() - firstRenderStartedAt,
+      ...(result.compileProfile ? { compiler: result.compileProfile } : {}),
+      resources: nextScene.profileSnapshot(),
+    }, 400);
+    publishMarbleProfile();
+  }
+  statusTitle.textContent = "Marble Music | live motion mix";
+  statusDetail.textContent = marbleStatus(result.performance);
+}
+
+function reportMarblePlanningFailure(error: string): void {
+  if (conceptSelect.value !== "marble") return;
+  statusTitle.textContent = "Motion mix unavailable";
+  statusDetail.textContent = error;
 }
 
 function scheduleMarbleRebuild(): void {
@@ -335,6 +371,7 @@ function updateMarbleMotionMix(changed: keyof MarbleMotionMix, bindingPane: Bind
   }
   previousMarbleMotionMix = { ...marbleMotionMix };
   bindingPane.refresh();
+  marblePlanner.invalidate();
   scheduleMarbleRebuild();
 }
 
@@ -346,6 +383,8 @@ function addMarbleMotionBinding(bindingPane: BindingPane, key: keyof MarbleMotio
 async function loadConcept(concept: string): Promise<void> {
   if (marbleRebuildTimer !== undefined) window.clearTimeout(marbleRebuildTimer);
   marbleRebuildTimer = undefined;
+  if (marbleActivationTimer !== undefined) window.clearTimeout(marbleActivationTimer);
+  marbleActivationTimer = undefined;
   const wasThree = scene?.backendKind === "three";
   destroyActiveScene();
   if (wasThree) destroyPixiBackend();
@@ -450,6 +489,7 @@ async function loadProject(id: string): Promise<void> {
   const response = await fetch(`/api/projects/${encodeURIComponent(id)}/song.json`);
   if (!response.ok) throw new Error(`Song request failed: ${response.status}`);
   song = parseSong(await response.json());
+  marblePlanner.initialize(song);
   audio.src = `/api/projects/${encodeURIComponent(id)}/master.wav`;
   audio.load();
   await waitForAudioMetadata(audio);
@@ -614,6 +654,7 @@ void start().catch((error: unknown) => {
   audio.removeAttribute("src");
   audio.load();
   pane?.dispose();
+  marblePlanner.dispose();
   destroyActiveScene();
   destroyPixiBackend();
 });

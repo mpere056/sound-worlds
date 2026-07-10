@@ -1,6 +1,6 @@
 # Marble live-control performance implementation plan
 
-Status: in progress (P0 complete; P1 next)
+Status: in progress (P0-P1 complete; P2 next)
 
 Last updated: 2026-07-10
 
@@ -185,7 +185,7 @@ Commit and push instrumentation before changing behavior.
 - The P0 evidence changes P2 priority: target candidate pruning and route
   clearance broad-phase come before motion-solver optimization.
 
-## Phase P1 - Dedicated route-planner worker
+## Phase P1 - Dedicated route-planner worker (complete)
 
 ### Work
 
@@ -231,6 +231,25 @@ type PlannerResult = {
 ### Commit point
 
 Commit and push the worker protocol and non-blocking planner integration.
+
+### Implemented result
+
+- A module worker owns browser-side `compileMarble` work and retains the parsed
+  song for the active project generation.
+- Structured-cloneable initialize/plan/planned/failed messages carry project
+  generations, monotonically increasing request IDs, and optional compile
+  profiles.
+- The client rejects stale project generations and request IDs; raw control
+  input invalidates outstanding requests before the debounced final request.
+- Scene activation additionally checks the compiled mix against the current
+  desired mix and waits for a short input quiet period.
+- A 100-request unit burst activates only request 100.
+- In the development browser, 10/80/10 compiled in the worker in 2,254 ms with
+  2,384 ms request-to-application latency while the UI maintained a 16.8 ms p95
+  frame interval and preserved the 3.500 s timeline position.
+- The remaining measured hitch is isolated to scene application: 9.8 ms scene
+  replacement plus 119 ms first render. P3 owns that cost, while P2 still owns
+  the 14,451-candidate target-placement compile.
 
 ## Phase P2 - Incremental and warm-started compiler
 
