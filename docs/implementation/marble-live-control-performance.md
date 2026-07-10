@@ -539,25 +539,39 @@ Commit and push the coordinator before adding camera access or MediaPipe.
   optional low-latency filtering for noisy gesture input, plus the five-minute
   synthetic stream and final-value catch-up gates.
 
-### Implemented slice: complete visual fallback smoothing
+### Implemented slice: complete visual fallback smoothing and size bounds
 
 - Safe same-shape future targets continue to use collision-checked position,
   shortest-path rotation, and size interpolation.
-- Every other non-contact platform now scales smoothly to 4% before activation
-  and grows from 4% at its new validated transform over 350 ms. This covers
-  shape changes, withheld collision morphs, and already-played platforms that
-  previously rebuilt all at once.
-- Crossfades inherit each target's currently displayed scale when another plan
-  arrives, so reversing or continuing a slider drag cannot pop a shrinking
-  platform back to full size.
-- The contact platform remains solid through impact. After activation it shrinks
-  at the old transform, switches transforms only while nearly invisible, and
-  grows back as the marble departs.
+- Every other non-contact platform now fades to zero opacity at stable size
+  before activation and fades in at its new validated transform over 350 ms.
+  Per-target material instances preserve pooled geometry and shader programs
+  while allowing independent opacity. This covers shape changes, withheld
+  collision morphs, and already-played platforms that previously rebuilt all at
+  once.
+- Crossfades inherit each target's currently displayed opacity when another plan
+  arrives, so reversing or continuing a slider drag cannot flash a fading
+  platform back to full opacity.
+- The contact platform remains solid through impact. After activation it fades
+  at the old transform, switches transforms only while invisible, and fades back
+  in as the marble departs.
 - The reference 20/40/40 drag reports 18 transitioning platforms out of 19; the
   sole pre-impact exception is the contact platform handled by the post-impact
   transition. Frame p95 remained 17.4 ms during the continuous drag.
-- Tests cover safe transform morphing, intersecting-layout crossfade fallback,
-  smooth scale endpoints/midpoint, and the contact-platform two-stage scale.
+- The final-note fallback now synthesizes an upward rebound velocity. This gives
+  the screenshot's 15/26/59 final impact a regular visible target instead of the
+  old 0.048 x 0.024 x 0.048 emergency speck.
+- Collision pads that must remain tiny in mathematically dense extreme layouts
+  are mounted on bounded visible carriers. Compact mechanisms use 0.22 x 0.055
+  x 0.14 minimum and 0.5 x 0.18 x 0.36 maximum carriers; full platforms use
+  0.48 x 0.09 x 0.24 minimum and 1.35 x 0.28 x 0.7 maximum carriers. Base
+  rendering is also capped at the corresponding maximum under tuning.
+- A proposed global route expansion was rejected because it raised marble speed
+  to 5.78 world units/s, beyond the proven 3.3 realism ceiling. Bounded carriers
+  preserve the exact collision pad and route instead of hiding a physics change.
+- Tests cover safe transform morphing, intersecting-layout opacity fallback,
+  fade endpoints/midpoint, contact-platform two-stage fading, final rebound size,
+  visual carrier bounds, and unchanged collision target data.
 
 ## Phase P6 - MediaPipe hand-control adapter
 

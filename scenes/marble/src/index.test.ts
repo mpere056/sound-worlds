@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildFixtureSong } from "@reaper-viz/core";
 import { compileMarble, marbleTargetClearance, sampleMarblePose } from "@reaper-viz/compiler-marble";
 import { PerspectiveCamera, Vector3 } from "three";
-import { blendMarbleCamera, interpolateMarbleScale, interpolateMarbleTarget, marbleBoundaryTransitionScale, prepareMarbleActivation, prepareMarbleTargetMorph, sampleMarbleCamera, type MarbleCameraPose } from "./index.js";
+import { blendMarbleCamera, interpolateMarbleOpacity, interpolateMarbleTarget, marbleBoundaryTransitionOpacity, marblePlatformVisualSize, prepareMarbleActivation, prepareMarbleTargetMorph, sampleMarbleCamera, type MarbleCameraPose } from "./index.js";
 
 function distance(a: [number, number, number], b: [number, number, number]): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
@@ -81,6 +81,16 @@ describe("Marble camera", () => {
 });
 
 describe("Marble live-plan activation", () => {
+  it("bounds visible platform carriers without changing collision target data", () => {
+    const song = buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [0, 1], pitch: 55, kind: "note" }] });
+    const source = compileMarble(song).statics.targets[0]!;
+    const tinyCompact = { ...source, kind: "peg" as const, size: [0.005, 0.002, 0.004] as [number, number, number] };
+    const hugePlate = { ...source, kind: "plate" as const, size: [3, 1, 2] as [number, number, number] };
+    expect(marblePlatformVisualSize(tinyCompact)).toEqual([0.22, 0.055, 0.14]);
+    expect(marblePlatformVisualSize(hugePlate)).toEqual([1.35, 0.28, 0.7]);
+    expect(tinyCompact.size).toEqual([0.005, 0.002, 0.004]);
+  });
+
   it("starts camera blending at the old pose and finishes at the new pose", () => {
     const from: MarbleCameraPose = { position: [1, 2, 3], lookAt: [0, 1, 2], zoom: 1.1 };
     const to: MarbleCameraPose = { position: [4, 6, 8], lookAt: [3, 5, 7], zoom: 1.25 };
@@ -167,13 +177,13 @@ describe("Marble live-plan activation", () => {
     expect(fallback?.fadeTargetIds).not.toContain(active.statics.impacts[activation!.noteIndex]!.targetId);
   });
 
-  it("smoothly scales withheld platforms out and back in", () => {
-    expect(interpolateMarbleScale(1, 0.04, 0)).toBe(1);
-    expect(interpolateMarbleScale(1, 0.04, 1)).toBeCloseTo(0.04, 10);
-    expect(interpolateMarbleScale(0.04, 1, 0.5)).toBeCloseTo(0.52, 10);
-    expect(interpolateMarbleScale(0.04, 1, 1)).toBe(1);
-    expect(marbleBoundaryTransitionScale(0)).toBe(1);
-    expect(marbleBoundaryTransitionScale(0.5)).toBeCloseTo(0.04, 10);
-    expect(marbleBoundaryTransitionScale(1)).toBe(1);
+  it("smoothly fades withheld platforms out and back in at stable size", () => {
+    expect(interpolateMarbleOpacity(1, 0, 0)).toBe(1);
+    expect(interpolateMarbleOpacity(1, 0, 1)).toBe(0);
+    expect(interpolateMarbleOpacity(0, 1, 0.5)).toBeCloseTo(0.5, 10);
+    expect(interpolateMarbleOpacity(0, 1, 1)).toBe(1);
+    expect(marbleBoundaryTransitionOpacity(0)).toBe(1);
+    expect(marbleBoundaryTransitionOpacity(0.5)).toBe(0);
+    expect(marbleBoundaryTransitionOpacity(1)).toBe(1);
   });
 });

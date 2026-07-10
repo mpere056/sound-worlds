@@ -50,6 +50,13 @@ describe("Marble Music compiler", () => {
     expect(JSON.stringify(compileMarble(song))).toBe(JSON.stringify(compileMarble(song)));
   });
 
+  it("gives the final note a visible rebound target instead of an emergency speck", () => {
+    const song = buildFixtureSong({ bars: 2, patterns: [{ role: "keys", beats: [0, 1, 2.5, 4, 6], pitch: 55, kind: "note" }] });
+    const performance = compileMarble(song, { motionMix: { leftRight: 15, upDown: 26, frontBack: 59 } });
+    const finalTarget = performance.statics.targets.at(-1)!;
+    expect(Math.max(...finalTarget.size)).toBeGreaterThanOrEqual(0.18);
+  });
+
   it("classifies dense notes as local mechanisms instead of dropping them", () => {
     const song = buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [0, 0.1, 0.18, 0.32, 1], pitch: 72, kind: "note" }] });
     const performance = compileMarble(song);

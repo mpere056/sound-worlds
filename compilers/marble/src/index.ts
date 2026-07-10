@@ -746,7 +746,7 @@ function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics
           -motion.gravity * Math.max(EPS, note.t - notes[index - 1]!.t),
           outgoingVelocities[index - 1]![2],
         ] as Vec3;
-    const outgoing = outgoingVelocities[index] ?? [incoming[0] * 0.35, -0.35, incoming[2] * 0.35] as Vec3;
+    const outgoing = outgoingVelocities[index] ?? [incoming[0] * 0.35, Math.max(0.35, -incoming[1] * 0.35), incoming[2] * 0.35] as Vec3;
     const impulse = vecNormalize(vecSub(outgoing, incoming), [0, 1, 0]);
     const rotation = Math.atan2(-impulse[0], impulse[1]);
     const depthTilt = Math.asin(clamp(impulse[2], -0.72, 0.72));
