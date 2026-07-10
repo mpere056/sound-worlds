@@ -539,39 +539,46 @@ Commit and push the coordinator before adding camera access or MediaPipe.
   optional low-latency filtering for noisy gesture input, plus the five-minute
   synthetic stream and final-value catch-up gates.
 
-### Implemented slice: complete visual fallback smoothing and size bounds
+### Implemented slice: persistent handoffs and marble-relative size bounds
 
 - Safe same-shape future targets continue to use collision-checked position,
   shortest-path rotation, and size interpolation.
-- Every other non-contact platform now fades to zero opacity at stable size
-  before activation and fades in at its new validated transform over 350 ms.
-  Per-target material instances preserve pooled geometry and shader programs
-  while allowing independent opacity. This covers shape changes, withheld
-  collision morphs, and already-played platforms that previously rebuilt all at
-  once.
-- Crossfades inherit each target's currently displayed opacity when another plan
-  arrives, so reversing or continuing a slider drag cannot flash a fading
-  platform back to full opacity.
+- Unsafe non-contact targets no longer fade away while the old route is still
+  active. At activation, the renderer snapshots those outgoing mechanisms as
+  geometry-sharing visual ghosts, installs the validated incoming route, and
+  crossfades old and new over 350 ms. A continuing slider drag does not clear an
+  in-progress ghost before its fade completes.
+- Per-target material instances preserve pooled geometry and shader programs
+  while allowing independent incoming and outgoing opacity. The old collision
+  bodies are visual only after activation; physics immediately belongs to the
+  validated incoming route.
 - The contact platform remains solid through impact. After activation it fades
   at the old transform, switches transforms only while invisible, and fades back
   in as the marble departs.
 - The reference 20/40/40 drag reports 18 transitioning platforms out of 19; the
   sole pre-impact exception is the contact platform handled by the post-impact
-  transition. Frame p95 remained 17.4 ms during the continuous drag.
+  transition.
 - The final-note fallback now synthesizes an upward rebound velocity. This gives
   the screenshot's 15/26/59 final impact a regular visible target instead of the
   old 0.048 x 0.024 x 0.048 emergency speck.
 - Collision pads that must remain tiny in mathematically dense extreme layouts
-  are mounted on bounded visible carriers. Compact mechanisms use 0.22 x 0.055
-  x 0.14 minimum and 0.5 x 0.18 x 0.36 maximum carriers; full platforms use
-  0.48 x 0.09 x 0.24 minimum and 1.35 x 0.28 x 0.7 maximum carriers. Base
-  rendering is also capped at the corresponding maximum under tuning.
+  are mounted on colored bounded carriers behind the contact surface. Compact
+  mechanisms use 0.58 x 0.11 x 0.28 minimum and 0.82 x 0.2 x 0.46 maximum
+  carriers; full platforms use 0.68 x 0.12 x 0.32 minimum and 1.35 x 0.28 x
+  0.7 maximum carriers. The compact minimum is wider than the 0.56-unit marble,
+  so a valid target cannot collapse into a dot beside the ball. Base rendering
+  remains capped at the corresponding maximum under tuning.
+- The reported 12/78/10 project profile contains 18 compact fallbacks as small
+  as 0.024 x 0.0072 x 0.0176. The previous 0.22-unit carrier was therefore also
+  smaller than the marble and could disappear in perspective. Browser checks at
+  12/78/10 and 5.728 s plus 43/47/10 and 1.381 s now retain clearly colored,
+  marble-scale platform faces.
 - A proposed global route expansion was rejected because it raised marble speed
   to 5.78 world units/s, beyond the proven 3.3 realism ceiling. Bounded carriers
   preserve the exact collision pad and route instead of hiding a physics change.
-- Tests cover safe transform morphing, intersecting-layout opacity fallback,
-  fade endpoints/midpoint, contact-platform two-stage fading, final rebound size,
-  visual carrier bounds, and unchanged collision target data.
+- Tests cover safe transform morphing, persistent unsafe outgoing opacity, ghost
+  fade endpoints/midpoint, contact-platform two-stage fading, final rebound
+  size, visual carrier bounds, and unchanged collision target data.
 
 ## Phase P6 - MediaPipe hand-control adapter
 

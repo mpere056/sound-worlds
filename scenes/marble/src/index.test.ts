@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildFixtureSong } from "@reaper-viz/core";
 import { compileMarble, marbleTargetClearance, sampleMarblePose } from "@reaper-viz/compiler-marble";
 import { PerspectiveCamera, Vector3 } from "three";
-import { blendMarbleCamera, interpolateMarbleOpacity, interpolateMarbleTarget, marbleBoundaryTransitionOpacity, marblePlatformVisualSize, prepareMarbleActivation, prepareMarbleTargetMorph, sampleMarbleCamera, type MarbleCameraPose } from "./index.js";
+import { blendMarbleCamera, interpolateMarbleOpacity, interpolateMarbleTarget, marbleBoundaryTransitionOpacity, marbleGhostTransitionOpacity, marblePlatformVisualSize, marbleTargetMorphOpacity, prepareMarbleActivation, prepareMarbleTargetMorph, sampleMarbleCamera, type MarbleCameraPose } from "./index.js";
 
 function distance(a: [number, number, number], b: [number, number, number]): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
@@ -86,8 +86,9 @@ describe("Marble live-plan activation", () => {
     const source = compileMarble(song).statics.targets[0]!;
     const tinyCompact = { ...source, kind: "peg" as const, size: [0.005, 0.002, 0.004] as [number, number, number] };
     const hugePlate = { ...source, kind: "plate" as const, size: [3, 1, 2] as [number, number, number] };
-    expect(marblePlatformVisualSize(tinyCompact)).toEqual([0.22, 0.055, 0.14]);
+    expect(marblePlatformVisualSize(tinyCompact)).toEqual([0.58, 0.11, 0.28]);
     expect(marblePlatformVisualSize(hugePlate)).toEqual([1.35, 0.28, 0.7]);
+    expect(marblePlatformVisualSize(tinyCompact)[0]).toBeGreaterThan(0.56);
     expect(tinyCompact.size).toEqual([0.005, 0.002, 0.004]);
   });
 
@@ -175,9 +176,11 @@ describe("Marble live-plan activation", () => {
     expect(fallback?.targetIds).toHaveLength(0);
     expect(fallback?.fadeTargetIds.length).toBeGreaterThan(0);
     expect(fallback?.fadeTargetIds).not.toContain(active.statics.impacts[activation!.noteIndex]!.targetId);
+    const withheldTargetId = fallback!.fadeTargetIds[0]!;
+    expect(marbleTargetMorphOpacity(fallback!, withheldTargetId, fallback!.endT - 0.001)).toBe(1);
   });
 
-  it("smoothly fades withheld platforms out and back in at stable size", () => {
+  it("smoothly crossfades replacement platforms at stable size", () => {
     expect(interpolateMarbleOpacity(1, 0, 0)).toBe(1);
     expect(interpolateMarbleOpacity(1, 0, 1)).toBe(0);
     expect(interpolateMarbleOpacity(0, 1, 0.5)).toBeCloseTo(0.5, 10);
@@ -185,5 +188,8 @@ describe("Marble live-plan activation", () => {
     expect(marbleBoundaryTransitionOpacity(0)).toBe(1);
     expect(marbleBoundaryTransitionOpacity(0.5)).toBe(0);
     expect(marbleBoundaryTransitionOpacity(1)).toBe(1);
+    expect(marbleGhostTransitionOpacity(0)).toBe(1);
+    expect(marbleGhostTransitionOpacity(0.5)).toBeCloseTo(0.5, 10);
+    expect(marbleGhostTransitionOpacity(1)).toBe(0);
   });
 });

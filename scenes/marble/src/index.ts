@@ -40,8 +40,8 @@ export interface MarbleTuning {
 }
 
 export const MARBLE_PLATFORM_VISUAL_BOUNDS = {
-  compact: { min: [0.22, 0.055, 0.14], max: [0.5, 0.18, 0.36] },
-  full: { min: [0.48, 0.09, 0.24], max: [1.35, 0.28, 0.7] },
+  compact: { min: [0.58, 0.11, 0.28], max: [0.82, 0.2, 0.46] },
+  full: { min: [0.68, 0.12, 0.32], max: [1.35, 0.28, 0.7] },
 } as const;
 
 export function marblePlatformVisualSize(target: MarbleTarget): [number, number, number] {
@@ -104,6 +104,12 @@ interface TargetMeshes {
   hardware: Group;
   compact: boolean;
   fadeMaterials: Array<{ material: Material; opacity: number; transparent: boolean; depthWrite: boolean }>;
+}
+
+interface TargetGhostTransition {
+  startT: number;
+  endT: number;
+  materials: Array<{ material: Material; opacity: number }>;
 }
 
 type MeshBasicLike = MeshStandardMaterial | MeshPhysicalMaterial;
@@ -266,6 +272,18 @@ export function marbleBoundaryTransitionOpacity(raw: number): number {
   return progress < 0.5
     ? interpolateMarbleOpacity(1, 0, progress * 2)
     : interpolateMarbleOpacity(0, 1, (progress - 0.5) * 2);
+}
+
+export function marbleTargetMorphOpacity(morph: MarbleTargetMorphPlan, targetId: string, t: number): number {
+  const from = morph.fromOpacities.get(targetId) ?? 1;
+  if (morph.fadeTargetIds.includes(targetId)) return from;
+  if (!morph.targetIds.includes(targetId)) return 1;
+  const raw = clamp((t - morph.startT) / Math.max(0.001, morph.endT - morph.startT), 0, 1);
+  return interpolateMarbleOpacity(from, 1, raw);
+}
+
+export function marbleGhostTransitionOpacity(raw: number): number {
+  return 1 - interpolateMarbleOpacity(0, 1, raw);
 }
 
 export function prepareMarbleTargetMorph(
@@ -436,13 +454,15 @@ interface TargetMaterialPool {
 function addTargetHardware(target: MarbleTarget, group: Group, geometry: TargetPrimitivePool, materials: TargetMaterialPool): Group {
   const hardware = new Group();
   const visualSize = marblePlatformVisualSize(target);
-  const undersized = target.size.some((value, index) => value < visualSize[index]! - 1e-6);
-  const backplate = new Mesh(geometry.box, undersized ? materials.accent : materials.darkMetal);
-  backplate.scale.set(visualSize[0] * 1.1, Math.max(0.035, visualSize[1] * 0.35), visualSize[2] * 1.16);
-  backplate.position.set(0, -visualSize[1] * 0.58, -0.07);
+  const compact = target.kind === "peg" || target.kind === "chime";
+  const collisionHalfThickness = compact ? target.size[1] * 0.9 : target.size[1] / 2;
+  const carrierThickness = Math.max(0.065, visualSize[1] * 0.5);
+  const backplate = new Mesh(geometry.box, materials.accent);
+  backplate.scale.set(visualSize[0] * 1.06, carrierThickness, visualSize[2] * 1.1);
+  backplate.position.set(0, -(collisionHalfThickness + carrierThickness / 2 + 0.018), 0);
   hardware.add(backplate);
 
-  if (target.kind === "peg" || target.kind === "chime") {
+  if (compact) {
     const cap = new Mesh(geometry.sphere, materials.accent);
     cap.scale.setScalar(target.size[1] * 1.15);
     cap.position.set(0, 0.03, 0.02);
@@ -469,8 +489,7 @@ function addTargetHardware(target: MarbleTarget, group: Group, geometry: TargetP
     }
   }
 
-  const compact = target.kind === "peg" || target.kind === "chime";
-  const bracketLength = compact ? 0.18 : 0.52;
+  const bracketLength = compact ? visualSize[0] * 0.7 : Math.max(0.52, visualSize[0] * 0.55);
   const bracket = new Mesh(geometry.cylinder, materials.darkMetal);
   bracket.scale.set(0.018, bracketLength, 0.018);
   bracket.rotation.z = Math.PI / 2;
@@ -511,6 +530,7 @@ export class MarbleScene {
   readonly #impactByTarget = new Map<string, MarbleImpact[]>();
   readonly #machine = new Group();
   readonly #performanceObjects = new Group();
+  readonly #targetGhosts = new Group();
   readonly #rails = new Group();
   readonly #marble: Mesh<SphereGeometry, MeshPhysicalMaterial>;
   readonly #marbleGlow: PointLight;
@@ -526,6 +546,7 @@ export class MarbleScene {
   #queuedActivation: MarbleActivationBoundary | undefined;
   #targetMorph: MarbleTargetMorphPlan | undefined;
   #targetReveal: { startT: number; endT: number; targetIds: Set<string> } | undefined;
+  #targetGhostTransition: TargetGhostTransition | undefined;
   #boundaryTransition: { startT: number; endT: number; targetId: string; from: MarbleTarget; to: MarbleTarget } | undefined;
   #cameraTransition: { path: readonly MarblePathSegment[]; startT: number; durationSec: number } | undefined;
   #completedActivation: MarbleSceneActivation | undefined;
@@ -583,7 +604,7 @@ export class MarbleScene {
     this.#scene.add(fill);
     this.#scene.add(this.#machine);
     this.#addWall();
-    this.#machine.add(this.#performanceObjects);
+    this.#machine.add(this.#performanceObjects, this.#targetGhosts);
     this.#addTargets();
     this.#addRods();
     this.#addRails();
@@ -893,6 +914,51 @@ export class MarbleScene {
     }
   }
 
+  #clearTargetGhosts(): void {
+    this.#targetGhosts.traverse((object) => {
+      const mesh = object as Mesh<BufferGeometry, Material | Material[]>;
+      if (!mesh.isMesh) return;
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      materials.forEach((material) => disposeMaterial(material));
+    });
+    this.#targetGhosts.clear();
+    this.#targetGhostTransition = undefined;
+  }
+
+  #beginTargetGhostTransition(targetIds: readonly string[], startT: number, durationSec: number): void {
+    this.#clearTargetGhosts();
+    const materials: TargetGhostTransition["materials"] = [];
+    for (const targetId of targetIds) {
+      const source = this.#targetMeshes.get(targetId)?.group;
+      if (!source) continue;
+      const ghost = source.clone(true);
+      ghost.traverse((object) => {
+        const mesh = object as Mesh<BufferGeometry, Material | Material[]>;
+        if (!mesh.isMesh) return;
+        const sourceMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        const clonedMaterials = sourceMaterials.map((sourceMaterial) => {
+          const material = sourceMaterial.clone();
+          material.transparent = true;
+          material.depthWrite = false;
+          materials.push({ material, opacity: sourceMaterial.opacity });
+          return material;
+        });
+        mesh.material = (Array.isArray(mesh.material) ? clonedMaterials : clonedMaterials[0]!) as Material | Material[];
+      });
+      this.#targetGhosts.add(ghost);
+    }
+    if (materials.length) this.#targetGhostTransition = { startT, endT: startT + durationSec, materials };
+  }
+
+  #renderTargetGhostTransition(t: number): void {
+    const transition = this.#targetGhostTransition;
+    if (!transition) return;
+    const raw = clamp((t - transition.startT) / Math.max(0.001, transition.endT - transition.startT), 0, 1);
+    const opacity = marbleGhostTransitionOpacity(raw);
+    transition.materials.forEach((entry) => { entry.material.opacity = entry.opacity * opacity; });
+    if (raw >= 1) this.#clearTargetGhosts();
+  }
+
   renderFrame(t: number): void {
     if (this.#disposed) return;
     const queued = this.#queuedActivation;
@@ -903,6 +969,7 @@ export class MarbleScene {
       const boundaryFrom = boundaryImpact ? this.#performance.statics.targets.find((target) => target.id === boundaryImpact.targetId) : undefined;
       const boundaryTo = boundaryImpact ? queued.performance.statics.targets.find((target) => target.id === boundaryImpact.targetId) : undefined;
       const startedAt = this.#now();
+      this.#beginTargetGhostTransition(revealTargetIds, queued.activationT, 0.35);
       this.replacePerformance(queued.performance);
       this.#queuedActivation = undefined;
       this.#targetMorph = undefined;
@@ -988,6 +1055,7 @@ export class MarbleScene {
       meshes.shadow.material.opacity = clamp(0.16 + intensity * 0.1, 0.08, 0.28) * transitionOpacity;
       meshes.shadow.scale.set(0.42 * (1.4 + Math.abs(recoil) * 2.2), 0.42 * (0.46 + Math.abs(recoil) * 0.42), 1);
     }
+    this.#renderTargetGhostTransition(t);
     let cameraPose = sampleMarbleCamera(this.#performance.statics.path, t, this.tuning.camera);
     if (this.#cameraTransition) {
       const raw = (t - this.#cameraTransition.startT) / this.#cameraTransition.durationSec;
@@ -1011,10 +1079,7 @@ export class MarbleScene {
       return marbleBoundaryTransitionOpacity(raw);
     }
     if (this.#targetMorph && (this.#targetMorph.targetIds.includes(targetId) || this.#targetMorph.fadeTargetIds.includes(targetId))) {
-      const raw = clamp((t - this.#targetMorph.startT) / Math.max(0.001, this.#targetMorph.endT - this.#targetMorph.startT), 0, 1);
-      const from = this.#targetMorph.fromOpacities.get(targetId) ?? 1;
-      const to = this.#targetMorph.fadeTargetIds.includes(targetId) ? 0 : 1;
-      return interpolateMarbleOpacity(from, to, raw);
+      return marbleTargetMorphOpacity(this.#targetMorph, targetId, t);
     }
     if (this.#targetReveal?.targetIds.has(targetId)) {
       const raw = clamp((t - this.#targetReveal.startT) / Math.max(0.001, this.#targetReveal.endT - this.#targetReveal.startT), 0, 1);
@@ -1043,6 +1108,7 @@ export class MarbleScene {
       this.#targetMorph = undefined;
       this.#targetReveal = undefined;
       this.#boundaryTransition = undefined;
+      this.#clearTargetGhosts();
       this.replacePerformance(performance);
       return undefined;
     }
