@@ -8,7 +8,13 @@ import { RunnerScene, type RunnerPerformance } from "@reaper-viz/scene-runner";
 import { TestPatternScene } from "@reaper-viz/scene-testpattern";
 import { Pane } from "tweakpane";
 import { MarblePlannerClient } from "./marble-planner-client.js";
-import { nextMarbleRequestDelay } from "./marble-live-coordinator.js";
+import {
+  copyMarbleMotionMix,
+  marbleMotionMixLabel,
+  nextMarbleRequestDelay,
+  projectMarbleMotionMix,
+  type MarbleLiveMixState,
+} from "./marble-live-coordinator.js";
 import type { MarblePlannerSuccess } from "./marble-planner-protocol.js";
 import "./styles.css";
 
@@ -41,6 +47,7 @@ interface MarbleBrowserProfile {
   renderMs: number[];
   longTasks: Array<{ durationMs: number; startTimeMs: number }>;
   swaps: MarbleBrowserSwapProfile[];
+  liveState?: MarbleLiveMixState;
 }
 
 const root = document.querySelector<HTMLDivElement>("#app");
@@ -102,6 +109,10 @@ let marbleRebuildTimer: number | undefined;
 let marbleSourceTrackId: string | undefined;
 const marbleMotionMix: MarbleMotionMix = { leftRight: 20, upDown: 20, frontBack: 60 };
 let previousMarbleMotionMix: MarbleMotionMix = { ...marbleMotionMix };
+const marbleLiveMixState: MarbleLiveMixState = {
+  desired: copyMarbleMotionMix(marbleMotionMix),
+  active: copyMarbleMotionMix(marbleMotionMix),
+};
 const marbleTuning: MarbleTuning = { glow: 0.78, camera: 0.88, targetScale: 1, tail: 0.8 };
 const marbleProfilingEnabled = new URLSearchParams(window.location.search).has("profileMarble");
 const marbleBrowserProfile: MarbleBrowserProfile = { frameIntervalsMs: [], renderMs: [], longTasks: [], swaps: [] };
@@ -172,7 +183,17 @@ function publishMarbleProfile(): void {
     longTasks: marbleBrowserProfile.longTasks,
     latestSwap: marbleBrowserProfile.swaps.at(-1),
     swapCount: marbleBrowserProfile.swaps.length,
+    liveState: {
+      desired: copyMarbleMotionMix(marbleLiveMixState.desired),
+      ...(marbleLiveMixState.requested ? { requested: copyMarbleMotionMix(marbleLiveMixState.requested) } : {}),
+      ...(marbleLiveMixState.planned ? { planned: copyMarbleMotionMix(marbleLiveMixState.planned) } : {}),
+      active: copyMarbleMotionMix(marbleLiveMixState.active),
+    },
   });
+}
+
+function marbleLiveStateDetail(): string {
+  return `desired ${marbleMotionMixLabel(marbleLiveMixState.desired)} | requested ${marbleMotionMixLabel(marbleLiveMixState.requested)} | planned ${marbleMotionMixLabel(marbleLiveMixState.planned)} | active ${marbleMotionMixLabel(marbleLiveMixState.active)}`;
 }
 
 function destroyActiveScene(): void {
@@ -263,6 +284,8 @@ function reportMarbleActivation(activation: MarbleSceneActivation | undefined, f
   if (!activation) return;
   const result = pendingMarbleActivationResult;
   pendingMarbleActivationResult = undefined;
+  marbleLiveMixState.active = copyMarbleMotionMix(activation.motionMix);
+  delete marbleLiveMixState.planned;
   if (marbleProfilingEnabled && result) {
     pushBounded(marbleBrowserProfile.swaps, {
       mix: { ...activation.motionMix },
@@ -276,7 +299,8 @@ function reportMarbleActivation(activation: MarbleSceneActivation | undefined, f
     publishMarbleProfile();
   }
   statusTitle.textContent = "Marble Music | live motion mix";
-  statusDetail.textContent = result ? marbleStatus(result.performance) : `${activation.motionMix.leftRight}/${activation.motionMix.upDown}/${activation.motionMix.frontBack}% active`;
+  statusDetail.textContent = marbleProfilingEnabled ? marbleLiveStateDetail() : result ? marbleStatus(result.performance) : `${marbleMotionMixLabel(activation.motionMix)}% active`;
+  publishMarbleProfile();
   play.disabled = false;
   scrub.disabled = false;
   if (marbleResumeAfterTransition) {
@@ -341,6 +365,8 @@ function rebuildMarbleScene(): void {
   statusDetail.textContent = `${marbleMotionMix.leftRight}% left/right | ${marbleMotionMix.upDown}% up/down | ${marbleMotionMix.frontBack}% front/back`;
   marblePlannerRequestedAt = performance.now();
   marbleLastRequestAt = marblePlannerRequestedAt;
+  marbleLiveMixState.requested = copyMarbleMotionMix(marbleMotionMix);
+  publishMarbleProfile();
   marblePlanner.request(marbleMotionMix, {
     profile: marbleProfilingEnabled,
     ...(marbleSourceTrackId ? { sourceTrackId: marbleSourceTrackId } : {}),
@@ -350,6 +376,8 @@ function rebuildMarbleScene(): void {
 function applyPlannedMarble(result: MarblePlannerSuccess): void {
   if (!song || conceptSelect.value !== "marble") return;
   const replacementStartedAt = marbleProfilingEnabled ? performance.now() : 0;
+  marbleLiveMixState.planned = copyMarbleMotionMix(result.performance.statics.motionMix);
+  publishMarbleProfile();
   const nextScene = scene instanceof MarbleScene ? scene : new MarbleScene(canvas, result.performance, marbleTuning, () => globalThis.performance.now());
   if (scene === nextScene) {
     const wasPlaying = !audio.paused;
@@ -406,19 +434,10 @@ function scheduleMarbleRebuild(): void {
 }
 
 function updateMarbleMotionMix(changed: keyof MarbleMotionMix, bindingPane: BindingPane): void {
-  const keys: Array<keyof MarbleMotionMix> = ["leftRight", "upDown", "frontBack"];
-  marbleMotionMix[changed] = Math.max(10, Math.min(80, Math.round(marbleMotionMix[changed])));
-  const others = keys.filter((key) => key !== changed);
-  const remainder = 100 - marbleMotionMix[changed];
-  const previousRemainder = previousMarbleMotionMix[others[0]!] + previousMarbleMotionMix[others[1]!];
-  const firstShare = previousRemainder > 0 ? previousMarbleMotionMix[others[0]!] / previousRemainder : 0.5;
-  marbleMotionMix[others[0]!] = Math.max(10, Math.round(remainder * firstShare));
-  marbleMotionMix[others[1]!] = 100 - marbleMotionMix[changed] - marbleMotionMix[others[0]!];
-  if (marbleMotionMix[others[1]!] < 10) {
-    marbleMotionMix[others[1]!] = 10;
-    marbleMotionMix[others[0]!] = remainder - 10;
-  }
+  Object.assign(marbleMotionMix, projectMarbleMotionMix(changed, marbleMotionMix[changed], previousMarbleMotionMix));
   previousMarbleMotionMix = { ...marbleMotionMix };
+  marbleLiveMixState.desired = copyMarbleMotionMix(marbleMotionMix);
+  publishMarbleProfile();
   bindingPane.refresh();
   scheduleMarbleRebuild();
 }
@@ -499,6 +518,10 @@ async function loadConcept(concept: string): Promise<void> {
     marbleSourceTrackId = performance.statics.source.trackId;
     Object.assign(marbleMotionMix, performance.statics.motionMix ?? { leftRight: 20, upDown: 20, frontBack: 60 });
     previousMarbleMotionMix = { ...marbleMotionMix };
+    marbleLiveMixState.desired = copyMarbleMotionMix(marbleMotionMix);
+    delete marbleLiveMixState.requested;
+    delete marbleLiveMixState.planned;
+    marbleLiveMixState.active = copyMarbleMotionMix(marbleMotionMix);
     Object.assign(marbleTuning, { glow: 0.78, camera: 0.88, targetScale: 1, tail: 0.8 });
     const marble = new MarbleScene(canvas, performance, marbleTuning, () => globalThis.performance.now());
     scene = marble;

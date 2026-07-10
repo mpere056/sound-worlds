@@ -502,6 +502,25 @@ Commit and push the coordinator before adding camera access or MediaPipe.
   optional low-latency filtering for noisy gesture input, plus the five-minute
   synthetic stream and final-value catch-up gates.
 
+### Implemented slice: gesture-ready coordinator state
+
+- Percentage compensation now lives in a pure bounded projection function
+  rather than the Tweakpane event handler. Direct control of any axis preserves
+  the 10-80 range and an exact integer total of 100, including boundary cases.
+- A pure input filter provides a 0.75-point default deadband and a configurable
+  percentage-per-second slew limit. Slider input remains direct; the filter is
+  ready for the future hand adapter without coupling MediaPipe to planning.
+- Development profiling publishes separate `desired`, `requested`, `planned`,
+  and `active` mixes. The visible profiling status uses the same state so stale
+  or lagging stages can be identified during sustained control.
+- Coordinator tests cover projection at ordinary and constrained extremes,
+  stationary-noise rejection, slew-limited movement, exact totals, and a
+  five-minute synthetic 60 Hz stream bounded to roughly 10 planner requests per
+  second.
+- Remaining P5 work: browser resource/latency gates for the sustained stream,
+  final-value catch-up under real worker load, and deciding whether the gesture
+  filter requires One Euro velocity adaptation after webcam measurements.
+
 ### Implemented slice: visible transform continuity and size bounds
 
 - All targets use one transform-only transition. Every platform remains fully
