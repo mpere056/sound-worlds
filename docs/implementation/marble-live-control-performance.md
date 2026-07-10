@@ -778,6 +778,28 @@ References:
 6. Only after those gates pass, evaluate two hands, horizontal gestures, or a
    custom recognizer as separate enhancements.
 
+### Implemented slice: camera-independent pinch controller
+
+- A pure `MarbleHandController` now consumes MediaPipe-shaped 21-point landmark
+  arrays without importing or requesting camera access.
+- Thumb/index owns up/down, thumb/middle owns left/right, and thumb/ring owns
+  front/back. Distances are normalized by palm width so thresholds do not depend
+  directly on camera distance or hand size.
+- Engagement requires both three confident frames and 80 ms. Separate engage
+  and release thresholds provide hysteresis, while an ambiguity margin prevents
+  two nearby fingertips from alternating ownership.
+- The fingertip pair selects the control, but filtered palm-center vertical
+  movement supplies the value delta. Engagement captures the current mix and
+  palm height, so the slider never jumps to an absolute camera coordinate.
+- Updates use the existing bounded projection function, retain 10-80 limits,
+  and sum exactly to 100. Tracking loss holds ownership for 220 ms before safely
+  disengaging.
+- Fixtures cover all three mappings, current-value-relative movement, exact
+  totals, ambiguous multi-pinches, noisy release hysteresis, and temporary versus
+  sustained tracking loss.
+- Next P6 slice: camera lifecycle and the MediaPipe vision worker, followed by
+  feeding its landmark results into this controller and the existing coordinator.
+
 ### Commit point
 
 Commit and push camera lifecycle, worker inference, geometric recognition,
