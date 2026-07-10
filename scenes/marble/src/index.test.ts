@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildFixtureSong } from "@reaper-viz/core";
 import { compileMarble, marbleTargetClearance, sampleMarblePose } from "@reaper-viz/compiler-marble";
 import { PerspectiveCamera, Vector3 } from "three";
-import { blendMarbleCamera, prepareMarbleActivation, sampleMarbleCamera, type MarbleCameraPose } from "./index.js";
+import { blendMarbleCamera, interpolateMarbleTarget, prepareMarbleActivation, prepareMarbleTargetMorph, sampleMarbleCamera, type MarbleCameraPose } from "./index.js";
 
 function distance(a: [number, number, number], b: [number, number, number]): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
@@ -132,5 +132,34 @@ describe("Marble live-plan activation", () => {
     const active = compileMarble(song);
     const incoming = compileMarble(song, { motionMix: { leftRight: 10, upDown: 10, frontBack: 80 } });
     expect(prepareMarbleActivation(active, incoming, active.durationSec)).toBeUndefined();
+  });
+
+  it("interpolates target transforms without taking the long rotation path", () => {
+    const song = buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [0, 1, 2, 3], pitch: 55, kind: "note" }] });
+    const target = compileMarble(song).statics.targets[0]!;
+    const from = { ...target, rotation: [target.rotation[0], 0, Math.PI - 0.1] as [number, number, number] };
+    const to = { ...target, pos: [target.pos[0] + 2, target.pos[1] - 1, target.pos[2] + 3] as [number, number, number], rotation: [target.rotation[0], 0, -Math.PI + 0.1] as [number, number, number] };
+    const middle = interpolateMarbleTarget(from, to, 0.5);
+    expect(middle.pos[0]).toBeCloseTo(target.pos[0] + 1, 10);
+    expect(middle.pos[1]).toBeCloseTo(target.pos[1] - 0.5, 10);
+    expect(middle.pos[2]).toBeCloseTo(target.pos[2] + 1.5, 10);
+    expect(Math.abs(middle.rotation[2] - from.rotation[2])).toBeLessThan(0.11);
+  });
+
+  it("accepts safe future-target morphs and rejects an intersecting endpoint", () => {
+    const song = buildFixtureSong({ bars: 3, patterns: [{ role: "keys", beats: [0, 3, 6, 9], pitch: 52, kind: "note" }] });
+    const active = compileMarble(song);
+    const activation = prepareMarbleActivation(active, active, 0);
+    expect(activation).toBeDefined();
+    const safe = prepareMarbleTargetMorph(active, activation!.performance, 0, activation!);
+    expect(safe?.targetIds.length).toBeGreaterThan(0);
+
+    const unsafePerformance = structuredClone(activation!.performance);
+    const futureImpact = unsafePerformance.statics.impacts.find((impact) => impact.noteIndex > activation!.noteIndex)!;
+    const movingTarget = unsafePerformance.statics.targets.find((target) => target.id === futureImpact.targetId)!;
+    const stationaryTarget = unsafePerformance.statics.targets[activation!.noteIndex]!;
+    movingTarget.pos = [...stationaryTarget.pos];
+    movingTarget.contactPos = [...stationaryTarget.contactPos];
+    expect(prepareMarbleTargetMorph(active, unsafePerformance, 0, activation!)).toBeUndefined();
   });
 });

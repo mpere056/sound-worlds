@@ -28,7 +28,7 @@ import {
   WebGLRenderer,
 } from "three";
 import { sampleCurve } from "@reaper-viz/core";
-import { sampleMarblePose, type MarbleImpact, type MarblePathSegment, type MarblePerformance, type MarblePose, type MarbleTarget } from "@reaper-viz/compiler-marble";
+import { marbleTargetClearance, marbleTargetsOverlap, sampleMarblePose, type MarbleImpact, type MarblePathSegment, type MarblePerformance, type MarblePose, type MarbleTarget } from "@reaper-viz/compiler-marble";
 
 export type { MarblePerformance } from "@reaper-viz/compiler-marble";
 
@@ -50,6 +50,7 @@ export interface MarbleActivationBoundary {
   noteIndex: number;
   translation: [number, number, number];
   performance: MarblePerformance;
+  morphTargetCount: number;
 }
 
 export interface MarbleSceneActivation {
@@ -57,6 +58,14 @@ export interface MarbleSceneActivation {
   noteIndex: number;
   applicationMs: number;
   motionMix: MarblePerformance["statics"]["motionMix"];
+}
+
+export interface MarbleTargetMorphPlan {
+  startT: number;
+  endT: number;
+  targetIds: string[];
+  fromTargets: Map<string, MarbleTarget>;
+  toTargets: Map<string, MarbleTarget>;
 }
 
 export interface MarbleSceneProfileSnapshot {
@@ -211,7 +220,66 @@ export function prepareMarbleActivation(
     noteIndex: boundaryImpact.noteIndex,
     translation,
     performance: translateMarblePerformance(incoming, translation),
+    morphTargetCount: 0,
   };
+}
+
+function interpolateAngle(from: number, to: number, progress: number): number {
+  const delta = ((to - from + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+  return from + delta * progress;
+}
+
+export function interpolateMarbleTarget(from: MarbleTarget, to: MarbleTarget, raw: number): MarbleTarget {
+  const progress = clamp(raw, 0, 1);
+  return {
+    ...to,
+    pos: from.pos.map((value, index) => value + (to.pos[index]! - value) * progress) as [number, number, number],
+    contactPos: from.contactPos.map((value, index) => value + (to.contactPos[index]! - value) * progress) as [number, number, number],
+    rotation: from.rotation.map((value, index) => interpolateAngle(value, to.rotation[index]!, progress)) as [number, number, number],
+    size: from.size.map((value, index) => value + (to.size[index]! - value) * progress) as [number, number, number],
+  };
+}
+
+export function prepareMarbleTargetMorph(
+  active: MarblePerformance,
+  incoming: MarblePerformance,
+  currentT: number,
+  boundary: Pick<MarbleActivationBoundary, "activationT" | "noteIndex">,
+  durationSec = 0.35,
+): MarbleTargetMorphPlan | undefined {
+  const startT = Math.max(currentT, boundary.activationT - durationSec);
+  if (boundary.activationT - startT < 0.12) return undefined;
+  const fromTargets = new Map(active.statics.targets.map((target) => [target.id, target]));
+  const toTargets = new Map(incoming.statics.targets.map((target) => [target.id, target]));
+  const targetIds = active.statics.impacts
+    .filter((impact) => impact.noteIndex > boundary.noteIndex)
+    .map((impact) => impact.targetId)
+    .filter((targetId, index, values) => values.indexOf(targetId) === index)
+    .filter((targetId) => {
+      const from = fromTargets.get(targetId);
+      const to = toTargets.get(targetId);
+      return from !== undefined && to !== undefined && from.kind === to.kind;
+    });
+  if (!targetIds.length) return undefined;
+  const moving = new Set(targetIds);
+  const samples = 12;
+  for (let step = 0; step <= samples; step += 1) {
+    const raw = step / samples;
+    const progress = raw * raw * (3 - 2 * raw);
+    const targets = active.statics.targets.map((target) => {
+      const to = toTargets.get(target.id);
+      return moving.has(target.id) && to ? interpolateMarbleTarget(target, to, progress) : target;
+    });
+    for (let left = 0; left < targets.length; left += 1) {
+      for (let right = left + 1; right < targets.length; right += 1) {
+        if (marbleTargetsOverlap(targets[left]!, targets[right]!, 0.055)) return undefined;
+      }
+    }
+    const sampleT = startT + (boundary.activationT - startT) * raw;
+    const marble = sampleMarblePose(active.statics.path, sampleT);
+    if (targets.some((target) => marbleTargetClearance(target, marble.pos) < 0.012)) return undefined;
+  }
+  return { startT, endT: boundary.activationT, targetIds, fromTargets, toTargets };
 }
 
 function v3(value: [number, number, number], zOffset = 0): Vector3 {
@@ -366,6 +434,7 @@ export class MarbleScene {
   readonly tuning: MarbleTuning;
   #performance: MarblePerformance;
   readonly #renderer: WebGLRenderer;
+  readonly #now: () => number;
   readonly #rendererIdentity = nextRendererIdentity++;
   readonly #primitiveGeometry = {
     box: new BoxGeometry(1, 1, 1),
@@ -404,6 +473,7 @@ export class MarbleScene {
   #disposed = false;
   #performanceUpdates = 0;
   #queuedActivation: MarbleActivationBoundary | undefined;
+  #targetMorph: MarbleTargetMorphPlan | undefined;
   #cameraTransition: { path: readonly MarblePathSegment[]; startT: number; durationSec: number } | undefined;
   #completedActivation: MarbleSceneActivation | undefined;
 
@@ -434,9 +504,10 @@ export class MarbleScene {
     return material;
   }
 
-  constructor(canvas: HTMLCanvasElement, performance: MarblePerformance, tuning?: MarbleTuning) {
+  constructor(canvas: HTMLCanvasElement, performance: MarblePerformance, tuning?: MarbleTuning, now: () => number = () => 0) {
     this.tuning = tuning ?? { glow: 0.78, camera: 0.88, targetScale: 1, tail: 0.8 };
     this.#performance = performance;
+    this.#now = now;
     this.#renderer = new WebGLRenderer({ canvas, context: createCompatibleWebGlContext(canvas), antialias: true, alpha: false });
     this.#renderer.setSize(performance.resolution.w, performance.resolution.h, false);
     this.#renderer.setPixelRatio(1);
@@ -759,16 +830,39 @@ export class MarbleScene {
     const queued = this.#queuedActivation;
     if (queued && t + 1e-6 >= queued.activationT) {
       const previousPath = this.#performance.statics.path;
-      const startedAt = globalThis.performance.now();
+      const startedAt = this.#now();
       this.replacePerformance(queued.performance);
       this.#queuedActivation = undefined;
+      this.#targetMorph = undefined;
       this.#cameraTransition = { path: previousPath, startT: queued.activationT, durationSec: 0.35 };
       this.#completedActivation = {
         activationT: queued.activationT,
         noteIndex: queued.noteIndex,
-        applicationMs: globalThis.performance.now() - startedAt,
+        applicationMs: this.#now() - startedAt,
         motionMix: { ...queued.performance.statics.motionMix },
       };
+    }
+    if (this.#targetMorph && t < this.#targetMorph.endT) {
+      const raw = clamp((t - this.#targetMorph.startT) / Math.max(0.001, this.#targetMorph.endT - this.#targetMorph.startT), 0, 1);
+      const progress = raw * raw * (3 - 2 * raw);
+      for (const targetId of this.#targetMorph.targetIds) {
+        const from = this.#targetMorph.fromTargets.get(targetId);
+        const to = this.#targetMorph.toTargets.get(targetId);
+        const meshes = this.#targetMeshes.get(targetId);
+        const svgTarget = this.#svgTargets.get(targetId);
+        if (!from || !to || !meshes) continue;
+        const target = interpolateMarbleTarget(from, to, progress);
+        meshes.home.set(...target.pos);
+        meshes.baseRotation = [...target.rotation];
+        const compact = target.kind === "peg" || target.kind === "chime";
+        meshes.baseScale.set(...(compact
+          ? [target.size[1] * 0.9, target.size[0], target.size[1] * 0.9] as [number, number, number]
+          : target.size));
+        if (svgTarget) {
+          const [x, y] = worldToScreen(target.pos);
+          svgTarget.baseTransform = `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${(target.rotation[2] * 57.2958).toFixed(2)})`;
+        }
+      }
     }
     const pose = sampleMarblePose(this.#performance.statics.path, t);
     this.#marble.position.set(...pose.pos);
@@ -827,13 +921,16 @@ export class MarbleScene {
   }
 
   queuePerformance(performance: MarblePerformance, currentT: number): MarbleActivationBoundary | undefined {
-    const boundary = prepareMarbleActivation(this.#performance, performance, currentT);
+    const boundary = prepareMarbleActivation(this.#performance, performance, currentT, 0.4);
     if (!boundary) {
       this.#queuedActivation = undefined;
+      this.#targetMorph = undefined;
       this.replacePerformance(performance);
       return undefined;
     }
     this.#queuedActivation = boundary;
+    this.#targetMorph = prepareMarbleTargetMorph(this.#performance, boundary.performance, currentT, boundary);
+    boundary.morphTargetCount = this.#targetMorph?.targetIds.length ?? 0;
     return boundary;
   }
 
@@ -889,6 +986,7 @@ export class MarbleScene {
   destroy(): void {
     this.#disposed = true;
     this.#queuedActivation = undefined;
+    this.#targetMorph = undefined;
     this.#cameraTransition = undefined;
     this.#completedActivation = undefined;
     this.#svg.remove();

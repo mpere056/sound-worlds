@@ -461,6 +461,27 @@ separate slices with visual evidence for each.
 - Collision-checked future-target morphing remains open. Targets currently adopt
   the aligned plan at activation, so P4 is not complete yet.
 
+### Implemented slice: collision-checked future-target morphing
+
+- Plans now reserve at least 400 ms before activation and use the final 350 ms
+  to smoothstep future same-shape targets toward their aligned positions,
+  shortest-path rotations, and base dimensions.
+- The boundary target and every already-played target remain fixed, so the active
+  platform cannot move under the marble.
+- Twelve transition samples rebuild the mixed old/new target set and reject the
+  entire morph if any pair has a 3D SAT overlap or any target violates the active
+  marble's sphere/OBB clearance. Shape-changing or missing targets are withheld.
+- Tests accept a safe sparse route, reject a deliberately intersecting endpoint,
+  verify shortest-path angle interpolation, and preserve the existing activation
+  and camera guarantees. Dense fixtures with pre-existing fallback overlaps are
+  conservatively withheld instead of worsening them.
+- The reference project accepted 18 future targets for a 20/21/59 update. At
+  0.350 s the targets were visibly between plans with zero swaps; crossing the
+  0.531 s boundary activated once on renderer `1` with 11 geometries and 16.8 ms
+  frame p95.
+- P4 remains open for retaining safe already-played target transforms and for a
+  full audio watch-through at naturally advancing activation boundaries.
+
 ## Phase P5 - High-rate control coordinator
 
 ### Work

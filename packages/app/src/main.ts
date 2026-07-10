@@ -357,13 +357,13 @@ function applyPlannedMarble(result: MarblePlannerSuccess): void {
     || plannedMix.upDown !== marbleMotionMix.upDown
     || plannedMix.frontBack !== marbleMotionMix.frontBack) return;
   const replacementStartedAt = marbleProfilingEnabled ? performance.now() : 0;
-  const nextScene = scene instanceof MarbleScene ? scene : new MarbleScene(canvas, result.performance, marbleTuning);
+  const nextScene = scene instanceof MarbleScene ? scene : new MarbleScene(canvas, result.performance, marbleTuning, () => globalThis.performance.now());
   if (scene === nextScene) {
     const boundary = nextScene.queuePerformance(result.performance, audio.currentTime);
     if (boundary) {
       pendingMarbleActivationResult = result;
       statusTitle.textContent = "Marble plan ready";
-      statusDetail.textContent = `${marbleStatus(result.performance)} | activates at ${formatTime(boundary.activationT)}`;
+      statusDetail.textContent = `${marbleStatus(result.performance)} | ${boundary.morphTargetCount} future targets morphing | activates at ${formatTime(boundary.activationT)}`;
       return;
     }
   } else {
@@ -494,7 +494,7 @@ async function loadConcept(concept: string): Promise<void> {
     Object.assign(marbleMotionMix, performance.statics.motionMix ?? { leftRight: 20, upDown: 20, frontBack: 60 });
     previousMarbleMotionMix = { ...marbleMotionMix };
     Object.assign(marbleTuning, { glow: 0.78, camera: 0.88, targetScale: 1, tail: 0.8 });
-    const marble = new MarbleScene(canvas, performance, marbleTuning);
+    const marble = new MarbleScene(canvas, performance, marbleTuning, () => globalThis.performance.now());
     scene = marble;
     addMarbleMotionBinding(bindingPane, "leftRight", "Left/right %");
     addMarbleMotionBinding(bindingPane, "upDown", "Up/down %");
