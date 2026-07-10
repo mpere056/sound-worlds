@@ -1,7 +1,7 @@
 import { parsePerformance, parseSong, type Song } from "@reaper-viz/core";
-import { compileMarble, type MarbleMotionMix } from "@reaper-viz/compiler-marble";
+import { compileMarble, type MarbleCompileProfile, type MarbleMotionMix } from "@reaper-viz/compiler-marble";
 import { captureCanvasPng, exportCanvasMp4, PixiBackend, supportsCanvasMp4 } from "@reaper-viz/render";
-import { MarbleScene, type MarblePerformance, type MarbleTuning } from "@reaper-viz/scene-marble";
+import { MarbleScene, type MarblePerformance, type MarbleSceneProfileSnapshot, type MarbleTuning } from "@reaper-viz/scene-marble";
 import { MetroScene, type MetroPerformance } from "@reaper-viz/scene-metro";
 import { PaintingScene, type PaintingPerformance } from "@reaper-viz/scene-painting";
 import { RunnerScene, type RunnerPerformance } from "@reaper-viz/scene-runner";
@@ -10,7 +10,7 @@ import { Pane } from "tweakpane";
 import "./styles.css";
 
 interface ProjectSummary { id: string; name: string; durationSec: number; concepts: string[]; }
-interface ActiveScene { backendKind: "pixi" | "three"; tuning: object; renderFrame(t: number): void; destroy(): void; auditFrame?(t: number): string[]; }
+interface ActiveScene { backendKind: "pixi" | "three"; tuning: object; renderFrame(t: number): void; destroy(): void; auditFrame?(t: number): string[]; profileSnapshot?(): MarbleSceneProfileSnapshot; }
 interface BindingApi { on(event: "change", handler: () => void): BindingApi; }
 interface BindingPane {
   addBinding<T extends object, K extends keyof T>(target: T, key: K, options: Record<string, unknown>): BindingApi;
@@ -21,6 +21,22 @@ interface HotModule {
 }
 interface HotImportMeta extends ImportMeta {
   readonly hot?: HotModule;
+}
+
+interface MarbleBrowserSwapProfile {
+  mix: MarbleMotionMix;
+  compileMs: number;
+  sceneReplacementMs: number;
+  firstRenderMs: number;
+  compiler?: MarbleCompileProfile;
+  resources?: MarbleSceneProfileSnapshot;
+}
+
+interface MarbleBrowserProfile {
+  frameIntervalsMs: number[];
+  renderMs: number[];
+  longTasks: Array<{ durationMs: number; startTimeMs: number }>;
+  swaps: MarbleBrowserSwapProfile[];
 }
 
 const root = document.querySelector<HTMLDivElement>("#app");
@@ -82,6 +98,56 @@ let marbleSourceTrackId: string | undefined;
 const marbleMotionMix: MarbleMotionMix = { leftRight: 20, upDown: 20, frontBack: 60 };
 let previousMarbleMotionMix: MarbleMotionMix = { ...marbleMotionMix };
 const marbleTuning: MarbleTuning = { glow: 0.78, camera: 0.88, targetScale: 1, tail: 0.8 };
+const marbleProfilingEnabled = new URLSearchParams(window.location.search).has("profileMarble");
+const marbleBrowserProfile: MarbleBrowserProfile = { frameIntervalsMs: [], renderMs: [], longTasks: [], swaps: [] };
+let previousAnimationFrameAt: number | undefined;
+let profilePublishFrame = 0;
+
+if (marbleProfilingEnabled) {
+  (globalThis as typeof globalThis & { __marbleLiveProfile?: MarbleBrowserProfile }).__marbleLiveProfile = marbleBrowserProfile;
+  try {
+    const observer = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        marbleBrowserProfile.longTasks.push({ durationMs: entry.duration, startTimeMs: entry.startTime });
+      }
+    });
+    observer.observe({ entryTypes: ["longtask"] });
+  } catch {
+    // Long Task API support is optional; frame timing remains available.
+  }
+  publishMarbleProfile();
+}
+
+function pushBounded<T>(values: T[], value: T, limit = 2400): void {
+  values.push(value);
+  if (values.length > limit) values.splice(0, values.length - limit);
+}
+
+function profilePercentile(values: readonly number[], amount: number): number {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * amount))] ?? 0;
+}
+
+function publishMarbleProfile(): void {
+  if (!marbleProfilingEnabled) return;
+  let output = document.querySelector<HTMLScriptElement>("#marble-live-profile");
+  if (!output) {
+    output = document.createElement("script");
+    output.id = "marble-live-profile";
+    output.type = "application/json";
+    document.head.append(output);
+  }
+  output.textContent = JSON.stringify({
+    frameCount: marbleBrowserProfile.frameIntervalsMs.length,
+    frameP95Ms: profilePercentile(marbleBrowserProfile.frameIntervalsMs, 0.95),
+    frameMaxMs: Math.max(0, ...marbleBrowserProfile.frameIntervalsMs),
+    renderP95Ms: profilePercentile(marbleBrowserProfile.renderMs, 0.95),
+    longTasks: marbleBrowserProfile.longTasks,
+    latestSwap: marbleBrowserProfile.swaps.at(-1),
+    swapCount: marbleBrowserProfile.swaps.length,
+  });
+}
 
 function destroyActiveScene(): void {
   scene?.destroy();
@@ -136,7 +202,9 @@ function renderAt(t: number): void {
   if (!song || !scene) return;
   updateTransport(t);
   try {
+    const renderStartedAt = marbleProfilingEnabled ? performance.now() : 0;
     scene.renderFrame(t);
+    if (marbleProfilingEnabled) pushBounded(marbleBrowserProfile.renderMs, performance.now() - renderStartedAt);
     renderFailure = undefined;
   } catch (error) {
     reportRenderFailure(error);
@@ -162,6 +230,13 @@ function renderAt(t: number): void {
 }
 
 function tick(): void {
+  if (marbleProfilingEnabled) {
+    const frameAt = performance.now();
+    if (previousAnimationFrameAt !== undefined) pushBounded(marbleBrowserProfile.frameIntervalsMs, frameAt - previousAnimationFrameAt);
+    previousAnimationFrameAt = frameAt;
+    profilePublishFrame += 1;
+    if (profilePublishFrame % 60 === 0) publishMarbleProfile();
+  }
   if (!audio.paused) renderAt(audio.currentTime);
   animationFrame = requestAnimationFrame(tick);
 }
@@ -201,16 +276,39 @@ function rebuildMarbleScene(): void {
   statusTitle.textContent = "Rebalancing marble world";
   statusDetail.textContent = `${marbleMotionMix.leftRight}% left/right | ${marbleMotionMix.upDown}% up/down | ${marbleMotionMix.frontBack}% front/back`;
   try {
-    const performance = compileMarble(song, {
+    let compilerProfile: MarbleCompileProfile | undefined;
+    const compileStartedAt = marbleProfilingEnabled ? performance.now() : 0;
+    const compiledPerformance = compileMarble(song, {
       ...(marbleSourceTrackId ? { sourceTrackId: marbleSourceTrackId } : {}),
       motionMix: marbleMotionMix,
+      ...(marbleProfilingEnabled ? {
+        instrumentation: {
+          now: () => performance.now(),
+          report: (result: MarbleCompileProfile) => { compilerProfile = result; },
+        },
+      } : {}),
     });
+    const compileMs = marbleProfilingEnabled ? performance.now() - compileStartedAt : 0;
+    const replacementStartedAt = marbleProfilingEnabled ? performance.now() : 0;
     destroyActiveScene();
-    scene = new MarbleScene(canvas, performance, marbleTuning);
+    scene = new MarbleScene(canvas, compiledPerformance, marbleTuning);
+    const sceneReplacementMs = marbleProfilingEnabled ? performance.now() - replacementStartedAt : 0;
     previousBeat = -1;
+    const firstRenderStartedAt = marbleProfilingEnabled ? performance.now() : 0;
     renderAt(audio.currentTime);
+    if (marbleProfilingEnabled) {
+      pushBounded(marbleBrowserProfile.swaps, {
+        mix: { ...marbleMotionMix },
+        compileMs,
+        sceneReplacementMs,
+        firstRenderMs: performance.now() - firstRenderStartedAt,
+        ...(compilerProfile ? { compiler: compilerProfile } : {}),
+        ...(scene.profileSnapshot ? { resources: scene.profileSnapshot() } : {}),
+      }, 400);
+      publishMarbleProfile();
+    }
     statusTitle.textContent = "Marble Music | live motion mix";
-    statusDetail.textContent = marbleStatus(performance);
+    statusDetail.textContent = marbleStatus(compiledPerformance);
   } catch (error) {
     statusTitle.textContent = "Motion mix unavailable";
     statusDetail.textContent = error instanceof Error ? error.message : "The route could not be rebuilt";

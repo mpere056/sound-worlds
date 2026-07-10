@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildFixtureSong } from "@reaper-viz/core";
-import { compileMarble, marbleTargetClearance, marbleTargetsOverlap, sampleMarblePath, sampleMarblePose } from "./index.js";
+import { compileMarble, marbleTargetClearance, marbleTargetsOverlap, sampleMarblePath, sampleMarblePose, type MarbleCompileProfile } from "./index.js";
 
 function sampledMotionMix(performance: ReturnType<typeof compileMarble>): [number, number, number] {
   const endT = performance.durationSec;
@@ -17,6 +17,25 @@ function sampledMotionMix(performance: ReturnType<typeof compileMarble>): [numbe
 }
 
 describe("Marble Music compiler", () => {
+  it("reports opt-in phase timings and deterministic work counters", () => {
+    const song = buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [0, 1, 2.5, 3.5], pitch: 48, kind: "note" }] });
+    let clock = 0;
+    let profile: MarbleCompileProfile | undefined;
+    const instrumented = compileMarble(song, {
+      instrumentation: {
+        now: () => { clock += 0.25; return clock; },
+        report: (result) => { profile = result; },
+      },
+    });
+    expect(JSON.stringify(instrumented)).toBe(JSON.stringify(compileMarble(song)));
+    expect(profile).toBeDefined();
+    expect(profile!.totalMs).toBeGreaterThan(0);
+    expect(Object.keys(profile!.phasesMs)).toHaveLength(9);
+    expect(profile!.counters.solverIterations).toBe(6);
+    expect(profile!.counters.targetCandidates).toBeGreaterThan(0);
+    expect(profile!.counters.routeClearanceSamples).toBeGreaterThan(0);
+  });
+
   it("maps every selected note to an exact hit", () => {
     const song = buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5], pitch: 48, kind: "note" }] });
     const performance = compileMarble(song);

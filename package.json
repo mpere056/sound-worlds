@@ -13,6 +13,7 @@
     "test": "vitest run --maxWorkers=1 --minWorkers=1 --fileParallelism=false",
     "typecheck": "corepack pnpm -r typecheck",
     "check:determinism": "node tools/check-determinism.mjs",
+    "benchmark:marble-live": "corepack pnpm --filter @reaper-viz/compiler-marble build && node tools/benchmark-marble-live.mjs",
     "check": "corepack pnpm check:determinism && corepack pnpm build && corepack pnpm test"
   },
   "devDependencies": {

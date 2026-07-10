@@ -44,6 +44,16 @@ export interface MarbleCameraPose {
   zoom: number;
 }
 
+export interface MarbleSceneProfileSnapshot {
+  rendererMemory: { geometries: number; textures: number };
+  rendererRender: { calls: number; triangles: number; points: number; lines: number };
+  programs: number;
+  sceneObjects: number;
+  targetGroups: number;
+  railObjects: number;
+  svgOverlays: number;
+}
+
 interface TargetMeshes {
   group: Group;
   base: Mesh<BoxGeometry | CylinderGeometry, MeshStandardMaterial>;
@@ -635,6 +645,20 @@ export class MarbleScene {
     this.#camera.updateProjectionMatrix();
     this.#camera.lookAt(...cameraPose.lookAt);
     this.#renderer.render(this.#scene, this.#camera);
+  }
+
+  profileSnapshot(): MarbleSceneProfileSnapshot {
+    let sceneObjects = 0;
+    this.#scene.traverse(() => { sceneObjects += 1; });
+    return {
+      rendererMemory: { ...this.#renderer.info.memory },
+      rendererRender: { ...this.#renderer.info.render },
+      programs: this.#renderer.info.programs?.length ?? 0,
+      sceneObjects,
+      targetGroups: this.#targetMeshes.size,
+      railObjects: this.#rails.children.length,
+      svgOverlays: this.#svg.parentElement?.querySelectorAll(".marble-svg-overlay").length ?? 0,
+    };
   }
 
   destroy(): void {

@@ -3,6 +3,10 @@ import type {
   CompileMarbleOptions,
   MarbleCluster,
   MarbleClusterKind,
+  MarbleCompileCounters,
+  MarbleCompileInstrumentation,
+  MarbleCompilePhase,
+  MarbleCompileProfile,
   MarbleDiagnostics,
   MarbleImpact,
   MarbleMotionMix,
@@ -51,6 +55,25 @@ interface PlannedTargetRoute {
   samples: Vec3[];
 }
 
+interface MutableCompileProfile {
+  instrumentation: MarbleCompileInstrumentation;
+  startedAt: number;
+  phasesMs: Record<MarbleCompilePhase, number>;
+  counters: MarbleCompileCounters;
+}
+
+const COMPILE_PHASES: MarbleCompilePhase[] = [
+  "selectTrack",
+  "metrics",
+  "motionSolve",
+  "targets",
+  "targetValidation",
+  "clustersAndImpacts",
+  "path",
+  "pathValidation",
+  "finalize",
+];
+
 const DEFAULT_MOTION_MIX: MarbleMotionMix = { leftRight: 20, upDown: 20, frontBack: 60 };
 
 interface SelectedTrack {
@@ -66,6 +89,33 @@ function clamp(value: number, min: number, max: number): number {
 
 function round(value: number, places = 6): number {
   return Number(value.toFixed(places));
+}
+
+function createCompileProfile(instrumentation: MarbleCompileInstrumentation | undefined): MutableCompileProfile | undefined {
+  if (!instrumentation) return undefined;
+  const phasesMs = Object.fromEntries(COMPILE_PHASES.map((phase) => [phase, 0])) as Record<MarbleCompilePhase, number>;
+  return {
+    instrumentation,
+    startedAt: instrumentation.now(),
+    phasesMs,
+    counters: {
+      solverIterations: 0,
+      targetCandidates: 0,
+      normalRejects: 0,
+      overlapRejects: 0,
+      clearanceRejects: 0,
+      overlapChecks: 0,
+      routeClearanceSamples: 0,
+    },
+  };
+}
+
+function measureCompilePhase<T>(profile: MutableCompileProfile | undefined, phase: MarbleCompilePhase, work: () => T): T {
+  if (!profile) return work();
+  const startedAt = profile.instrumentation.now();
+  const result = work();
+  profile.phasesMs[phase] += profile.instrumentation.now() - startedAt;
+  return result;
 }
 
 function compileMotionProfile(input: Partial<MarbleMotionMix> | undefined): MarbleMotionProfile {
@@ -481,7 +531,8 @@ function samplePlannedRoute(notes: readonly SongEvent[], positions: readonly Vec
   return samples;
 }
 
-function minimumTargetRouteClearance(target: MarbleTarget, route: readonly Vec3[]): number {
+function minimumTargetRouteClearance(target: MarbleTarget, route: readonly Vec3[], profile?: MutableCompileProfile): number {
+  if (profile) profile.counters.routeClearanceSamples += route.length;
   return route.reduce((minimum, point) => Math.min(minimum, marbleTargetClearance(target, point)), Number.POSITIVE_INFINITY);
 }
 
@@ -505,6 +556,14 @@ export function marbleTargetsOverlap(a: MarbleTarget, b: MarbleTarget, padding =
     if (distance >= footprintProjectionRadius(left, axis) + footprintProjectionRadius(right, axis) + padding) return false;
   }
   return true;
+}
+
+function targetOverlapsAny(candidate: MarbleTarget, targets: readonly MarbleTarget[], padding: number, profile?: MutableCompileProfile): boolean {
+  for (const previous of targets) {
+    if (profile) profile.counters.overlapChecks += 1;
+    if (marbleTargetsOverlap(candidate, previous, padding)) return true;
+  }
+  return false;
 }
 
 function placeTarget(
@@ -581,7 +640,7 @@ function sampledAxisTravel(samples: readonly Vec3[]): Vec3 {
   return travel;
 }
 
-function solveMotionProfile(notes: readonly SongEvent[], initial: MarbleMotionProfile): MarbleMotionProfile {
+function solveMotionProfile(notes: readonly SongEvent[], initial: MarbleMotionProfile, profile?: MutableCompileProfile): MarbleMotionProfile {
   const baseline: MarbleMotionProfile = {
     mix: DEFAULT_MOTION_MIX,
     gravity: MARBLE_GRAVITY,
@@ -598,6 +657,7 @@ function solveMotionProfile(notes: readonly SongEvent[], initial: MarbleMotionPr
   ];
   const solved: MarbleMotionProfile = { ...initial };
   for (let iteration = 0; iteration < 6; iteration += 1) {
+    if (profile) profile.counters.solverIterations += 1;
     const travel = sampledAxisTravel(planTargetRoute(notes, solved).samples);
     const factors: Vec3 = travel.map((value, axis) => clamp(targets[axis]! / Math.max(EPS, value), 0.25, 4)) as Vec3;
     solved.horizontalSpeed *= factors[0];
@@ -608,7 +668,7 @@ function solveMotionProfile(notes: readonly SongEvent[], initial: MarbleMotionPr
   return solved;
 }
 
-function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics, motion: MarbleMotionProfile): MarbleTarget[] {
+function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics, motion: MarbleMotionProfile, profile?: MutableCompileProfile): MarbleTarget[] {
   const span = Math.max(1, metrics.pitchRange);
   const { positions, outgoingVelocities, samples: routeSamples } = planTargetRoute(notes, motion);
 
@@ -656,17 +716,27 @@ function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics
         for (const offset of rotationOffsets) {
           const candidateRotation = rotation + offset;
           for (const tiltOffset of depthTiltOffsets) {
+            if (profile) profile.counters.targetCandidates += 1;
             const candidateDepthTilt = clamp(depthTilt + tiltOffset, -0.82, 0.82);
             const candidateNormal = targetSurfaceNormal(candidateRotation, candidateDepthTilt);
-            if (vecDot(incoming, candidateNormal) > -0.005 || vecDot(outgoing, candidateNormal) < 0.005) continue;
+            if (vecDot(incoming, candidateNormal) > -0.005 || vecDot(outgoing, candidateNormal) < 0.005) {
+              if (profile) profile.counters.normalRejects += 1;
+              continue;
+            }
             const candidate = placeTarget(`target:${index}`, variant.kind, pitch, pitchClass, contactPos, candidateRotation, candidateDepthTilt, size, variant.material);
-            if (targets.some((previous) => marbleTargetsOverlap(candidate, previous))) continue;
-            const routeClearance = minimumTargetRouteClearance(candidate, routeSamples);
+            if (targetOverlapsAny(candidate, targets, 0.055, profile)) {
+              if (profile) profile.counters.overlapRejects += 1;
+              continue;
+            }
+            const routeClearance = minimumTargetRouteClearance(candidate, routeSamples, profile);
             if (routeClearance > bestClearance) {
               bestTarget = candidate;
               bestClearance = routeClearance;
             }
-            if (routeClearance < ROUTE_CLEARANCE) continue;
+            if (routeClearance < ROUTE_CLEARANCE) {
+              if (profile) profile.counters.clearanceRejects += 1;
+              continue;
+            }
             chosenKind = variant.kind;
             target = candidate;
             break findCandidate;
@@ -682,17 +752,27 @@ function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics
         for (const offset of rotationOffsets) {
           const candidateRotation = rotation + offset;
           for (const tiltOffset of depthTiltOffsets) {
+            if (profile) profile.counters.targetCandidates += 1;
             const candidateDepthTilt = clamp(depthTilt + tiltOffset, -0.82, 0.82);
             const candidateNormal = targetSurfaceNormal(candidateRotation, candidateDepthTilt);
-            if (vecDot(incoming, candidateNormal) > -0.005 || vecDot(outgoing, candidateNormal) < 0.005) continue;
+            if (vecDot(incoming, candidateNormal) > -0.005 || vecDot(outgoing, candidateNormal) < 0.005) {
+              if (profile) profile.counters.normalRejects += 1;
+              continue;
+            }
             const candidate = placeTarget(`target:${index}`, fallbackKind, pitch, pitchClass, contactPos, candidateRotation, candidateDepthTilt, size, "rubber");
-            if (targets.some((previous) => marbleTargetsOverlap(candidate, previous, 0))) continue;
-            const routeClearance = minimumTargetRouteClearance(candidate, routeSamples);
+            if (targetOverlapsAny(candidate, targets, 0, profile)) {
+              if (profile) profile.counters.overlapRejects += 1;
+              continue;
+            }
+            const routeClearance = minimumTargetRouteClearance(candidate, routeSamples, profile);
             if (routeClearance > bestClearance) {
               bestTarget = candidate;
               bestClearance = routeClearance;
             }
-            if (routeClearance < ROUTE_CLEARANCE) continue;
+            if (routeClearance < ROUTE_CLEARANCE) {
+              if (profile) profile.counters.clearanceRejects += 1;
+              continue;
+            }
             target = candidate;
             break fallbackCandidate;
           }
@@ -732,7 +812,7 @@ function compileClusters(notes: readonly SongEvent[], targets: readonly MarbleTa
   return clusters;
 }
 
-function validateTargetLayout(targets: readonly MarbleTarget[]): void {
+function validateTargetLayout(targets: readonly MarbleTarget[], profile?: MutableCompileProfile): void {
   for (let left = 0; left < targets.length; left += 1) {
     for (let right = left + 1; right < targets.length; right += 1) {
       const a = targets[left]!;
@@ -740,6 +820,7 @@ function validateTargetLayout(targets: readonly MarbleTarget[]): void {
       const aCompact = a.kind === "peg" || a.kind === "chime";
       const bCompact = b.kind === "peg" || b.kind === "chime";
       if (aCompact && bCompact) continue;
+      if (profile) profile.counters.overlapChecks += 1;
       if (marbleTargetsOverlap(a, b, 0)) throw new Error(`Invalid Marble layout: ${a.id} overlaps ${b.id}`);
     }
   }
@@ -1026,13 +1107,16 @@ export function measureMarbleMotionMix(path: readonly MarblePathSegment[], durat
 }
 
 export function compileMarble(song: Song, options: CompileMarbleOptions = {}): MarblePerformance {
-  const selected = selectTrack(song, options);
-  const motion = solveMotionProfile(selected.notes, compileMotionProfile(options.motionMix));
-  const metrics = compileMetrics(selected.notes);
-  const targets = compileTargets(selected.notes, metrics, motion);
-  validateTargetLayout(targets);
-  const clusters = compileClusters(selected.notes, targets);
-  const impacts = compileImpacts(selected.notes, targets, clusters);
+  const profile = createCompileProfile(options.instrumentation);
+  const selected = measureCompilePhase(profile, "selectTrack", () => selectTrack(song, options));
+  const metrics = measureCompilePhase(profile, "metrics", () => compileMetrics(selected.notes));
+  const motion = measureCompilePhase(profile, "motionSolve", () => solveMotionProfile(selected.notes, compileMotionProfile(options.motionMix), profile));
+  const targets = measureCompilePhase(profile, "targets", () => compileTargets(selected.notes, metrics, motion, profile));
+  measureCompilePhase(profile, "targetValidation", () => validateTargetLayout(targets, profile));
+  const { clusters, impacts } = measureCompilePhase(profile, "clustersAndImpacts", () => {
+    const compiledClusters = compileClusters(selected.notes, targets);
+    return { clusters: compiledClusters, impacts: compileImpacts(selected.notes, targets, compiledClusters) };
+  });
   const diagnostics: MarbleDiagnostics = {
     droppedNotes: 0,
     timingMismatches: 0,
@@ -1049,42 +1133,53 @@ export function compileMarble(song: Song, options: CompileMarbleOptions = {}): M
       "collision: radius-offset contact poses and non-overlapping target footprints",
     ],
   };
-  const path = compilePath(song, selected.notes, targets, clusters, diagnostics, motion);
-  validateMarble(selected.notes, impacts, path, diagnostics);
-  const tail = compileTail(song, impacts);
-  const palette = solvePalette(null, [selected.track.role, "keys", "fx"]);
-  const performance: MarblePerformance = {
-    schemaVersion: 1,
-    concept: "marble",
-    seed: `${song.meta.seed}:marble:${selected.track.id}`,
-    durationSec: song.meta.durationSec,
-    fps: 60,
-    resolution: { w: W, h: H },
-    palette,
-    camera: compileCamera(song, targets, impacts, clusters),
-    curves: { energy: song.master.energy },
-    events: compileEvents(impacts, clusters, tail),
-    statics: {
-      compilerVersion: 12,
-      motionMix: motion.mix,
-      actualMotionMix: measureMarbleMotionMix(path, song.meta.durationSec),
-      source: {
-        trackId: selected.track.id,
-        trackName: selected.track.name,
-        role: selected.track.role,
-        selectionMode: selected.mode,
-        noteCount: selected.notes.length,
-        selectionReason: selected.reason,
+  const path = measureCompilePhase(profile, "path", () => compilePath(song, selected.notes, targets, clusters, diagnostics, motion));
+  measureCompilePhase(profile, "pathValidation", () => validateMarble(selected.notes, impacts, path, diagnostics));
+  const performance = measureCompilePhase(profile, "finalize", () => {
+    const tail = compileTail(song, impacts);
+    const palette = solvePalette(null, [selected.track.role, "keys", "fx"]);
+    const compiled: MarblePerformance = {
+      schemaVersion: 1,
+      concept: "marble",
+      seed: `${song.meta.seed}:marble:${selected.track.id}`,
+      durationSec: song.meta.durationSec,
+      fps: 60,
+      resolution: { w: W, h: H },
+      palette,
+      camera: compileCamera(song, targets, impacts, clusters),
+      curves: { energy: song.master.energy },
+      events: compileEvents(impacts, clusters, tail),
+      statics: {
+        compilerVersion: 12,
+        motionMix: motion.mix,
+        actualMotionMix: measureMarbleMotionMix(path, song.meta.durationSec),
+        source: {
+          trackId: selected.track.id,
+          trackName: selected.track.name,
+          role: selected.track.role,
+          selectionMode: selected.mode,
+          noteCount: selected.notes.length,
+          selectionReason: selected.reason,
+        },
+        metrics,
+        targets,
+        impacts,
+        path,
+        clusters,
+        tail,
+        diagnostics,
       },
-      metrics,
-      targets,
-      impacts,
-      path,
-      clusters,
-      tail,
-      diagnostics,
-    },
-  };
-  parsePerformance(performance);
+    };
+    parsePerformance(compiled);
+    return compiled;
+  });
+  if (profile) {
+    const completed: MarbleCompileProfile = {
+      totalMs: profile.instrumentation.now() - profile.startedAt,
+      phasesMs: { ...profile.phasesMs },
+      counters: { ...profile.counters },
+    };
+    profile.instrumentation.report(completed);
+  }
   return performance;
 }

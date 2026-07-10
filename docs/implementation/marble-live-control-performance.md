@@ -1,6 +1,6 @@
 # Marble live-control performance implementation plan
 
-Status: planned
+Status: in progress (P0 complete; P1 next)
 
 Last updated: 2026-07-10
 
@@ -40,17 +40,36 @@ Warm Node compile measurements from 2026-07-10:
 
 | Motion mix | Median compile | Observed range |
 | --- | ---: | ---: |
-| 20/20/60 | 33 ms | 31-43 ms |
-| 10/10/80 | 158 ms | 153-164 ms |
-| 45/10/45 | 249 ms | 237-262 ms |
-| 10/80/10 | 1,882 ms | 1,871-1,928 ms |
+| 20/20/60 | 40 ms | 37-45 ms |
+| 10/10/80 | 175 ms | 170-189 ms |
+| 45/10/45 | 248 ms | 246-267 ms |
+| 10/80/10 | 1,938 ms | 1,911-1,947 ms |
 
 The compiler cost varies sharply by layout because candidate target orientation,
 route-clearance, and overlap searches do more work for difficult profiles. The
 current app then adds renderer and scene reconstruction cost and garbage
 collection pressure.
 
-Before implementation, record equivalent browser measurements for:
+P0 browser baseline for one 10/80/10 live rebuild in the development preview:
+
+| Measurement | Result |
+| --- | ---: |
+| Total compile | 5,299 ms |
+| Target placement | 5,289 ms |
+| Scene replacement | 9.3 ms |
+| First render | 115.6 ms |
+| Target candidates | 14,451 |
+| Route-clearance samples | 8,502,000 |
+| Scene objects | 192 |
+| Geometries | 118 |
+| Draw calls | 185 |
+
+The browser compile is materially slower than the warm Node benchmark, but both
+profiles identify the same hot phase and deterministic work explosion. Motion
+solving is below 2 ms; target placement accounts for essentially all extreme
+compile time.
+
+P0 records equivalent browser measurements for:
 
 - compiler phase timings;
 - scene construction and destruction;
@@ -128,7 +147,7 @@ The worker removes UI freezes even before the compile budgets are reached. The
 compile targets remain important because a gesture controller can otherwise
 produce stale results that arrive seconds after the hand has moved elsewhere.
 
-## Phase P0 - Instrumentation and repeatable benchmark
+## Phase P0 - Instrumentation and repeatable benchmark (complete)
 
 ### Work
 
@@ -153,6 +172,18 @@ produce stale results that arrive seconds after the hand has moved elsewhere.
 ### Commit point
 
 Commit and push instrumentation before changing behavior.
+
+### Implemented result
+
+- `corepack pnpm benchmark:marble-live` runs the reference profile matrix and
+  reports warm min/median/p95/max, phase medians, and deterministic work counts.
+- Compiler instrumentation uses an injected clock, so deterministic modules do
+  not access ambient time and compiled output remains byte-identical.
+- `?profileMarble=1` enables hidden browser JSON diagnostics for frame intervals,
+  render cost, long tasks, compile phases, scene replacement, first render, and
+  Three.js resources without adding production UI.
+- The P0 evidence changes P2 priority: target candidate pruning and route
+  clearance broad-phase come before motion-solver optimization.
 
 ## Phase P1 - Dedicated route-planner worker
 

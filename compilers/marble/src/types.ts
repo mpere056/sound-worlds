@@ -36,6 +36,38 @@ export interface MarbleMotionMix {
   frontBack: number;
 }
 
+export type MarbleCompilePhase =
+  | "selectTrack"
+  | "metrics"
+  | "motionSolve"
+  | "targets"
+  | "targetValidation"
+  | "clustersAndImpacts"
+  | "path"
+  | "pathValidation"
+  | "finalize";
+
+export interface MarbleCompileCounters {
+  solverIterations: number;
+  targetCandidates: number;
+  normalRejects: number;
+  overlapRejects: number;
+  clearanceRejects: number;
+  overlapChecks: number;
+  routeClearanceSamples: number;
+}
+
+export interface MarbleCompileProfile {
+  totalMs: number;
+  phasesMs: Record<MarbleCompilePhase, number>;
+  counters: MarbleCompileCounters;
+}
+
+export interface MarbleCompileInstrumentation {
+  now(): number;
+  report(profile: MarbleCompileProfile): void;
+}
+
 export interface MarbleTarget {
   id: string;
   kind: MarbleTargetKind;
@@ -145,4 +177,5 @@ export interface MarblePerformance extends Performance {
 export interface CompileMarbleOptions {
   sourceTrackId?: string;
   motionMix?: Partial<MarbleMotionMix>;
+  instrumentation?: MarbleCompileInstrumentation;
 }
