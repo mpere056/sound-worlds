@@ -3,7 +3,6 @@ import {
   BufferGeometry,
   BoxGeometry,
   CanvasTexture,
-  CatmullRomCurve3,
   CircleGeometry,
   Color,
   CubicBezierCurve3,
@@ -23,7 +22,6 @@ import {
   SphereGeometry,
   SRGBColorSpace,
   Texture,
-  TubeGeometry,
   Vector3,
   WebGLRenderer,
 } from "three";
@@ -95,6 +93,8 @@ export interface MarblePlatformTransition {
   toTargets: Map<string, MarbleTarget>;
   fromCarriers: Map<string, MarblePlatformCarrierTransform>;
   toCarriers: Map<string, MarblePlatformCarrierTransform>;
+  fromPath: Map<string, MarblePathSegment>;
+  toPath: Map<string, MarblePathSegment>;
   performance: MarblePerformance;
 }
 
@@ -128,6 +128,17 @@ interface TargetMeshes {
   carrier: Mesh<BoxGeometry, MeshStandardMaterial>;
   compact: boolean;
   rod?: Mesh<CylinderGeometry, MeshStandardMaterial>;
+}
+
+interface RailMeshes {
+  left: Mesh<CylinderGeometry, MeshStandardMaterial>[];
+  right: Mesh<CylinderGeometry, MeshStandardMaterial>[];
+  ties: Array<{ index: number; mesh: Mesh<CylinderGeometry, MeshStandardMaterial> }>;
+  supports: Array<{
+    index: number;
+    stem: Mesh<CylinderGeometry, MeshStandardMaterial>;
+    collar: Mesh<CylinderGeometry, MeshStandardMaterial>;
+  }>;
 }
 
 type MeshBasicLike = MeshStandardMaterial | MeshPhysicalMaterial;
@@ -279,9 +290,47 @@ export function interpolateMarbleTarget(from: MarbleTarget, to: MarbleTarget, ra
   };
 }
 
+function interpolateOptionalPoint(from: [number, number, number] | undefined, to: [number, number, number] | undefined, progress: number): [number, number, number] | undefined {
+  if (!from || !to) return progress < 1 ? from : to;
+  return from.map((value, index) => value + (to[index]! - value) * progress) as [number, number, number];
+}
+
+export function interpolateMarblePathSegment(from: MarblePathSegment, to: MarblePathSegment, raw: number): MarblePathSegment {
+  const progress = clamp(raw, 0, 1);
+  const result: MarblePathSegment = {
+    ...(progress < 1 ? from : to),
+    from: from.from.map((value, index) => value + (to.from[index]! - value) * progress) as [number, number, number],
+    to: from.to.map((value, index) => value + (to.to[index]! - value) * progress) as [number, number, number],
+    arcHeight: (from.arcHeight ?? 0) + ((to.arcHeight ?? 0) - (from.arcHeight ?? 0)) * progress,
+  };
+  const control = interpolateOptionalPoint(from.control, to.control, progress);
+  const control2 = interpolateOptionalPoint(from.control2, to.control2, progress);
+  if (control) result.control = control;
+  else delete result.control;
+  if (control2) result.control2 = control2;
+  else delete result.control2;
+  return result;
+}
+
 export function marblePlatformTransitionProgress(raw: number): number {
   const progress = clamp(raw, 0, 1);
   return progress * progress * (3 - 2 * progress);
+}
+
+export function marblePlatformTransitionDuration(fromTargets: ReadonlyMap<string, MarbleTarget>, toTargets: ReadonlyMap<string, MarbleTarget>): number {
+  let maxDistance = 0;
+  let maxAngle = 0;
+  let maxCarrierDelta = 0;
+  for (const [targetId, from] of fromTargets) {
+    const to = toTargets.get(targetId);
+    if (!to) continue;
+    maxDistance = Math.max(maxDistance, Math.hypot(...from.pos.map((value, index) => to.pos[index]! - value)));
+    maxAngle = Math.max(maxAngle, ...from.rotation.map((value, index) => Math.abs(interpolateAngle(value, to.rotation[index]!, 1) - value)));
+    const fromCarrier = marblePlatformCarrierTransform(from);
+    const toCarrier = marblePlatformCarrierTransform(to);
+    maxCarrierDelta = Math.max(maxCarrierDelta, Math.hypot(...fromCarrier.scale.map((value, index) => toCarrier.scale[index]! - value)));
+  }
+  return Math.round(clamp(Math.max(450, maxDistance * 200, maxAngle * 260, maxCarrierDelta * 320), 450, 1400));
 }
 
 export function interpolateMarblePlatformCarrier(from: MarbleTarget, to: MarbleTarget, raw: number): MarblePlatformCarrierTransform {
@@ -321,6 +370,14 @@ function railSideAt(points: readonly Vector3[], index: number): Vector3 {
   const side = new Vector3(-tangent.y, tangent.x, 0);
   if (side.lengthSq() < 0.0001) return new Vector3(1, 0, 0);
   return side.normalize();
+}
+
+function positionCylinder(mesh: Mesh<CylinderGeometry, MeshStandardMaterial>, from: Vector3, to: Vector3, radius: number): void {
+  const direction = to.clone().sub(from);
+  const length = Math.max(0.0001, direction.length());
+  mesh.position.copy(from).add(to).multiplyScalar(0.5);
+  mesh.scale.set(radius, length, radius);
+  mesh.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), direction.multiplyScalar(1 / length));
 }
 
 function makeNoiseTexture(): CanvasTexture {
@@ -487,6 +544,7 @@ export class MarbleScene {
   readonly #scene = new Scene();
   readonly #camera: PerspectiveCamera;
   readonly #targetMeshes = new Map<string, TargetMeshes>();
+  readonly #railMeshes = new Map<string, RailMeshes>();
   readonly #impactByTarget = new Map<string, MarbleImpact[]>();
   readonly #machine = new Group();
   readonly #performanceObjects = new Group();
@@ -783,41 +841,51 @@ export class MarbleScene {
       if (segment.kind !== "rail") continue;
       const points = this.#segmentPoints(segment);
       if (points.length < 2) continue;
-      const railGap = 0.115;
-      const leftPoints = points.map((point, index) => point.clone().add(railSideAt(points, index).multiplyScalar(railGap)));
-      const rightPoints = points.map((point, index) => point.clone().add(railSideAt(points, index).multiplyScalar(-railGap)));
-      for (const sidePoints of [leftPoints, rightPoints]) {
-        const curve = new CatmullRomCurve3(sidePoints, false, "centripetal", 0.35);
-        const tube = new Mesh(new TubeGeometry(curve, Math.max(8, sidePoints.length * 3), 0.018, 8, false), this.#sharedMaterials.rail);
-        this.#rails.add(tube);
-      }
-      const tieStep = 4;
-      for (let index = 1; index < points.length - 1; index += tieStep) {
-        const point = points[index]!;
-        const side = railSideAt(points, index);
-        const tie = new Mesh(this.#primitiveGeometry.cylinder, this.#sharedMaterials.tie);
-        tie.scale.set(0.012, railGap * 2.42, 0.012);
-        tie.position.copy(point);
-        tie.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), side);
-        this.#rails.add(tie);
-      }
+      const left = Array.from({ length: points.length - 1 }, () => new Mesh(this.#primitiveGeometry.cylinder, this.#sharedMaterials.rail));
+      const right = Array.from({ length: points.length - 1 }, () => new Mesh(this.#primitiveGeometry.cylinder, this.#sharedMaterials.rail));
+      const ties = Array.from({ length: Math.max(0, Math.ceil((points.length - 2) / 4)) }, (_, tieIndex) => ({
+        index: 1 + tieIndex * 4,
+        mesh: new Mesh(this.#primitiveGeometry.cylinder, this.#sharedMaterials.tie),
+      })).filter((entry) => entry.index < points.length - 1);
       const supportIndexes = Array.from(new Set([0, Math.floor(points.length / 2), points.length - 1]));
-      for (const index of supportIndexes) {
-        const point = points[index]!;
-        const supportLength = Math.max(0.18, point.z + 0.42);
-        const support = new Mesh(this.#primitiveGeometry.cylinder, this.#sharedMaterials.support);
-        support.scale.set(0.016, supportLength, 0.016);
-        support.position.set(point.x, point.y, (point.z - 0.42) / 2);
-        support.rotation.x = Math.PI / 2;
-        this.#rails.add(support);
-        const collar = new Mesh(this.#primitiveGeometry.cylinder, this.#sharedMaterials.support);
-        collar.scale.set(0.038, 0.018, 0.038);
-        collar.position.copy(point);
-        collar.rotation.x = Math.PI / 2;
-        this.#rails.add(collar);
-      }
+      const supports = supportIndexes.map((index) => ({
+        index,
+        stem: new Mesh(this.#primitiveGeometry.cylinder, this.#sharedMaterials.support),
+        collar: new Mesh(this.#primitiveGeometry.cylinder, this.#sharedMaterials.support),
+      }));
+      const meshes: RailMeshes = { left, right, ties, supports };
+      this.#railMeshes.set(segment.id, meshes);
+      this.#rails.add(...left, ...right, ...ties.map((entry) => entry.mesh), ...supports.flatMap((entry) => [entry.stem, entry.collar]));
+      this.#applyRailVisual(segment, meshes);
     }
     this.#performanceObjects.add(this.#rails);
+  }
+
+  #applyRailVisual(segment: MarblePathSegment, meshes: RailMeshes): void {
+    const points = this.#segmentPoints(segment);
+    if (points.length < 2) return;
+    const railGap = 0.115;
+    const leftPoints = points.map((point, index) => point.clone().add(railSideAt(points, index).multiplyScalar(railGap)));
+    const rightPoints = points.map((point, index) => point.clone().add(railSideAt(points, index).multiplyScalar(-railGap)));
+    for (let index = 0; index < Math.min(meshes.left.length, leftPoints.length - 1); index += 1) {
+      positionCylinder(meshes.left[index]!, leftPoints[index]!, leftPoints[index + 1]!, 0.018);
+      positionCylinder(meshes.right[index]!, rightPoints[index]!, rightPoints[index + 1]!, 0.018);
+    }
+    for (const tie of meshes.ties) {
+      const point = points[tie.index];
+      if (!point) continue;
+      const side = railSideAt(points, tie.index).multiplyScalar(railGap * 1.21);
+      positionCylinder(tie.mesh, point.clone().sub(side), point.clone().add(side), 0.012);
+    }
+    for (const support of meshes.supports) {
+      const point = points[support.index];
+      if (!point) continue;
+      const floor = new Vector3(point.x, point.y, -0.42);
+      positionCylinder(support.stem, floor, point, 0.016);
+      support.collar.scale.set(0.038, 0.018, 0.038);
+      support.collar.position.copy(point);
+      support.collar.rotation.x = Math.PI / 2;
+    }
   }
 
   #targetIntensity(targetId: string, t: number): number {
@@ -856,11 +924,15 @@ export class MarbleScene {
     }
   }
 
-  #platformTransitionState(nowMs: number): { targets: Map<string, MarbleTarget>; carriers: Map<string, MarblePlatformCarrierTransform> } {
+  #platformTransitionState(nowMs: number): { targets: Map<string, MarbleTarget>; carriers: Map<string, MarblePlatformCarrierTransform>; path: Map<string, MarblePathSegment> } {
     const transition = this.#platformTransition;
     if (!transition) {
       const targets = new Map(this.#performance.statics.targets.map((target) => [target.id, target]));
-      return { targets, carriers: new Map([...targets].map(([targetId, target]) => [targetId, marblePlatformCarrierTransform(target)])) };
+      return {
+        targets,
+        carriers: new Map([...targets].map(([targetId, target]) => [targetId, marblePlatformCarrierTransform(target)])),
+        path: new Map(this.#performance.statics.path.map((segment) => [segment.id, segment])),
+      };
     }
     const progress = marblePlatformTransitionProgress((nowMs - transition.startedAtMs) / transition.durationMs);
     const targets = new Map([...transition.fromTargets].map(([targetId, from]) => {
@@ -871,7 +943,11 @@ export class MarbleScene {
       const to = transition.toCarriers.get(targetId);
       return [targetId, to ? interpolateMarblePlatformCarrierTransform(from, to, progress) : from];
     }));
-    return { targets, carriers };
+    const path = new Map([...transition.fromPath].map(([segmentId, from]) => {
+      const to = transition.toPath.get(segmentId);
+      return [segmentId, to ? interpolateMarblePathSegment(from, to, progress) : from];
+    }));
+    return { targets, carriers, path };
   }
 
   #renderPlatformTransition(nowMs: number): void {
@@ -893,6 +969,11 @@ export class MarbleScene {
           progress,
         ),
       );
+    }
+    for (const [segmentId, from] of transition.fromPath) {
+      const to = transition.toPath.get(segmentId);
+      const meshes = this.#railMeshes.get(segmentId);
+      if (to && meshes) this.#applyRailVisual(interpolateMarblePathSegment(from, to, progress), meshes);
     }
     if (raw < 1) return;
     const previousPath = this.#performance.statics.path;
@@ -989,25 +1070,29 @@ export class MarbleScene {
     }
   }
 
-  transitionPerformance(performance: MarblePerformance, currentT: number, durationMs = 450): MarbleTransitionStart {
+  transitionPerformance(performance: MarblePerformance, currentT: number, durationMs?: number): MarbleTransitionStart {
     const nowMs = this.#now();
     const displayed = this.#platformTransitionState(nowMs);
     const fromTargets = displayed.targets;
     const alignedPerformance = prepareMarblePerformanceTransition(this.#performance, performance, currentT);
     const toTargets = new Map(alignedPerformance.statics.targets.map((target) => [target.id, target]));
     const toCarriers = new Map([...toTargets].map(([targetId, target]) => [targetId, marblePlatformCarrierTransform(target)]));
+    const toPath = new Map(alignedPerformance.statics.path.map((segment) => [segment.id, segment]));
+    const resolvedDurationMs = durationMs ?? marblePlatformTransitionDuration(fromTargets, toTargets);
     this.#platformTransition = {
       songT: currentT,
       startedAtMs: nowMs,
-      durationMs,
+      durationMs: resolvedDurationMs,
       fromTargets,
       toTargets,
       fromCarriers: displayed.carriers,
       toCarriers,
+      fromPath: displayed.path,
+      toPath,
       performance: alignedPerformance,
     };
     return {
-      durationMs,
+      durationMs: resolvedDurationMs,
       platformCount: [...fromTargets.keys()].filter((targetId) => toTargets.has(targetId)).length,
       motionMix: { ...alignedPerformance.statics.motionMix },
     };
@@ -1034,6 +1119,7 @@ export class MarbleScene {
     });
     this.#performanceObjects.clear();
     this.#rails.clear();
+    this.#railMeshes.clear();
     this.#targetMeshes.clear();
     this.#impactByTarget.clear();
     this.#svgTargets.clear();

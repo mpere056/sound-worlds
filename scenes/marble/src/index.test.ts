@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildFixtureSong } from "@reaper-viz/core";
 import { compileMarble, marbleTargetClearance, sampleMarblePose } from "@reaper-viz/compiler-marble";
 import { PerspectiveCamera, Vector3 } from "three";
-import { blendMarbleCamera, interpolateMarblePlatformCarrier, interpolateMarbleTarget, marblePlatformCarrierTransform, marblePlatformTransitionProgress, marblePlatformVisualSize, prepareMarbleActivation, prepareMarblePerformanceTransition, sampleMarbleCamera, type MarbleCameraPose } from "./index.js";
+import { blendMarbleCamera, interpolateMarblePathSegment, interpolateMarblePlatformCarrier, interpolateMarbleTarget, marblePlatformCarrierTransform, marblePlatformTransitionDuration, marblePlatformTransitionProgress, marblePlatformVisualSize, prepareMarbleActivation, prepareMarblePerformanceTransition, sampleMarbleCamera, type MarbleCameraPose } from "./index.js";
 
 function distance(a: [number, number, number], b: [number, number, number]): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
@@ -184,5 +184,15 @@ describe("Marble live-plan activation", () => {
     const displayed = interpolateMarbleTarget(target, firstDestination, marblePlatformTransitionProgress(0.4));
     const secondDestination = { ...target, pos: [target.pos[0] - 1, target.pos[1] + 2, target.pos[2] - 2] as [number, number, number] };
     expect(interpolateMarbleTarget(displayed, secondDestination, 0).pos).toEqual(displayed.pos);
+    expect(marblePlatformTransitionDuration(new Map([[target.id, target]]), new Map([[target.id, target]]))).toBe(450);
+    expect(marblePlatformTransitionDuration(new Map([[target.id, target]]), new Map([[target.id, firstDestination]]))).toBe(490);
+    const extremeDestination = { ...target, pos: [target.pos[0] + 20, target.pos[1], target.pos[2]] as [number, number, number] };
+    expect(marblePlatformTransitionDuration(new Map([[target.id, target]]), new Map([[target.id, extremeDestination]]))).toBe(1400);
+    const fromSegment = active.statics.path[1]!;
+    const toSegment = { ...fromSegment, from: [fromSegment.from[0] + 2, fromSegment.from[1] - 1, fromSegment.from[2] + 3] as [number, number, number] };
+    const middleSegment = interpolateMarblePathSegment(fromSegment, toSegment, 0.5);
+    expect(middleSegment.from[0]).toBeCloseTo(fromSegment.from[0] + 1, 10);
+    expect(middleSegment.from[1]).toBeCloseTo(fromSegment.from[1] - 0.5, 10);
+    expect(middleSegment.from[2]).toBeCloseTo(fromSegment.from[2] + 1.5, 10);
   });
 });

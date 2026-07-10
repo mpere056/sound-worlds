@@ -400,7 +400,8 @@ transform switch to move between generated maps.
    worker plan arrives.
 2. Rigidly align the incoming route to the held marble center.
 3. Smoothstep every paired platform's position, shortest-path rotation, collision
-   body dimensions, colored carrier, and support rod for 450 ms.
+   body dimensions, colored carrier, support rod, and generated route rail over
+   a displacement-aware 450-1400 ms window.
 4. If another slider plan arrives, sample the transforms currently on screen and
    use them as the next transition's starting state.
 5. Install the validated incoming physics only after all visible platforms reach
@@ -425,19 +426,21 @@ transform switch to move between generated maps.
   the held song time and rigidly translates the incoming path, targets, contact
   points, controls, and camera keys so the marble center is continuous.
 - `MarbleScene.transitionPerformance()` stores one old/new target pair per stable
-  ID and drives a 450 ms wall-clock smoothstep. Position, shortest-path rotation,
-  base size, marble-relative colored carrier size, and target support rods all
-  move continuously. No target material is cloned and no transition opacity,
-  reveal, ghost, or duplicate target group exists.
+  ID and drives a displacement-aware wall-clock smoothstep. Position, shortest-
+  path rotation, base size, marble-relative colored carrier size, and target
+  support rods all move continuously. Small corrections use 450 ms; larger
+  distance, angle, or carrier changes scale up to a 1400 ms ceiling. No target
+  material is cloned and no transition opacity, reveal, ghost, or duplicate
+  target group exists.
 - The app pauses audio only when it was already playing, renders the held marble
-  while the platforms move, disables play/scrub for the 450 ms re-layout, and
+  while the platforms move, disables play/scrub for the bounded re-layout, and
   resumes automatically after the validated plan is installed.
 - Continuous slider input retargets from the displayed interpolation state. The
-  final plan therefore catches up 450 ms after release without snapping back to
-  any intermediate worker result.
-- The pooled renderer is retained. Rebuilding decorative route rails at the final
-  validated endpoint remains a smaller follow-up; target bodies, carriers,
-  hardware groups, and support rods already have continuous transforms.
+  final plan therefore catches up within the bounded settle window after release
+  without snapping back to any intermediate worker result.
+- Decorative rails now use pooled cylinder segments instead of disposable tube
+  geometry. Stable path IDs interpolate rail samples, ties, collars, and supports
+  through the same transition without allocating geometry per frame.
 - Tests prove arbitrary-time marble-center alignment, incoming-plan immutability,
   exact easing endpoints/midpoint, shortest-path rotation, all-target ID pairing,
   and displayed-state retargeting.
@@ -507,7 +510,7 @@ Commit and push the coordinator before adding camera access or MediaPipe.
 - A new worker result samples the transforms currently displayed by an active
   transition before retargeting. Repeated slider changes therefore preserve
   position continuity instead of restarting from an old map.
-- Transport and marble time are held for the 450 ms settle window. The incoming
+- Transport and marble time are held for the 450-1400 ms settle window. The incoming
   path is aligned at that held timestamp, installed only after platform movement
   finishes, and playback resumes automatically when it was previously running.
 - The runtime contains no map-transition opacity, duplicate target geometry,
