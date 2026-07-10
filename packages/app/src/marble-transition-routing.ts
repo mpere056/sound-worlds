@@ -1,6 +1,7 @@
 import type { MarbleTarget } from "@reaper-viz/compiler-marble";
 
 export type MarbleTransitionOffset = [number, number, number];
+export type MarbleTransitionTiming = [number, number];
 
 interface Footprint {
   center: MarbleTransitionOffset;
@@ -17,8 +18,8 @@ function interpolateAngle(from: number, to: number, progress: number): number {
   return from + delta * progress;
 }
 
-function targetAt(from: MarbleTarget, to: MarbleTarget, raw: number, offset: MarbleTransitionOffset): MarbleTarget {
-  const progress = clamp(raw);
+function targetAt(from: MarbleTarget, to: MarbleTarget, raw: number, offset: MarbleTransitionOffset, timing: MarbleTransitionTiming = [0, 1]): MarbleTarget {
+  const progress = clamp((raw - timing[0]) / Math.max(1e-6, timing[1] - timing[0]));
   const envelope = Math.sin(Math.PI * progress);
   return {
     ...to,
@@ -59,7 +60,7 @@ function radius(value: Footprint, axis: MarbleTransitionOffset): number {
   return value.axes.reduce((sum, footprintAxis, index) => sum + value.halfExtents[index]! * Math.abs(dot(footprintAxis, axis)), 0);
 }
 
-function overlaps(left: Footprint, right: Footprint, padding = 0.025): boolean {
+function overlaps(left: Footprint, right: Footprint, padding = 0.002): boolean {
   const delta: MarbleTransitionOffset = [right.center[0] - left.center[0], right.center[1] - left.center[1], right.center[2] - left.center[2]];
   const axes: MarbleTransitionOffset[] = [...left.axes, ...right.axes];
   for (const leftAxis of left.axes) {
@@ -77,6 +78,7 @@ export function marbleTransitionOverlapCount(
   toTargets: readonly MarbleTarget[],
   offsets: ReadonlyMap<string, MarbleTransitionOffset>,
   samples = 120,
+  timings: ReadonlyMap<string, MarbleTransitionTiming> = new Map(),
 ): number {
   const toById = new Map(toTargets.map((target) => [target.id, target]));
   const pairs = fromTargets.flatMap((from) => {
@@ -86,7 +88,7 @@ export function marbleTransitionOverlapCount(
   let count = 0;
   for (let sample = 1; sample < samples; sample += 1) {
     const progress = sample / samples;
-    const footprints = pairs.map((pair) => footprint(targetAt(pair.from, pair.to, progress, offsets.get(pair.id) ?? [0, 0, 0])));
+    const footprints = pairs.map((pair) => footprint(targetAt(pair.from, pair.to, progress, offsets.get(pair.id) ?? [0, 0, 0], timings.get(pair.id))));
     for (let left = 0; left < footprints.length; left += 1) {
       for (let right = left + 1; right < footprints.length; right += 1) {
         if (overlaps(footprints[left]!, footprints[right]!)) count += 1;
@@ -150,8 +152,48 @@ function targetOverlapCount(
 
 export interface MarbleTransitionRoute {
   offsets: Array<[string, MarbleTransitionOffset]>;
+  timings: Array<[string, MarbleTransitionTiming]>;
   overlapCount: number;
   samples: number;
+}
+
+const REPAIR_DIRECTIONS: MarbleTransitionOffset[] = [
+  [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1],
+  [0.7, 0, 0.7], [-0.7, 0, 0.7], [0.7, 0, -0.7], [-0.7, 0, -0.7],
+  [0, 0.7, 0.7], [0, -0.7, 0.7], [0, 0.7, -0.7], [0, -0.7, -0.7],
+];
+
+function repairMarbleTransitionRoute(
+  fromTargets: readonly MarbleTarget[],
+  toTargets: readonly MarbleTarget[],
+  initial: ReadonlyMap<string, MarbleTransitionOffset>,
+  searchSamples: number,
+): Map<string, MarbleTransitionOffset> {
+  const offsets = new Map(initial);
+  for (let pass = 0; pass < 3; pass += 1) {
+    const conflicts = [...overlappingTargetIds(fromTargets, toTargets, offsets, searchSamples)].sort().reverse();
+    if (!conflicts.length) break;
+    for (const id of conflicts) {
+      const original = offsets.get(id) ?? [0, 0, 0];
+      let selected = original;
+      let selectedCount = targetOverlapCount(id, fromTargets, toTargets, offsets, searchSamples);
+      for (const magnitude of [0.6, 1.1, 1.8, 2.8]) {
+        for (const direction of REPAIR_DIRECTIONS) {
+          const candidate = original.map((value, index) => value + direction[index]! * magnitude) as MarbleTransitionOffset;
+          offsets.set(id, candidate);
+          const count = targetOverlapCount(id, fromTargets, toTargets, offsets, searchSamples);
+          if (count < selectedCount) {
+            selected = candidate;
+            selectedCount = count;
+          }
+          if (count === 0) break;
+        }
+        if (selectedCount === 0) break;
+      }
+      offsets.set(id, selected);
+    }
+  }
+  return offsets;
 }
 
 export function planMarbleTransitionRoute(fromTargets: readonly MarbleTarget[], toTargets: readonly MarbleTarget[]): MarbleTransitionRoute {
@@ -159,11 +201,14 @@ export function planMarbleTransitionRoute(fromTargets: readonly MarbleTarget[], 
   const direct = new Map<string, MarbleTransitionOffset>(ids.map((id) => [id, [0, 0, 0]]));
   const samples = 120;
   const directOverlaps = marbleTransitionOverlapCount(fromTargets, toTargets, direct, samples);
-  if (directOverlaps === 0) return { offsets: [...direct], overlapCount: 0, samples };
+  if (directOverlaps === 0) return { offsets: [...direct], timings: [], overlapCount: 0, samples };
 
   const goldenAngle = Math.PI * (3 - Math.sqrt(5));
-  let best = direct;
-  let bestCount = directOverlaps;
+  const searchSamples = 24;
+  const directRepair = repairMarbleTransitionRoute(fromTargets, toTargets, direct, searchSamples);
+  const directRepairCount = marbleTransitionOverlapCount(fromTargets, toTargets, directRepair, samples);
+  if (directRepairCount === 0) return { offsets: [...directRepair], timings: [], overlapCount: 0, samples };
+  const ranked: Array<{ offsets: Map<string, MarbleTransitionOffset>; count: number; magnitude: number }> = [];
   for (const magnitude of [0.8, 1.2, 1.8, 2.6, 3.8, 5.4, 7.2]) {
     for (const verticalScale of [0.24, 0.48]) {
       for (let phaseIndex = 0; phaseIndex < 8; phaseIndex += 1) {
@@ -173,42 +218,64 @@ export function planMarbleTransitionRoute(fromTargets: readonly MarbleTarget[], 
           const angle = index * goldenAngle + phase;
           candidate.set(id, [Math.cos(angle) * magnitude, (((index * 2) % 5) - 2) * magnitude * verticalScale, Math.sin(angle) * magnitude]);
         });
-        const count = marbleTransitionOverlapCount(fromTargets, toTargets, candidate, samples);
-        if (count < bestCount) {
-          best = candidate;
-          bestCount = count;
-        }
-        if (count === 0) return { offsets: [...candidate], overlapCount: 0, samples };
+        ranked.push({ offsets: candidate, count: marbleTransitionOverlapCount(fromTargets, toTargets, candidate, searchSamples), magnitude });
       }
     }
   }
-  const repairDirections: MarbleTransitionOffset[] = [
-    [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1],
-    [0.7, 0, 0.7], [-0.7, 0, 0.7], [0.7, 0, -0.7], [-0.7, 0, -0.7],
-    [0, 0.7, 0.7], [0, -0.7, 0.7], [0, 0.7, -0.7], [0, -0.7, -0.7],
-  ];
-  for (let pass = 0; pass < 4 && bestCount > 0; pass += 1) {
-    const conflicts = [...overlappingTargetIds(fromTargets, toTargets, best, samples)].sort().reverse();
-    for (const id of conflicts) {
-      const original = best.get(id) ?? [0, 0, 0];
-      let selected = original;
-      let selectedCount = targetOverlapCount(id, fromTargets, toTargets, best, samples);
-      for (const magnitude of [0.6, 1, 1.6, 2.4, 3.4]) {
-        for (const direction of repairDirections) {
-          const candidate = original.map((value, index) => value + direction[index]! * magnitude) as MarbleTransitionOffset;
-          best.set(id, candidate);
-          const count = targetOverlapCount(id, fromTargets, toTargets, best, samples);
-          if (count < selectedCount) {
-            selected = candidate;
-            selectedCount = count;
-          }
-          if (count === 0) break;
-        }
-        if (selectedCount === 0) break;
-      }
-      best.set(id, selected);
+  ranked.sort((a, b) => a.count - b.count || a.magnitude - b.magnitude);
+  let best = directRepairCount < directOverlaps ? directRepair : direct;
+  let bestCount = Math.min(directRepairCount, directOverlaps);
+  for (const entry of ranked.filter((candidate) => candidate.count === 0)) {
+    const certifiedCount = marbleTransitionOverlapCount(fromTargets, toTargets, entry.offsets, samples);
+    if (certifiedCount < bestCount) {
+      best = entry.offsets;
+      bestCount = certifiedCount;
     }
-    bestCount = marbleTransitionOverlapCount(fromTargets, toTargets, best, samples);
+    if (certifiedCount === 0) return { offsets: [...entry.offsets], timings: [], overlapCount: 0, samples };
   }
-  return { offsets: [...best], overlapCount: bestCount, samples };
+  for (const entry of ranked.slice(0, 32)) {
+    const repaired = repairMarbleTransitionRoute(fromTargets, toTargets, entry.offsets, searchSamples);
+    const certifiedCount = marbleTransitionOverlapCount(fromTargets, toTargets, repaired, samples);
+    if (certifiedCount < bestCount) {
+      best = repaired;
+      bestCount = certifiedCount;
+    }
+    if (certifiedCount === 0) return { offsets: [...repaired], timings: [], overlapCount: 0, samples };
+  }
+  const fallbackSamples = 60;
+  let fallback = ranked[0]?.offsets ?? directRepair;
+  let fallbackCount = Number.POSITIVE_INFINITY;
+  let fallbackMagnitude = Number.POSITIVE_INFINITY;
+  for (const entry of ranked) {
+    const count = marbleTransitionOverlapCount(fromTargets, toTargets, entry.offsets, fallbackSamples);
+    if (count < fallbackCount || (count === fallbackCount && entry.magnitude < fallbackMagnitude)) {
+      fallback = entry.offsets;
+      fallbackCount = count;
+      fallbackMagnitude = entry.magnitude;
+    }
+  }
+  const repairedFallback = repairMarbleTransitionRoute(fromTargets, toTargets, fallback, fallbackSamples);
+  const repairedFallbackCount = marbleTransitionOverlapCount(fromTargets, toTargets, repairedFallback, samples);
+  if (repairedFallbackCount === 0) return { offsets: [...repairedFallback], timings: [], overlapCount: 0, samples };
+  if (repairedFallbackCount < bestCount) {
+    best = repairedFallback;
+    bestCount = repairedFallbackCount;
+  }
+  const timingOrders = [ids, [...ids].reverse()];
+  for (const order of timingOrders) {
+    for (const window of [0.28, 0.4, 0.55]) {
+      const timings = new Map<string, MarbleTransitionTiming>();
+      const available = 1 - window;
+      order.forEach((id, index) => {
+        const start = order.length > 1 ? available * index / (order.length - 1) : 0;
+        timings.set(id, [start, start + window]);
+      });
+      for (const candidateOffsets of [directRepair, best]) {
+        const count = marbleTransitionOverlapCount(fromTargets, toTargets, candidateOffsets, samples, timings);
+        if (count === 0) return { offsets: [...candidateOffsets], timings: [...timings], overlapCount: 0, samples };
+        if (count < bestCount) bestCount = count;
+      }
+    }
+  }
+  return { offsets: [...best], timings: [], overlapCount: bestCount, samples };
 }

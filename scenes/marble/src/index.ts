@@ -96,6 +96,7 @@ export interface MarblePlatformTransition {
   fromPath: Map<string, MarblePathSegment>;
   toPath: Map<string, MarblePathSegment>;
   targetOffsets: Map<string, [number, number, number]>;
+  targetTimings: Map<string, [number, number]>;
   performance: MarblePerformance;
 }
 
@@ -307,8 +308,9 @@ export function interpolateMarbleTargetRoute(
   to: MarbleTarget,
   raw: number,
   offset: [number, number, number] = [0, 0, 0],
+  timing: [number, number] = [0, 1],
 ): MarbleTarget {
-  const progress = clamp(raw, 0, 1);
+  const progress = clamp((raw - timing[0]) / Math.max(1e-6, timing[1] - timing[0]), 0, 1);
   const target = interpolateMarbleTarget(from, to, progress);
   const envelope = Math.sin(Math.PI * progress);
   return {
@@ -965,7 +967,7 @@ export class MarbleScene {
     const progress = marblePlatformTransitionProgress((nowMs - transition.startedAtMs) / transition.durationMs);
     const targets = new Map([...transition.fromTargets].map(([targetId, from]) => {
       const to = transition.toTargets.get(targetId);
-      return [targetId, to ? interpolateMarbleTargetRoute(from, to, progress, transition.targetOffsets.get(targetId)) : from];
+      return [targetId, to ? interpolateMarbleTargetRoute(from, to, progress, transition.targetOffsets.get(targetId), transition.targetTimings.get(targetId)) : from];
     }));
     const carriers = new Map([...transition.fromCarriers].map(([targetId, from]) => {
       const to = transition.toCarriers.get(targetId);
@@ -988,13 +990,13 @@ export class MarbleScene {
       const meshes = this.#targetMeshes.get(targetId);
       if (!to || !meshes) continue;
       this.#applyTargetVisual(
-        interpolateMarbleTargetRoute(from, to, progress, transition.targetOffsets.get(targetId)),
+        interpolateMarbleTargetRoute(from, to, progress, transition.targetOffsets.get(targetId), transition.targetTimings.get(targetId)),
         meshes,
         this.#svgTargets.get(targetId),
         interpolateMarblePlatformCarrierTransform(
           transition.fromCarriers.get(targetId) ?? marblePlatformCarrierTransform(from),
           transition.toCarriers.get(targetId) ?? marblePlatformCarrierTransform(to),
-          progress,
+          clamp((progress - (transition.targetTimings.get(targetId)?.[0] ?? 0)) / Math.max(1e-6, (transition.targetTimings.get(targetId)?.[1] ?? 1) - (transition.targetTimings.get(targetId)?.[0] ?? 0)), 0, 1),
         ),
       );
     }
@@ -1132,6 +1134,7 @@ export class MarbleScene {
   startPreparedTransition(
     prepared: MarblePreparedTransition,
     targetOffsets: ReadonlyMap<string, [number, number, number]> = new Map(),
+    targetTimings: ReadonlyMap<string, [number, number]> = new Map(),
     durationMs?: number,
   ): MarbleTransitionStart {
     const resolvedDurationMs = durationMs ?? marblePlatformTransitionDuration(prepared.fromTargets, prepared.toTargets);
@@ -1146,6 +1149,7 @@ export class MarbleScene {
       fromPath: prepared.fromPath,
       toPath: prepared.toPath,
       targetOffsets: new Map(targetOffsets),
+      targetTimings: new Map(targetTimings),
       performance: prepared.performance,
     };
     return {
@@ -1156,7 +1160,7 @@ export class MarbleScene {
   }
 
   transitionPerformance(performance: MarblePerformance, currentT: number, durationMs?: number): MarbleTransitionStart {
-    return this.startPreparedTransition(this.preparePerformanceTransition(performance, currentT), new Map(), durationMs);
+    return this.startPreparedTransition(this.preparePerformanceTransition(performance, currentT), new Map(), new Map(), durationMs);
   }
 
   isTransitioning(): boolean {

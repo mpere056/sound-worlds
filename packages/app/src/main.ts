@@ -390,7 +390,7 @@ function beginPreparedMarbleTransition(activeScene: MarbleScene, result: MarbleP
       return;
     }
     pendingMarbleRoutePlanningMs = routed.planningMs;
-    const transition = activeScene.startPreparedTransition(prepared, new Map(routed.route.offsets));
+    const transition = activeScene.startPreparedTransition(prepared, new Map(routed.route.offsets), new Map(routed.route.timings));
     pendingMarbleActivationResult = result;
     statusTitle.textContent = "Moving marble platforms";
     statusDetail.textContent = `${marbleStatus(result.performance)} | ${transition.platformCount} platforms moving | ${transition.durationMs} ms`;

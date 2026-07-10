@@ -37,7 +37,7 @@ describe("Marble transition routing", () => {
     const route = planMarbleTransitionRoute(from, to);
     expect(route.overlapCount).toBe(0);
     expect(route.samples).toBe(120);
-    expect(marbleTransitionOverlapCount(from, to, new Map(route.offsets), route.samples)).toBe(0);
+    expect(marbleTransitionOverlapCount(from, to, new Map(route.offsets), route.samples, new Map(route.timings))).toBe(0);
   });
 
   it("certifies compiled extreme-mix transitions after marble alignment", () => {
@@ -56,7 +56,7 @@ describe("Marble transition routing", () => {
       }));
       const route = planMarbleTransitionRoute(active.statics.targets, alignedTargets);
       expect(route.overlapCount).toBe(0);
-      expect(marbleTransitionOverlapCount(active.statics.targets, alignedTargets, new Map(route.offsets), route.samples)).toBe(0);
+      expect(marbleTransitionOverlapCount(active.statics.targets, alignedTargets, new Map(route.offsets), route.samples, new Map(route.timings))).toBe(0);
     }
   });
 
@@ -73,8 +73,8 @@ describe("Marble transition routing", () => {
     const second = client.route(from, to);
     await expect(first).rejects.toThrow("superseded");
     expect(ports[1]!.terminate).toHaveBeenCalledOnce();
-    ports[1]!.emit({ type: "routed", requestId: 1, route: { offsets: [], overlapCount: 0, samples: 120 }, planningMs: 2 });
-    ports[2]!.emit({ type: "routed", requestId: 2, route: { offsets: [["left", [0, 0, 0]]], overlapCount: 0, samples: 120 }, planningMs: 3 });
+    ports[1]!.emit({ type: "routed", requestId: 1, route: { offsets: [], timings: [], overlapCount: 0, samples: 120 }, planningMs: 2 });
+    ports[2]!.emit({ type: "routed", requestId: 2, route: { offsets: [["left", [0, 0, 0]]], timings: [], overlapCount: 0, samples: 120 }, planningMs: 3 });
     await expect(second).resolves.toMatchObject({ requestId: 2, planningMs: 3 });
     client.dispose();
     expect(ports[2]!.terminate).toHaveBeenCalledOnce();

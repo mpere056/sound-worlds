@@ -163,6 +163,8 @@ describe("Marble live-plan activation", () => {
     expect(routedMiddle.pos[2]).toBeCloseTo(target.pos[2] + 3.5, 10);
     expect(interpolateMarbleTargetRoute(from, to, 0, [0, 0, 2]).pos).toEqual(from.pos);
     expect(interpolateMarbleTargetRoute(from, to, 1, [0, 0, 2]).pos[2]).toBeCloseTo(to.pos[2], 10);
+    expect(interpolateMarbleTargetRoute(from, to, 0.25, [0, 0, 2], [0.5, 1]).pos).toEqual(from.pos);
+    expect(interpolateMarbleTargetRoute(from, to, 0.75, [0, 0, 2], [0.5, 1]).pos[2]).toBeCloseTo(routedMiddle.pos[2], 10);
   });
 
   it("aligns a transform-only plan at the held marble time", () => {

@@ -512,6 +512,25 @@ Worker routing gates:
   broaden zero-overlap certification to lateral- and depth-heavy extremes, and
   add a worker timeout/retry policy before enabling webcam input.
 
+### Implemented slice: staged route-search optimization
+
+- Candidate search now uses a 24-sample ranking pass and reserves the 120-sample
+  SAT pass for promising candidates and final certification. Local repairs run
+  only on the platforms implicated in coarse conflicts.
+- The router can emit per-target movement windows, allowing certified temporal
+  staggering when spatial arcs alone are insufficient. Target transforms and
+  colored carriers use the same local progress window.
+- Transition certification now uses a 0.002-unit numerical contact tolerance
+  instead of the compiler's 0.025-unit planning cushion. Final generated maps
+  keep their larger compiler clearance; the transition worker no longer spends
+  seconds routing around near-misses where visible OBBs never touch.
+- The previously slow 20/20/60 -> 60/20/20 browser case now plans in 78.3 ms,
+  down from 1,890.7 ms, and activates successfully. Frame p95 remained 17 ms
+  and frame max 43.6 ms. The same 120-sample zero-contact certificate remains
+  required before movement starts.
+- Remaining routing work: benchmark a larger mix matrix and long sessions, then
+  add the worker timeout/retry policy before webcam input.
+
 ## Phase P5 - High-rate control coordinator (in progress)
 
 ### Work
