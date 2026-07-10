@@ -52,6 +52,13 @@ export interface MarbleActivationBoundary {
   performance: MarblePerformance;
 }
 
+export interface MarbleSceneActivation {
+  activationT: number;
+  noteIndex: number;
+  applicationMs: number;
+  motionMix: MarblePerformance["statics"]["motionMix"];
+}
+
 export interface MarbleSceneProfileSnapshot {
   rendererIdentity: number;
   performanceUpdates: number;
@@ -141,6 +148,16 @@ export function sampleMarbleCamera(path: readonly MarblePathSegment[], t: number
     position: [focus.x + 0.55 + orbit, focus.y + cameraLift + 12, routeDepthCenter + distance + depthOffset * 0.72],
     lookAt: [focus.x + lead.x, focus.y - 0.42 + lead.y * 0.3, routeDepthCenter + depthOffset * 0.88 + lead.z * 0.08],
     zoom: clamp(1.16 + (cameraTuning - 0.88) * 0.08, 1.08, 1.26),
+  };
+}
+
+export function blendMarbleCamera(from: MarbleCameraPose, to: MarbleCameraPose, raw: number): MarbleCameraPose {
+  const progress = clamp(raw, 0, 1);
+  const blend = progress * progress * (3 - 2 * progress);
+  return {
+    position: from.position.map((value, index) => value + (to.position[index]! - value) * blend) as [number, number, number],
+    lookAt: from.lookAt.map((value, index) => value + (to.lookAt[index]! - value) * blend) as [number, number, number],
+    zoom: from.zoom + (to.zoom - from.zoom) * blend,
   };
 }
 
@@ -386,6 +403,9 @@ export class MarbleScene {
   readonly #svgMarbleCore: SVGCircleElement;
   #disposed = false;
   #performanceUpdates = 0;
+  #queuedActivation: MarbleActivationBoundary | undefined;
+  #cameraTransition: { path: readonly MarblePathSegment[]; startT: number; durationSec: number } | undefined;
+  #completedActivation: MarbleSceneActivation | undefined;
 
   #targetMaterial(target: MarbleTarget): MeshStandardMaterial {
     const key = `${target.material}:${target.color}`;
@@ -736,6 +756,20 @@ export class MarbleScene {
 
   renderFrame(t: number): void {
     if (this.#disposed) return;
+    const queued = this.#queuedActivation;
+    if (queued && t + 1e-6 >= queued.activationT) {
+      const previousPath = this.#performance.statics.path;
+      const startedAt = globalThis.performance.now();
+      this.replacePerformance(queued.performance);
+      this.#queuedActivation = undefined;
+      this.#cameraTransition = { path: previousPath, startT: queued.activationT, durationSec: 0.35 };
+      this.#completedActivation = {
+        activationT: queued.activationT,
+        noteIndex: queued.noteIndex,
+        applicationMs: globalThis.performance.now() - startedAt,
+        motionMix: { ...queued.performance.statics.motionMix },
+      };
+    }
     const pose = sampleMarblePose(this.#performance.statics.path, t);
     this.#marble.position.set(...pose.pos);
     this.#marble.quaternion.set(pose.quat[0], pose.quat[1], pose.quat[2], pose.quat[3]);
@@ -775,12 +809,38 @@ export class MarbleScene {
       meshes.shadow.material.opacity = clamp(0.16 + intensity * 0.1, 0.08, 0.28);
       meshes.shadow.scale.set(0.42 * (1.4 + Math.abs(recoil) * 2.2), 0.42 * (0.46 + Math.abs(recoil) * 0.42), 1);
     }
-    const cameraPose = sampleMarbleCamera(this.#performance.statics.path, t, this.tuning.camera);
+    let cameraPose = sampleMarbleCamera(this.#performance.statics.path, t, this.tuning.camera);
+    if (this.#cameraTransition) {
+      const raw = (t - this.#cameraTransition.startT) / this.#cameraTransition.durationSec;
+      if (raw >= 1) {
+        this.#cameraTransition = undefined;
+      } else if (raw >= 0) {
+        const from = sampleMarbleCamera(this.#cameraTransition.path, t, this.tuning.camera);
+        cameraPose = blendMarbleCamera(from, cameraPose, raw);
+      }
+    }
     this.#camera.position.set(...cameraPose.position);
     this.#camera.zoom = cameraPose.zoom;
     this.#camera.updateProjectionMatrix();
     this.#camera.lookAt(...cameraPose.lookAt);
     this.#renderer.render(this.#scene, this.#camera);
+  }
+
+  queuePerformance(performance: MarblePerformance, currentT: number): MarbleActivationBoundary | undefined {
+    const boundary = prepareMarbleActivation(this.#performance, performance, currentT);
+    if (!boundary) {
+      this.#queuedActivation = undefined;
+      this.replacePerformance(performance);
+      return undefined;
+    }
+    this.#queuedActivation = boundary;
+    return boundary;
+  }
+
+  consumeActivation(): MarbleSceneActivation | undefined {
+    const activation = this.#completedActivation;
+    this.#completedActivation = undefined;
+    return activation;
   }
 
   replacePerformance(performance: MarblePerformance): void {
@@ -828,6 +888,9 @@ export class MarbleScene {
 
   destroy(): void {
     this.#disposed = true;
+    this.#queuedActivation = undefined;
+    this.#cameraTransition = undefined;
+    this.#completedActivation = undefined;
     this.#svg.remove();
     this.#scene.traverse((object: Object3D) => {
       const mesh = object as Mesh;

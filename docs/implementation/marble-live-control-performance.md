@@ -434,7 +434,7 @@ Do not replace the marble's current flight in midair.
 Commit and push target morphing, route activation, and bridge validation as
 separate slices with visual evidence for each.
 
-### Implemented slice: activation alignment kernel
+### Implemented slices: activation alignment and deferred playback
 
 - `prepareMarbleActivation()` selects the next note-index impact shared by the
   active and incoming plans after a configurable lead time.
@@ -447,8 +447,19 @@ separate slices with visual evidence for each.
 - Tests prove sub-nanometer activation-position continuity, translated impact
   clearance, preserved target spacing, input immutability, and no-boundary
   behavior after the final shared impact.
-- Playback wiring, camera blending, and collision-checked future-target morphing
-  remain open; the helper is not yet used by the live scene.
+- `MarbleScene.queuePerformance()` now replaces older queued plans and waits for
+  transport to cross the selected impact before replacing performance-owned
+  scene data. Paused playback reports the exact pending activation time instead
+  of pretending the requested mix is already active.
+- The first activated frame uses the old camera pose; position, look-at, and zoom
+  then smoothstep to the translated incoming camera over 350 ms. A pure camera-
+  blend test proves exact endpoints and near-zero initial movement.
+- Deferred activation reports its actual scene-application and first-render cost
+  back to the existing profiler. A browser check queued 20/21/59 for 0.531 s,
+  kept swap count at zero before that boundary, and applied exactly once after a
+  seek crossed it on the same renderer with 11 geometries.
+- Collision-checked future-target morphing remains open. Targets currently adopt
+  the aligned plan at activation, so P4 is not complete yet.
 
 ## Phase P5 - High-rate control coordinator
 

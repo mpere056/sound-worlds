@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildFixtureSong } from "@reaper-viz/core";
 import { compileMarble, marbleTargetClearance, sampleMarblePose } from "@reaper-viz/compiler-marble";
 import { PerspectiveCamera, Vector3 } from "three";
-import { prepareMarbleActivation, sampleMarbleCamera } from "./index.js";
+import { blendMarbleCamera, prepareMarbleActivation, sampleMarbleCamera, type MarbleCameraPose } from "./index.js";
 
 function distance(a: [number, number, number], b: [number, number, number]): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
@@ -81,6 +81,16 @@ describe("Marble camera", () => {
 });
 
 describe("Marble live-plan activation", () => {
+  it("starts camera blending at the old pose and finishes at the new pose", () => {
+    const from: MarbleCameraPose = { position: [1, 2, 3], lookAt: [0, 1, 2], zoom: 1.1 };
+    const to: MarbleCameraPose = { position: [4, 6, 8], lookAt: [3, 5, 7], zoom: 1.25 };
+    expect(blendMarbleCamera(from, to, 0)).toEqual(from);
+    expect(blendMarbleCamera(from, to, 1)).toEqual(to);
+    const start = blendMarbleCamera(from, to, 0.001);
+    expect(distance(start.position, from.position)).toBeLessThan(0.0001);
+    expect(distance(start.lookAt, from.lookAt)).toBeLessThan(0.0001);
+  });
+
   it("aligns an incoming route at the next shared impact without mutating it", () => {
     const song = buildFixtureSong({ bars: 3, patterns: [{ role: "keys", beats: [0, 1.5, 3.5, 5.5, 7.5, 9.5], pitch: 52, kind: "note" }] });
     const active = compileMarble(song, { motionMix: { leftRight: 20, upDown: 20, frontBack: 60 } });
