@@ -2,6 +2,20 @@ import { describe, expect, it } from "vitest";
 import { buildFixtureSong } from "@reaper-viz/core";
 import { compileMarble, marbleTargetClearance, marbleTargetsOverlap, sampleMarblePath, sampleMarblePose } from "./index.js";
 
+function sampledMotionMix(performance: ReturnType<typeof compileMarble>): [number, number, number] {
+  const endT = performance.durationSec;
+  const travel: [number, number, number] = [0, 0, 0];
+  let previous = sampleMarblePose(performance.statics.path, 0).pos;
+  const steps = Math.max(1, Math.ceil(endT * 120));
+  for (let step = 1; step <= steps; step += 1) {
+    const current = sampleMarblePose(performance.statics.path, endT * step / steps).pos;
+    for (let axis = 0; axis < 3; axis += 1) travel[axis] += Math.abs(current[axis]! - previous[axis]!);
+    previous = current;
+  }
+  const total = travel[0] + travel[1] + travel[2];
+  return travel.map((value) => value * 100 / total) as [number, number, number];
+}
+
 describe("Marble Music compiler", () => {
   it("maps every selected note to an exact hit", () => {
     const song = buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5], pitch: 48, kind: "note" }] });
@@ -118,8 +132,11 @@ describe("Marble Music compiler", () => {
     expect(Math.min(...averageSpeeds)).toBeGreaterThan(1.25);
     expect(Math.max(...averageSpeeds)).toBeLessThan(3.3);
     expect(Math.max(...averageSpeeds) / Math.min(...averageSpeeds)).toBeLessThan(2);
+    const gravity = moving[0]!.gravityScale!;
+    expect(gravity).toBeGreaterThan(0.2);
+    expect(gravity).toBeLessThan(4);
     for (const segment of moving) {
-      expect(segment.gravityScale).toBeCloseTo(2.4, 6);
+      expect(segment.gravityScale).toBeCloseTo(gravity, 6);
       expect(segment.kind === "arc" || segment.kind === "rattle" || segment.kind === "cascade").toBe(true);
     }
   });
@@ -206,6 +223,15 @@ describe("Marble Music compiler", () => {
     ]) {
       const performance = compileMarble(song, { motionMix });
       expect(performance.statics.motionMix).toEqual(motionMix);
+      expect(performance.statics.actualMotionMix).toEqual({
+        leftRight: expect.any(Number),
+        upDown: expect.any(Number),
+        frontBack: expect.any(Number),
+      });
+      sampledMotionMix(performance).forEach((value, axis) => {
+        const requested = [motionMix.leftRight, motionMix.upDown, motionMix.frontBack][axis]!;
+        expect(Math.abs(value - requested)).toBeLessThan(2.1);
+      });
       for (let left = 0; left < performance.statics.targets.length; left += 1) {
         for (let right = left + 1; right < performance.statics.targets.length; right += 1) {
           const leftTarget = performance.statics.targets[left]!;

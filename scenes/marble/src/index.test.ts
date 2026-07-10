@@ -76,6 +76,6 @@ describe("Marble camera", () => {
     }
     const totalContribution = axisContribution.reduce((sum, value) => sum + value, 0);
     expect(axisContribution[2]! / totalContribution).toBeGreaterThan(0.52);
-    expect(axisContribution[0]! / totalContribution).toBeLessThan(0.3);
+    expect(axisContribution[0]! / totalContribution).toBeLessThan(0.45);
   });
 });

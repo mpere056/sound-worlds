@@ -126,6 +126,7 @@ export interface MarblePose {
 export interface MarbleStatics extends Record<string, unknown> {
   compilerVersion: number;
   motionMix: MarbleMotionMix;
+  actualMotionMix: MarbleMotionMix;
   source: MarbleSource;
   metrics: MarbleTrackMetrics;
   targets: MarbleTarget[];

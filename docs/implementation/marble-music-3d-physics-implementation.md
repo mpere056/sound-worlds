@@ -860,15 +860,16 @@ Before this gate can pass, review at least:
       drop, full-interval travel, exact arrivals, and accumulated roll
 - [x] Compiler tests bound average speed and prove pitch does not change route
       geometry
-- [x] Compiler v11 separates platform centers from marble contact poses, samples
+- [x] Compiler v12 separates platform centers from marble contact poses, samples
       pre/contact/post clearance, ranks target candidates against a 120 Hz
       sample of the full route, and validates sphere-to-3D-oriented-box
       clearance plus full 3D platform separating axes
 - [x] A five-forward/one-back depth cadence weaves the marble through a widened
       bounded corridor; platform depth tilt follows the 3D collision normal
-- [x] Projected-axis audit measures the reference project at 19.8% lateral,
-      20.4% vertical, and 59.9% front/back contribution; regression tests
-      require at least 52% depth and no more than 30% lateral contribution
+- [x] Projected-axis audit remains a separate camera-legibility gate from the
+      physical motion budget; the v12 reference default projects at 37.1%
+      lateral, 10.0% vertical, and 52.9% front/back, while regression tests
+      require at least 52% visible depth and no more than 45% lateral contribution
 - [x] Pose-follow camera uses a weighted time window, follows route depth at
       damped position/aim rates, and keeps stable zoom; continuity tests cover
       both sides of every impact tangent and sampled movement throughout the route
@@ -876,6 +877,10 @@ Before this gate can pass, review at least:
       total, and rebuild the deterministic collision route at the current
       playback timestamp after a short debounce; compiler tests cover lateral-,
       vertical-, and depth-heavy profiles
+- [x] Motion percentages budget total 120 Hz sampled trajectory travel; a
+      deterministic solver includes gravity, initial drop, impact-to-impact
+      curvature, launch speeds, and post-note settle movement, and stores the
+      measured result as `actualMotionMix`
 - [ ] Move live motion recompilation to a Web Worker before enabling this control
       for substantially larger songs
 - [x] `untitled-project-418cb58f` compiles 19 targets with zero footprint
