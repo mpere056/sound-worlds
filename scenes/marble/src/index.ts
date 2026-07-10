@@ -45,6 +45,13 @@ export interface MarbleCameraPose {
   zoom: number;
 }
 
+export interface MarbleActivationBoundary {
+  activationT: number;
+  noteIndex: number;
+  translation: [number, number, number];
+  performance: MarblePerformance;
+}
+
 export interface MarbleSceneProfileSnapshot {
   rendererIdentity: number;
   performanceUpdates: number;
@@ -134,6 +141,59 @@ export function sampleMarbleCamera(path: readonly MarblePathSegment[], t: number
     position: [focus.x + 0.55 + orbit, focus.y + cameraLift + 12, routeDepthCenter + distance + depthOffset * 0.72],
     lookAt: [focus.x + lead.x, focus.y - 0.42 + lead.y * 0.3, routeDepthCenter + depthOffset * 0.88 + lead.z * 0.08],
     zoom: clamp(1.16 + (cameraTuning - 0.88) * 0.08, 1.08, 1.26),
+  };
+}
+
+function translatePoint(point: [number, number, number], translation: [number, number, number]): [number, number, number] {
+  return [point[0] + translation[0], point[1] + translation[1], point[2] + translation[2]];
+}
+
+function translateMarblePerformance(performance: MarblePerformance, translation: [number, number, number]): MarblePerformance {
+  return {
+    ...performance,
+    camera: performance.camera.map((keyframe) => ({ ...keyframe, pos: translatePoint(keyframe.pos, translation) })),
+    statics: {
+      ...performance.statics,
+      targets: performance.statics.targets.map((target) => ({
+        ...target,
+        pos: translatePoint(target.pos, translation),
+        contactPos: translatePoint(target.contactPos, translation),
+      })),
+      path: performance.statics.path.map((segment) => ({
+        ...segment,
+        from: translatePoint(segment.from, translation),
+        to: translatePoint(segment.to, translation),
+        ...(segment.control ? { control: translatePoint(segment.control, translation) } : {}),
+        ...(segment.control2 ? { control2: translatePoint(segment.control2, translation) } : {}),
+      })),
+    },
+  };
+}
+
+export function prepareMarbleActivation(
+  active: MarblePerformance,
+  incoming: MarblePerformance,
+  currentT: number,
+  minimumLeadSec = 0.08,
+): MarbleActivationBoundary | undefined {
+  const activeImpacts = new Map(active.statics.impacts.map((impact) => [impact.noteIndex, impact]));
+  const boundaryImpact = incoming.statics.impacts.find((impact) => {
+    const activeImpact = activeImpacts.get(impact.noteIndex);
+    return impact.t >= currentT + minimumLeadSec && activeImpact !== undefined && Math.abs(activeImpact.t - impact.t) <= 1e-6;
+  });
+  if (!boundaryImpact) return undefined;
+  const activePose = sampleMarblePose(active.statics.path, boundaryImpact.t);
+  const incomingPose = sampleMarblePose(incoming.statics.path, boundaryImpact.t);
+  const translation: [number, number, number] = [
+    activePose.pos[0] - incomingPose.pos[0],
+    activePose.pos[1] - incomingPose.pos[1],
+    activePose.pos[2] - incomingPose.pos[2],
+  ];
+  return {
+    activationT: boundaryImpact.t,
+    noteIndex: boundaryImpact.noteIndex,
+    translation,
+    performance: translateMarblePerformance(incoming, translation),
   };
 }
 

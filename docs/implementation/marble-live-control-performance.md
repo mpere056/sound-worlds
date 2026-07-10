@@ -434,6 +434,22 @@ Do not replace the marble's current flight in midair.
 Commit and push target morphing, route activation, and bridge validation as
 separate slices with visual evidence for each.
 
+### Implemented slice: activation alignment kernel
+
+- `prepareMarbleActivation()` selects the next note-index impact shared by the
+  active and incoming plans after a configurable lead time.
+- It samples both deterministic routes at that exact timestamp and rigidly
+  translates the incoming path, targets, contact points, controls, and camera
+  keys so the two marble centers coincide at activation.
+- A single rigid translation preserves all relative platform spacing, route
+  geometry, sphere/OBB clearances, and exact note timestamps. The worker result
+  remains immutable.
+- Tests prove sub-nanometer activation-position continuity, translated impact
+  clearance, preserved target spacing, input immutability, and no-boundary
+  behavior after the final shared impact.
+- Playback wiring, camera blending, and collision-checked future-target morphing
+  remain open; the helper is not yet used by the live scene.
+
 ## Phase P5 - High-rate control coordinator
 
 ### Work

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { buildFixtureSong } from "@reaper-viz/core";
-import { compileMarble } from "@reaper-viz/compiler-marble";
+import { compileMarble, marbleTargetClearance, sampleMarblePose } from "@reaper-viz/compiler-marble";
 import { PerspectiveCamera, Vector3 } from "three";
-import { sampleMarbleCamera } from "./index.js";
+import { prepareMarbleActivation, sampleMarbleCamera } from "./index.js";
 
 function distance(a: [number, number, number], b: [number, number, number]): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
@@ -77,5 +77,50 @@ describe("Marble camera", () => {
     const totalContribution = axisContribution.reduce((sum, value) => sum + value, 0);
     expect(axisContribution[2]! / totalContribution).toBeGreaterThan(0.52);
     expect(axisContribution[0]! / totalContribution).toBeLessThan(0.45);
+  });
+});
+
+describe("Marble live-plan activation", () => {
+  it("aligns an incoming route at the next shared impact without mutating it", () => {
+    const song = buildFixtureSong({ bars: 3, patterns: [{ role: "keys", beats: [0, 1.5, 3.5, 5.5, 7.5, 9.5], pitch: 52, kind: "note" }] });
+    const active = compileMarble(song, { motionMix: { leftRight: 20, upDown: 20, frontBack: 60 } });
+    const incoming = compileMarble(song, { motionMix: { leftRight: 10, upDown: 80, frontBack: 10 } });
+    const incomingBefore = JSON.stringify(incoming);
+    const currentT = active.statics.impacts[1]!.t + 0.01;
+    const activation = prepareMarbleActivation(active, incoming, currentT);
+
+    expect(activation).toBeDefined();
+    expect(activation!.activationT).toBeGreaterThan(currentT);
+    const activePose = sampleMarblePose(active.statics.path, activation!.activationT);
+    const incomingPose = sampleMarblePose(activation!.performance.statics.path, activation!.activationT);
+    expect(distance(activePose.pos, incomingPose.pos)).toBeLessThan(1e-9);
+    expect(JSON.stringify(incoming)).toBe(incomingBefore);
+  });
+
+  it("preserves translated target spacing and route clearance", () => {
+    const song = buildFixtureSong({ bars: 2, patterns: [{ role: "keys", beats: [0, 1, 2.5, 4, 6], pitch: 55, kind: "note" }] });
+    const active = compileMarble(song, { motionMix: { leftRight: 20, upDown: 20, frontBack: 60 } });
+    const incoming = compileMarble(song, { motionMix: { leftRight: 45, upDown: 10, frontBack: 45 } });
+    const activation = prepareMarbleActivation(active, incoming, 0);
+    expect(activation).toBeDefined();
+
+    const originalTargets = incoming.statics.targets;
+    const translatedTargets = activation!.performance.statics.targets;
+    for (let index = 1; index < originalTargets.length; index += 1) {
+      expect(distance(originalTargets[0]!.pos, originalTargets[index]!.pos))
+        .toBeCloseTo(distance(translatedTargets[0]!.pos, translatedTargets[index]!.pos), 10);
+    }
+    for (const impact of activation!.performance.statics.impacts) {
+      const target = translatedTargets[impact.noteIndex]!;
+      const pose = sampleMarblePose(activation!.performance.statics.path, impact.t);
+      expect(marbleTargetClearance(target, pose.pos)).toBeGreaterThanOrEqual(0.0119);
+    }
+  });
+
+  it("returns no boundary after the final shared impact", () => {
+    const song = buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [0, 1, 2, 3], pitch: 55, kind: "note" }] });
+    const active = compileMarble(song);
+    const incoming = compileMarble(song, { motionMix: { leftRight: 10, upDown: 10, frontBack: 80 } });
+    expect(prepareMarbleActivation(active, incoming, active.durationSec)).toBeUndefined();
   });
 });
