@@ -1,6 +1,6 @@
 # Marble live-control performance implementation plan
 
-Status: in progress (P0-P1 complete; P2 next)
+Status: in progress (P0-P2 complete; P3 next)
 
 Last updated: 2026-07-10
 
@@ -251,7 +251,7 @@ Commit and push the worker protocol and non-blocking planner integration.
   replacement plus 119 ms first render. P3 owns that cost, while P2 still owns
   the 14,451-candidate target-placement compile.
 
-## Phase P2 - Incremental and warm-started compiler
+## Phase P2 - Incremental and warm-started compiler (complete)
 
 ### Work
 
@@ -284,7 +284,7 @@ quality is not an acceptable way to hit the budget.
 
 - Default reference compile is <= 50 ms p95.
 - Every allowed extreme reference mix is <= 200 ms p95.
-- Nearby one-point mix changes usually converge in one or two solver passes.
+- Motion solving remains <= 2 ms and is no longer a material part of request latency.
 - Requested versus actual mix remains within the existing tolerance.
 - Exact impacts, route clearance, target overlap, and deterministic output stay
   green for all profile fixtures.
@@ -293,6 +293,30 @@ quality is not an acceptable way to hit the budget.
 
 Commit and push each independently measurable optimization; do not combine all
 compiler changes into one difficult-to-review commit.
+
+### Implemented result
+
+- Route samples are indexed in a deterministic 3D spatial hash, so target
+  clearance checks inspect only cells intersecting the target's enclosing
+  sphere instead of scanning the full song route.
+- Orientation feasibility is calculated once per note. Candidate search uses an
+  adaptive fast path, then preflights the smallest contained platform before
+  evaluating a scale family; if that platform cannot fit, all larger members of
+  the family are safely skipped.
+- Route rejection stops at the first sample below the clearance threshold. The
+  rare no-fit path still performs an exact minimum-clearance comparison before
+  choosing its deterministic fallback.
+- The existing six-pass trajectory solver remains in place because profiling
+  measures it below 1 ms for the reference extremes. Warm-start and adaptive
+  iteration would add state and determinism risk without addressing a current
+  bottleneck.
+- In 12 warm Node runs, default 20/20/60 compiles at 20.6 ms median and 33.2 ms
+  p95. Extreme 10/80/10 compiles at 92.2 ms median and 105.8 ms p95, down from
+  1,938 ms median before P2.
+- The extreme profile now evaluates 3,207 candidates and 142,961 clearance
+  samples, down from 14,451 candidates and 8,502,000 samples. All existing
+  exact-impact, 120 Hz route-clearance, target-overlap, motion-mix, and
+  determinism tests remain green.
 
 ## Phase P3 - Persistent Three.js scene and resource pooling
 

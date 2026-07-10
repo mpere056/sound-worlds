@@ -36,6 +36,8 @@ const MARBLE_DEPTH_MAX = 24.75;
 const ARC_SAMPLE_COUNT = 24;
 const ROUTE_SAMPLE_RATE = 120;
 const ROUTE_CLEARANCE = 0.012;
+const ROUTE_INDEX_CELL_SIZE = 0.6;
+const ROUTE_QUERY_MARGIN = 0.05;
 const PITCH_COLORS = ["#6ee7ff", "#8df5c8", "#f7d06a", "#ff9bd6", "#9ea7ff", "#f4fbff", "#7affd7", "#ffb86b", "#c2ff72", "#b9d8ff", "#ffd1f2", "#d8f6ff"];
 
 type Vec3 = [number, number, number];
@@ -53,6 +55,11 @@ interface PlannedTargetRoute {
   positions: Vec3[];
   outgoingVelocities: Vec3[];
   samples: Vec3[];
+}
+
+interface RouteSpatialIndex {
+  samples: readonly Vec3[];
+  cells: Map<string, number[]>;
 }
 
 interface MutableCompileProfile {
@@ -531,9 +538,61 @@ function samplePlannedRoute(notes: readonly SongEvent[], positions: readonly Vec
   return samples;
 }
 
-function minimumTargetRouteClearance(target: MarbleTarget, route: readonly Vec3[], profile?: MutableCompileProfile): number {
-  if (profile) profile.counters.routeClearanceSamples += route.length;
-  return route.reduce((minimum, point) => Math.min(minimum, marbleTargetClearance(target, point)), Number.POSITIVE_INFINITY);
+function routeCellCoordinate(value: number): number {
+  return Math.floor(value / ROUTE_INDEX_CELL_SIZE);
+}
+
+function routeCellKey(x: number, y: number, z: number): string {
+  return `${x}:${y}:${z}`;
+}
+
+function buildRouteSpatialIndex(samples: readonly Vec3[]): RouteSpatialIndex {
+  const cells = new Map<string, number[]>();
+  for (let index = 0; index < samples.length; index += 1) {
+    const point = samples[index]!;
+    const key = routeCellKey(routeCellCoordinate(point[0]), routeCellCoordinate(point[1]), routeCellCoordinate(point[2]));
+    const entries = cells.get(key) ?? [];
+    entries.push(index);
+    cells.set(key, entries);
+  }
+  return { samples, cells };
+}
+
+function minimumTargetRouteClearance(
+  target: MarbleTarget,
+  route: RouteSpatialIndex,
+  profile?: MutableCompileProfile,
+  stopBelow = Number.NEGATIVE_INFINITY,
+): number {
+  const footprint = targetFootprint(target);
+  const radius = Math.hypot(...footprint.halfExtents) + MARBLE_RADIUS + ROUTE_QUERY_MARGIN;
+  const min = footprint.center.map((value) => routeCellCoordinate(value - radius)) as Vec3;
+  const max = footprint.center.map((value) => routeCellCoordinate(value + radius)) as Vec3;
+  let minimum = Number.POSITIVE_INFINITY;
+  let sampleCount = 0;
+  for (let x = min[0]; x <= max[0]; x += 1) {
+    for (let y = min[1]; y <= max[1]; y += 1) {
+      for (let z = min[2]; z <= max[2]; z += 1) {
+        for (const index of route.cells.get(routeCellKey(x, y, z)) ?? []) {
+          minimum = Math.min(minimum, marbleTargetClearance(target, route.samples[index]!));
+          sampleCount += 1;
+          if (minimum < stopBelow) break;
+        }
+        if (minimum < stopBelow) break;
+      }
+      if (minimum < stopBelow) break;
+    }
+    if (minimum < stopBelow) break;
+  }
+  if (sampleCount === 0) {
+    for (const point of route.samples) {
+      minimum = Math.min(minimum, marbleTargetClearance(target, point));
+      sampleCount += 1;
+      if (minimum < stopBelow) break;
+    }
+  }
+  if (profile) profile.counters.routeClearanceSamples += sampleCount;
+  return minimum;
 }
 
 function footprintProjectionRadius(footprint: TargetFootprint, axis: Vec3): number {
@@ -671,6 +730,7 @@ function solveMotionProfile(notes: readonly SongEvent[], initial: MarbleMotionPr
 function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics, motion: MarbleMotionProfile, profile?: MutableCompileProfile): MarbleTarget[] {
   const span = Math.max(1, metrics.pitchRange);
   const { positions, outgoingVelocities, samples: routeSamples } = planTargetRoute(notes, motion);
+  const routeIndex = buildRouteSpatialIndex(routeSamples);
 
   const targets: MarbleTarget[] = [];
   for (let index = 0; index < notes.length; index += 1) {
@@ -702,80 +762,176 @@ function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics
     const fullSize: Vec3 = [0.7 + (1 - pitchNorm) * 0.36 + note.vel * 0.18, 0.16 + note.vel * 0.08, 0.38 + pitchNorm * 0.2];
     const compactSize: Vec3 = [0.3, 0.09, 0.22];
     let target: MarbleTarget | undefined;
-    let bestTarget: MarbleTarget | undefined;
-    let bestClearance = Number.NEGATIVE_INFINITY;
     const rotationOffsets = [0, 0.16, -0.16, 0.32, -0.32, 0.5, -0.5, 0.72, -0.72];
     const depthTiltOffsets = [0, 0.12, -0.12, 0.24, -0.24];
+    const feasibleOrientations: Array<{ rotation: number; depthTilt: number }> = [];
+    for (const offset of rotationOffsets) {
+      const candidateRotation = rotation + offset;
+      for (const tiltOffset of depthTiltOffsets) {
+        const candidateDepthTilt = clamp(depthTilt + tiltOffset, -0.82, 0.82);
+        const candidateNormal = targetSurfaceNormal(candidateRotation, candidateDepthTilt);
+        if (vecDot(incoming, candidateNormal) > -0.005 || vecDot(outgoing, candidateNormal) < 0.005) {
+          if (profile) profile.counters.normalRejects += 1;
+          continue;
+        }
+        feasibleOrientations.push({ rotation: candidateRotation, depthTilt: candidateDepthTilt });
+      }
+    }
     const variants: Array<{ kind: MarbleTarget["kind"]; material: MarbleTarget["material"]; size: Vec3; scales: number[] }> = [
       { kind: chosenKind, material, size: chosenKind === "peg" || chosenKind === "chime" ? compactSize : fullSize, scales: [1, 0.84, 0.7, 0.56, 0.44] },
       { kind: index % 2 === 0 ? "peg" : "chime", material: "rubber", size: compactSize, scales: [1, 0.82, 0.66, 0.5, 0.36, 0.24, 0.16] },
     ];
+    const preflightOrientations = (
+      kind: MarbleTarget["kind"],
+      candidateMaterial: MarbleTarget["material"],
+      size: Vec3,
+      scale: number,
+      overlapPadding: number,
+    ): Map<(typeof feasibleOrientations)[number], MarbleTarget> => {
+      const viable = new Map<(typeof feasibleOrientations)[number], MarbleTarget>();
+      const scaledSize: Vec3 = [size[0] * scale, size[1] * scale, size[2] * scale];
+      for (const orientation of feasibleOrientations) {
+        if (profile) profile.counters.targetCandidates += 1;
+        const candidate = placeTarget(`target:${index}`, kind, pitch, pitchClass, contactPos, orientation.rotation, orientation.depthTilt, scaledSize, candidateMaterial);
+        if (targetOverlapsAny(candidate, targets, overlapPadding, profile)) {
+          if (profile) profile.counters.overlapRejects += 1;
+          continue;
+        }
+        if (minimumTargetRouteClearance(candidate, routeIndex, profile, ROUTE_CLEARANCE) < ROUTE_CLEARANCE) {
+          if (profile) profile.counters.clearanceRejects += 1;
+          continue;
+        }
+        viable.set(orientation, candidate);
+      }
+      return viable;
+    };
     findCandidate: for (const variant of variants) {
-      for (const scale of variant.scales) {
+      const firstScale = variant.scales[0]!;
+      const firstSize: Vec3 = [variant.size[0] * firstScale, variant.size[1] * firstScale, variant.size[2] * firstScale];
+      for (const orientation of feasibleOrientations) {
+        if (profile) profile.counters.targetCandidates += 1;
+        const candidate = placeTarget(`target:${index}`, variant.kind, pitch, pitchClass, contactPos, orientation.rotation, orientation.depthTilt, firstSize, variant.material);
+        if (targetOverlapsAny(candidate, targets, 0.055, profile)) {
+          if (profile) profile.counters.overlapRejects += 1;
+          continue;
+        }
+        const routeClearance = minimumTargetRouteClearance(candidate, routeIndex, profile, ROUTE_CLEARANCE);
+        if (routeClearance < ROUTE_CLEARANCE) {
+          if (profile) profile.counters.clearanceRejects += 1;
+          continue;
+        }
+        chosenKind = variant.kind;
+        target = candidate;
+        break findCandidate;
+      }
+      const smallestScale = variant.scales[variant.scales.length - 1]!;
+      const viable = preflightOrientations(variant.kind, variant.material, variant.size, smallestScale, 0.055);
+      for (const scale of variant.scales.slice(1)) {
         const size: Vec3 = [variant.size[0] * scale, variant.size[1] * scale, variant.size[2] * scale];
-        for (const offset of rotationOffsets) {
-          const candidateRotation = rotation + offset;
-          for (const tiltOffset of depthTiltOffsets) {
-            if (profile) profile.counters.targetCandidates += 1;
-            const candidateDepthTilt = clamp(depthTilt + tiltOffset, -0.82, 0.82);
-            const candidateNormal = targetSurfaceNormal(candidateRotation, candidateDepthTilt);
-            if (vecDot(incoming, candidateNormal) > -0.005 || vecDot(outgoing, candidateNormal) < 0.005) {
-              if (profile) profile.counters.normalRejects += 1;
-              continue;
-            }
-            const candidate = placeTarget(`target:${index}`, variant.kind, pitch, pitchClass, contactPos, candidateRotation, candidateDepthTilt, size, variant.material);
-            if (targetOverlapsAny(candidate, targets, 0.055, profile)) {
-              if (profile) profile.counters.overlapRejects += 1;
-              continue;
-            }
-            const routeClearance = minimumTargetRouteClearance(candidate, routeSamples, profile);
-            if (routeClearance > bestClearance) {
-              bestTarget = candidate;
-              bestClearance = routeClearance;
-            }
-            if (routeClearance < ROUTE_CLEARANCE) {
-              if (profile) profile.counters.clearanceRejects += 1;
-              continue;
-            }
+        for (const orientation of feasibleOrientations) {
+          const preflightCandidate = viable.get(orientation);
+          if (!preflightCandidate) continue;
+          if (scale === smallestScale) {
             chosenKind = variant.kind;
-            target = candidate;
+            target = preflightCandidate;
             break findCandidate;
           }
+          if (profile) profile.counters.targetCandidates += 1;
+          const candidate = placeTarget(`target:${index}`, variant.kind, pitch, pitchClass, contactPos, orientation.rotation, orientation.depthTilt, size, variant.material);
+          if (targetOverlapsAny(candidate, targets, 0.055, profile)) {
+            if (profile) profile.counters.overlapRejects += 1;
+            continue;
+          }
+          const routeClearance = minimumTargetRouteClearance(candidate, routeIndex, profile, ROUTE_CLEARANCE);
+          if (routeClearance < ROUTE_CLEARANCE) {
+            if (profile) profile.counters.clearanceRejects += 1;
+            continue;
+          }
+          chosenKind = variant.kind;
+          target = candidate;
+          break findCandidate;
         }
       }
     }
     if (!target) {
       const fallbackKind = index % 2 === 0 ? "peg" : "chime";
       const fallbackScales = [0.16, 0.12, 0.08, 0.05, 0.03, 0.018];
-      fallbackCandidate: for (const scale of fallbackScales) {
+      const firstScale = fallbackScales[0]!;
+      const firstSize: Vec3 = [0.3 * firstScale, 0.09 * firstScale, 0.22 * firstScale];
+      for (const orientation of feasibleOrientations) {
+        if (profile) profile.counters.targetCandidates += 1;
+        const candidate = placeTarget(`target:${index}`, fallbackKind, pitch, pitchClass, contactPos, orientation.rotation, orientation.depthTilt, firstSize, "rubber");
+        if (targetOverlapsAny(candidate, targets, 0, profile)) {
+          if (profile) profile.counters.overlapRejects += 1;
+          continue;
+        }
+        const routeClearance = minimumTargetRouteClearance(candidate, routeIndex, profile, ROUTE_CLEARANCE);
+        if (routeClearance < ROUTE_CLEARANCE) {
+          if (profile) profile.counters.clearanceRejects += 1;
+          continue;
+        }
+        target = candidate;
+        break;
+      }
+      if (target) {
+        targets.push(target);
+        continue;
+      }
+      const smallestScale = fallbackScales[fallbackScales.length - 1]!;
+      const viable = preflightOrientations(fallbackKind, "rubber", compactSize, smallestScale, 0);
+      fallbackCandidate: for (const scale of fallbackScales.slice(1)) {
         const size: Vec3 = [0.3 * scale, 0.09 * scale, 0.22 * scale];
-        for (const offset of rotationOffsets) {
-          const candidateRotation = rotation + offset;
-          for (const tiltOffset of depthTiltOffsets) {
-            if (profile) profile.counters.targetCandidates += 1;
-            const candidateDepthTilt = clamp(depthTilt + tiltOffset, -0.82, 0.82);
-            const candidateNormal = targetSurfaceNormal(candidateRotation, candidateDepthTilt);
-            if (vecDot(incoming, candidateNormal) > -0.005 || vecDot(outgoing, candidateNormal) < 0.005) {
-              if (profile) profile.counters.normalRejects += 1;
-              continue;
-            }
-            const candidate = placeTarget(`target:${index}`, fallbackKind, pitch, pitchClass, contactPos, candidateRotation, candidateDepthTilt, size, "rubber");
-            if (targetOverlapsAny(candidate, targets, 0, profile)) {
-              if (profile) profile.counters.overlapRejects += 1;
-              continue;
-            }
-            const routeClearance = minimumTargetRouteClearance(candidate, routeSamples, profile);
-            if (routeClearance > bestClearance) {
-              bestTarget = candidate;
-              bestClearance = routeClearance;
-            }
-            if (routeClearance < ROUTE_CLEARANCE) {
-              if (profile) profile.counters.clearanceRejects += 1;
-              continue;
-            }
-            target = candidate;
+        for (const orientation of feasibleOrientations) {
+          const preflightCandidate = viable.get(orientation);
+          if (!preflightCandidate) continue;
+          if (scale === smallestScale) {
+            target = preflightCandidate;
             break fallbackCandidate;
           }
+          if (profile) profile.counters.targetCandidates += 1;
+          const candidate = placeTarget(`target:${index}`, fallbackKind, pitch, pitchClass, contactPos, orientation.rotation, orientation.depthTilt, size, "rubber");
+          if (targetOverlapsAny(candidate, targets, 0, profile)) {
+            if (profile) profile.counters.overlapRejects += 1;
+            continue;
+          }
+          const routeClearance = minimumTargetRouteClearance(candidate, routeIndex, profile, ROUTE_CLEARANCE);
+          if (routeClearance < ROUTE_CLEARANCE) {
+            if (profile) profile.counters.clearanceRejects += 1;
+            continue;
+          }
+          target = candidate;
+          break fallbackCandidate;
+        }
+      }
+    }
+    let bestTarget: MarbleTarget | undefined;
+    if (!target) {
+      let bestClearance = Number.NEGATIVE_INFINITY;
+      for (const variant of variants) {
+        const scale = variant.scales[variant.scales.length - 1]!;
+        const size: Vec3 = [variant.size[0] * scale, variant.size[1] * scale, variant.size[2] * scale];
+        for (const orientation of feasibleOrientations) {
+          if (profile) profile.counters.targetCandidates += 1;
+          const candidate = placeTarget(`target:${index}`, variant.kind, pitch, pitchClass, contactPos, orientation.rotation, orientation.depthTilt, size, variant.material);
+          if (targetOverlapsAny(candidate, targets, 0.055, profile)) continue;
+          const routeClearance = minimumTargetRouteClearance(candidate, routeIndex, profile);
+          if (routeClearance > bestClearance) {
+            bestTarget = candidate;
+            bestClearance = routeClearance;
+          }
+        }
+      }
+      const fallbackKind = index % 2 === 0 ? "peg" : "chime";
+      const scale = 0.018;
+      const size: Vec3 = [0.3 * scale, 0.09 * scale, 0.22 * scale];
+      for (const orientation of feasibleOrientations) {
+        if (profile) profile.counters.targetCandidates += 1;
+        const candidate = placeTarget(`target:${index}`, fallbackKind, pitch, pitchClass, contactPos, orientation.rotation, orientation.depthTilt, size, "rubber");
+        if (targetOverlapsAny(candidate, targets, 0, profile)) continue;
+        const routeClearance = minimumTargetRouteClearance(candidate, routeIndex, profile);
+        if (routeClearance > bestClearance) {
+          bestTarget = candidate;
+          bestClearance = routeClearance;
         }
       }
     }
