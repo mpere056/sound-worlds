@@ -1,6 +1,6 @@
 # Marble live-control performance implementation plan
 
-Status: in progress (P0-P2 complete; P3 next)
+Status: in progress (P0-P2 complete; P3 renderer ownership implemented, pooling next)
 
 Last updated: 2026-07-10
 
@@ -352,6 +352,24 @@ queuePerformance(plan: PreparedMarblePlan, transition: RouteTransition): void;
 ### Commit point
 
 Commit and push persistent renderer ownership first, then mesh/geometry pooling.
+
+### Implemented slice: persistent renderer ownership
+
+- `MarbleScene.replacePerformance()` now keeps the WebGL renderer, context,
+  Three.js scene, camera, lights, wall, marble, tuning object, and SVG overlay
+  alive across validated planner results.
+- Performance-owned targets, rods, rails, SVG target nodes, and impact lookups are
+  disposed and rebuilt inside the existing scene. Full disposal still occurs
+  when leaving Marble Music or switching projects.
+- Development snapshots expose a stable renderer identity and performance-update
+  count so repeated-change tests can detect accidental renderer recreation.
+- In a browser run across 10/80/10 and 45/45/10 plans, renderer identity remained
+  `1`, update count advanced from `1` to `2`, and the overlay count remained `1`.
+  Scene application measured 8.8-11.7 ms and first render measured 20.3-24.7 ms,
+  down from the P1 119 ms first-render baseline.
+- P3 remains open: target/rail geometry and materials are still rebuilt. Pooling
+  and transform updates must bring validated-plan application below 4 ms and
+  keep geometry/program counts bounded across the 100-change gate.
 
 ## Phase P4 - Smooth, collision-aware route transitions
 

@@ -45,6 +45,8 @@ export interface MarbleCameraPose {
 }
 
 export interface MarbleSceneProfileSnapshot {
+  rendererIdentity: number;
+  performanceUpdates: number;
   rendererMemory: { geometries: number; textures: number };
   rendererRender: { calls: number; triangles: number; points: number; lines: number };
   programs: number;
@@ -74,6 +76,7 @@ interface SvgTarget {
 }
 
 const SVG_NS = "http://www.w3.org/2000/svg";
+let nextRendererIdentity = 1;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -282,23 +285,27 @@ function addTargetHardware(target: MarbleTarget, group: Group): Group {
 export class MarbleScene {
   readonly backendKind = "three";
   readonly tuning: MarbleTuning;
-  readonly #performance: MarblePerformance;
+  #performance: MarblePerformance;
   readonly #renderer: WebGLRenderer;
+  readonly #rendererIdentity = nextRendererIdentity++;
   readonly #scene = new Scene();
   readonly #camera: PerspectiveCamera;
   readonly #targetMeshes = new Map<string, TargetMeshes>();
   readonly #impactByTarget = new Map<string, MarbleImpact[]>();
   readonly #machine = new Group();
+  readonly #performanceObjects = new Group();
   readonly #rails = new Group();
   readonly #marble: Mesh<SphereGeometry, MeshPhysicalMaterial>;
   readonly #marbleGlow: PointLight;
   readonly #marbleShadow: Mesh<CircleGeometry, MeshBasicMaterial>;
   readonly #svg: SVGSVGElement;
+  readonly #svgTargetLayer: SVGGElement;
   readonly #svgTargets = new Map<string, SvgTarget>();
   readonly #svgMarble: SVGGElement;
   readonly #svgMarbleGlow: SVGCircleElement;
   readonly #svgMarbleCore: SVGCircleElement;
   #disposed = false;
+  #performanceUpdates = 0;
 
   constructor(canvas: HTMLCanvasElement, performance: MarblePerformance, tuning?: MarbleTuning) {
     this.tuning = tuning ?? { glow: 0.78, camera: 0.88, targetScale: 1, tail: 0.8 };
@@ -309,6 +316,7 @@ export class MarbleScene {
     this.#renderer.outputColorSpace = SRGBColorSpace;
     const svgOverlay = this.#createSvgOverlay(canvas);
     this.#svg = svgOverlay.svg;
+    this.#svgTargetLayer = svgOverlay.targetLayer;
     this.#svgMarble = svgOverlay.marble;
     this.#svgMarbleGlow = svgOverlay.marbleGlow;
     this.#svgMarbleCore = svgOverlay.marbleCore;
@@ -324,6 +332,7 @@ export class MarbleScene {
     this.#scene.add(fill);
     this.#scene.add(this.#machine);
     this.#addWall();
+    this.#machine.add(this.#performanceObjects);
     this.#addTargets();
     this.#addRods();
     this.#addRails();
@@ -339,7 +348,7 @@ export class MarbleScene {
     this.#machine.add(this.#marbleShadow, this.#marble, this.#marbleGlow);
   }
 
-  #createSvgOverlay(canvas: HTMLCanvasElement): { svg: SVGSVGElement; marble: SVGGElement; marbleGlow: SVGCircleElement; marbleCore: SVGCircleElement } {
+  #createSvgOverlay(canvas: HTMLCanvasElement): { svg: SVGSVGElement; targetLayer: SVGGElement; marble: SVGGElement; marbleGlow: SVGCircleElement; marbleCore: SVGCircleElement } {
     const parent = canvas.parentElement;
     parent?.querySelectorAll(".marble-svg-overlay").forEach((entry) => entry.remove());
 
@@ -389,6 +398,36 @@ export class MarbleScene {
     wall.setAttribute("opacity", "0.94");
     svg.append(wall);
 
+    const targetLayer = svgElement("g");
+    targetLayer.classList.add("marble-svg-targets");
+    svg.append(targetLayer);
+    this.#addSvgTargets(targetLayer);
+
+    const marble = svgElement("g");
+    marble.setAttribute("filter", "url(#marble-svg-glow)");
+    const marbleGlow = svgElement("circle");
+    marbleGlow.setAttribute("r", "54");
+    marbleGlow.setAttribute("fill", "#91f5ff");
+    marbleGlow.setAttribute("opacity", "0.22");
+    const marbleCore = svgElement("circle");
+    marbleCore.setAttribute("r", "28");
+    marbleCore.setAttribute("fill", "#f5fcff");
+    marbleCore.setAttribute("stroke", "#7de7ff");
+    marbleCore.setAttribute("stroke-width", "5");
+    const marbleShine = svgElement("circle");
+    marbleShine.setAttribute("cx", "-9");
+    marbleShine.setAttribute("cy", "-11");
+    marbleShine.setAttribute("r", "9");
+    marbleShine.setAttribute("fill", "#ffffff");
+    marbleShine.setAttribute("opacity", "0.72");
+    marble.append(marbleGlow, marbleCore, marbleShine);
+    svg.append(marble);
+
+    parent?.append(svg);
+    return { svg, targetLayer, marble, marbleGlow, marbleCore };
+  }
+
+  #addSvgTargets(targetLayer = this.#svgTargetLayer): void {
     for (const target of this.#performance.statics.targets) {
       const [x, y] = worldToScreen(target.pos);
       const group = svgElement("g");
@@ -416,32 +455,9 @@ export class MarbleScene {
       base.setAttribute("stroke-width", "2");
       base.setAttribute("opacity", "0.92");
       group.append(glow, base);
-      svg.append(group);
+      targetLayer.append(group);
       this.#svgTargets.set(target.id, { group, base, glow, baseTransform });
     }
-
-    const marble = svgElement("g");
-    marble.setAttribute("filter", "url(#marble-svg-glow)");
-    const marbleGlow = svgElement("circle");
-    marbleGlow.setAttribute("r", "54");
-    marbleGlow.setAttribute("fill", "#91f5ff");
-    marbleGlow.setAttribute("opacity", "0.22");
-    const marbleCore = svgElement("circle");
-    marbleCore.setAttribute("r", "28");
-    marbleCore.setAttribute("fill", "#f5fcff");
-    marbleCore.setAttribute("stroke", "#7de7ff");
-    marbleCore.setAttribute("stroke-width", "5");
-    const marbleShine = svgElement("circle");
-    marbleShine.setAttribute("cx", "-9");
-    marbleShine.setAttribute("cy", "-11");
-    marbleShine.setAttribute("r", "9");
-    marbleShine.setAttribute("fill", "#ffffff");
-    marbleShine.setAttribute("opacity", "0.72");
-    marble.append(marbleGlow, marbleCore, marbleShine);
-    svg.append(marble);
-
-    parent?.append(svg);
-    return { svg, marble, marbleGlow, marbleCore };
   }
 
   #addWall(): void {
@@ -489,7 +505,7 @@ export class MarbleScene {
       shadow.position.set(target.pos[0] - 0.08, target.pos[1] - 0.1, -0.405);
       shadow.scale.set(1.4, 0.46, 1);
       this.#targetMeshes.set(target.id, { group, base, home: group.position.clone(), baseRotation: [group.rotation.x, group.rotation.y, group.rotation.z], glow, shadow, hardware });
-      this.#machine.add(shadow, group, glow);
+      this.#performanceObjects.add(shadow, group, glow);
     }
   }
 
@@ -501,7 +517,7 @@ export class MarbleScene {
       const rod = new Mesh(new CylinderGeometry(0.026, 0.026, 0.86, 10), rodMaterial);
       rod.position.set(target.pos[0] - 0.44, target.pos[1] - 0.18, target.pos[2] - 0.18);
       rod.rotation.z = Math.PI / 2 + target.rotation[2] * 0.45;
-      this.#machine.add(rod);
+      this.#performanceObjects.add(rod);
     }
   }
 
@@ -563,7 +579,7 @@ export class MarbleScene {
         this.#rails.add(collar);
       }
     }
-    this.#machine.add(this.#rails);
+    this.#performanceObjects.add(this.#rails);
   }
 
   #targetIntensity(targetId: string, t: number): number {
@@ -647,10 +663,39 @@ export class MarbleScene {
     this.#renderer.render(this.#scene, this.#camera);
   }
 
+  replacePerformance(performance: MarblePerformance): void {
+    if (this.#disposed) return;
+    this.#performanceObjects.traverse((object: Object3D) => {
+      const mesh = object as Mesh;
+      if (mesh.geometry) mesh.geometry.dispose();
+      const material = mesh.material;
+      if (Array.isArray(material)) material.forEach((entry) => disposeMaterial(entry));
+      else if (material) disposeMaterial(material);
+    });
+    this.#performanceObjects.clear();
+    this.#rails.clear();
+    this.#targetMeshes.clear();
+    this.#impactByTarget.clear();
+    this.#svgTargets.clear();
+    this.#svgTargetLayer.replaceChildren();
+
+    this.#performance = performance;
+    this.#renderer.setSize(performance.resolution.w, performance.resolution.h, false);
+    this.#camera.aspect = performance.resolution.w / performance.resolution.h;
+    this.#camera.updateProjectionMatrix();
+    this.#addSvgTargets();
+    this.#addTargets();
+    this.#addRods();
+    this.#addRails();
+    this.#performanceUpdates += 1;
+  }
+
   profileSnapshot(): MarbleSceneProfileSnapshot {
     let sceneObjects = 0;
     this.#scene.traverse(() => { sceneObjects += 1; });
     return {
+      rendererIdentity: this.#rendererIdentity,
+      performanceUpdates: this.#performanceUpdates,
       rendererMemory: { ...this.#renderer.info.memory },
       rendererRender: { ...this.#renderer.info.render },
       programs: this.#renderer.info.programs?.length ?? 0,

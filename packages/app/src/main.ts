@@ -12,7 +12,7 @@ import type { MarblePlannerSuccess } from "./marble-planner-protocol.js";
 import "./styles.css";
 
 interface ProjectSummary { id: string; name: string; durationSec: number; concepts: string[]; }
-interface ActiveScene { backendKind: "pixi" | "three"; tuning: object; renderFrame(t: number): void; destroy(): void; auditFrame?(t: number): string[]; profileSnapshot?(): MarbleSceneProfileSnapshot; }
+interface ActiveScene { backendKind: "pixi" | "three"; tuning: object; renderFrame(t: number): void; destroy(): void; auditFrame?(t: number): string[]; profileSnapshot?(): MarbleSceneProfileSnapshot; replacePerformance?(performance: MarblePerformance): void; }
 interface BindingApi { on(event: "change", handler: () => void): BindingApi; }
 interface BindingPane {
   addBinding<T extends object, K extends keyof T>(target: T, key: K, options: Record<string, unknown>): BindingApi;
@@ -322,9 +322,9 @@ function applyPlannedMarble(result: MarblePlannerSuccess): void {
     || plannedMix.upDown !== marbleMotionMix.upDown
     || plannedMix.frontBack !== marbleMotionMix.frontBack) return;
   const replacementStartedAt = marbleProfilingEnabled ? performance.now() : 0;
-  destroyActiveScene();
-  const nextScene = new MarbleScene(canvas, result.performance, marbleTuning);
-  scene = nextScene;
+  const nextScene = scene instanceof MarbleScene ? scene : new MarbleScene(canvas, result.performance, marbleTuning);
+  if (scene === nextScene) nextScene.replacePerformance(result.performance);
+  else scene = nextScene;
   const sceneReplacementMs = marbleProfilingEnabled ? performance.now() - replacementStartedAt : 0;
   previousBeat = -1;
   const firstRenderStartedAt = marbleProfilingEnabled ? performance.now() : 0;
