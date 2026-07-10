@@ -245,9 +245,8 @@ export function prepareMarbleTargetMorph(
   incoming: MarblePerformance,
   currentT: number,
   boundary: Pick<MarbleActivationBoundary, "activationT" | "noteIndex">,
-  durationSec = 0.35,
 ): MarbleTargetMorphPlan | undefined {
-  const startT = Math.max(currentT, boundary.activationT - durationSec);
+  const startT = currentT;
   if (boundary.activationT - startT < 0.12) return undefined;
   const fromTargets = new Map(active.statics.targets.map((target) => [target.id, target]));
   const toTargets = new Map(incoming.statics.targets.map((target) => [target.id, target]));
@@ -929,7 +928,20 @@ export class MarbleScene {
       return undefined;
     }
     this.#queuedActivation = boundary;
-    this.#targetMorph = prepareMarbleTargetMorph(this.#performance, boundary.performance, currentT, boundary);
+    const displayedTargets = this.#performance.statics.targets.map((target) => {
+      if (!this.#targetMorph || !this.#targetMorph.targetIds.includes(target.id)) return target;
+      const from = this.#targetMorph.fromTargets.get(target.id);
+      const to = this.#targetMorph.toTargets.get(target.id);
+      if (!from || !to) return target;
+      const raw = clamp((currentT - this.#targetMorph.startT) / Math.max(0.001, this.#targetMorph.endT - this.#targetMorph.startT), 0, 1);
+      const progress = raw * raw * (3 - 2 * raw);
+      return interpolateMarbleTarget(from, to, progress);
+    });
+    const displayedPerformance: MarblePerformance = {
+      ...this.#performance,
+      statics: { ...this.#performance.statics, targets: displayedTargets },
+    };
+    this.#targetMorph = prepareMarbleTargetMorph(displayedPerformance, boundary.performance, currentT, boundary);
     boundary.morphTargetCount = this.#targetMorph?.targetIds.length ?? 0;
     return boundary;
   }

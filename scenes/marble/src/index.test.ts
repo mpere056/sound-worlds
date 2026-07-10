@@ -153,6 +153,7 @@ describe("Marble live-plan activation", () => {
     expect(activation).toBeDefined();
     const safe = prepareMarbleTargetMorph(active, activation!.performance, 0, activation!);
     expect(safe?.targetIds.length).toBeGreaterThan(0);
+    expect(safe?.startT).toBe(0);
 
     const unsafePerformance = structuredClone(activation!.performance);
     const futureImpact = unsafePerformance.statics.impacts.find((impact) => impact.noteIndex > activation!.noteIndex)!;

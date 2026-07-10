@@ -1,6 +1,6 @@
 # Marble live-control performance implementation plan
 
-Status: in progress (P0-P3 complete; P4 next)
+Status: in progress (P0-P3 complete; P4 transitions and P5 live input in progress)
 
 Last updated: 2026-07-10
 
@@ -482,7 +482,7 @@ separate slices with visual evidence for each.
 - P4 remains open for retaining safe already-played target transforms and for a
   full audio watch-through at naturally advancing activation boundaries.
 
-## Phase P5 - High-rate control coordinator
+## Phase P5 - High-rate control coordinator (in progress)
 
 ### Work
 
@@ -515,6 +515,29 @@ interface MarbleMotionInput {
 ### Commit point
 
 Commit and push the coordinator before adding camera access or MediaPipe.
+
+### Implemented slice: continuous validated planning
+
+- Slider changes now use a fixed 100 ms maximum request interval with a trailing
+  request instead of a release-style 100 ms debounce. Continuous input therefore
+  submits the latest mix at roughly 10 Hz while a final settled value is never
+  stranded.
+- Raw pointer/input events no longer invalidate valid in-flight work. The planner
+  client's request IDs and latest-pending coalescing remain the authority for
+  rejecting stale results; project/world changes still invalidate explicitly.
+- The newest completed request may become the next safe queued plan even if the
+  displayed slider has advanced slightly, allowing the physical world to follow
+  progressively instead of waiting for exact desired/planned equality.
+- A newly validated plan samples the platform transforms currently visible in an
+  existing morph and retargets from those values. Morphing begins at the current
+  transport time, avoiding both delayed movement and snap-back during a drag.
+- Unit tests cover immediate first submission, fixed-cadence scheduling, and the
+  final settled request. In a browser drag of 18 changes spaced 85 ms apart, 16
+  distinct validated plans appeared before release, progressing from 20/25/55
+  through 20/41/39 while frame p95 remained 16.8 ms.
+- Remaining P5 work: desired/planning/active diagnostic state, deadband and
+  optional low-latency filtering for noisy gesture input, plus the five-minute
+  synthetic stream and final-value catch-up gates.
 
 ## Phase P6 - MediaPipe hand-control adapter
 

@@ -8,6 +8,7 @@ import { RunnerScene, type RunnerPerformance } from "@reaper-viz/scene-runner";
 import { TestPatternScene } from "@reaper-viz/scene-testpattern";
 import { Pane } from "tweakpane";
 import { MarblePlannerClient } from "./marble-planner-client.js";
+import { nextMarbleRequestDelay } from "./marble-live-coordinator.js";
 import type { MarblePlannerSuccess } from "./marble-planner-protocol.js";
 import "./styles.css";
 
@@ -107,8 +108,7 @@ const marbleBrowserProfile: MarbleBrowserProfile = { frameIntervalsMs: [], rende
 let previousAnimationFrameAt: number | undefined;
 let profilePublishFrame = 0;
 let marblePlannerRequestedAt = 0;
-let marbleLastInputAt = 0;
-let marbleActivationTimer: number | undefined;
+let marbleLastRequestAt = Number.NEGATIVE_INFINITY;
 let pendingMarbleActivationResult: MarblePlannerSuccess | undefined;
 const marblePlanner = new MarblePlannerClient(
   new Worker(new URL("./marble-planner.worker.ts", import.meta.url), { type: "module" }),
@@ -117,16 +117,6 @@ const marblePlanner = new MarblePlannerClient(
     failed: (error) => reportMarblePlanningFailure(error),
   },
 );
-
-for (const eventName of ["pointerdown", "keydown", "input"]) {
-  tweakpaneContainer.addEventListener(eventName, () => {
-    if (conceptSelect.value !== "marble") return;
-    marbleLastInputAt = performance.now();
-    if (marbleActivationTimer !== undefined) window.clearTimeout(marbleActivationTimer);
-    marbleActivationTimer = undefined;
-    marblePlanner.invalidate();
-  }, { capture: true });
-}
 
 if (marbleProfilingEnabled) {
   (globalThis as typeof globalThis & { __marbleLiveProfile?: MarbleBrowserProfile }).__marbleLiveProfile = marbleBrowserProfile;
@@ -335,6 +325,7 @@ function rebuildMarbleScene(): void {
   statusTitle.textContent = "Rebalancing marble world";
   statusDetail.textContent = `${marbleMotionMix.leftRight}% left/right | ${marbleMotionMix.upDown}% up/down | ${marbleMotionMix.frontBack}% front/back`;
   marblePlannerRequestedAt = performance.now();
+  marbleLastRequestAt = marblePlannerRequestedAt;
   marblePlanner.request(marbleMotionMix, {
     profile: marbleProfilingEnabled,
     ...(marbleSourceTrackId ? { sourceTrackId: marbleSourceTrackId } : {}),
@@ -343,19 +334,6 @@ function rebuildMarbleScene(): void {
 
 function applyPlannedMarble(result: MarblePlannerSuccess): void {
   if (!song || conceptSelect.value !== "marble") return;
-  const remainingQuietMs = 250 - (performance.now() - marbleLastInputAt);
-  if (remainingQuietMs > 0) {
-    if (marbleActivationTimer !== undefined) window.clearTimeout(marbleActivationTimer);
-    marbleActivationTimer = window.setTimeout(() => {
-      marbleActivationTimer = undefined;
-      applyPlannedMarble(result);
-    }, remainingQuietMs);
-    return;
-  }
-  const plannedMix = result.performance.statics.motionMix;
-  if (plannedMix.leftRight !== marbleMotionMix.leftRight
-    || plannedMix.upDown !== marbleMotionMix.upDown
-    || plannedMix.frontBack !== marbleMotionMix.frontBack) return;
   const replacementStartedAt = marbleProfilingEnabled ? performance.now() : 0;
   const nextScene = scene instanceof MarbleScene ? scene : new MarbleScene(canvas, result.performance, marbleTuning, () => globalThis.performance.now());
   if (scene === nextScene) {
@@ -398,7 +376,12 @@ function reportMarblePlanningFailure(error: string): void {
 
 function scheduleMarbleRebuild(): void {
   if (marbleRebuildTimer !== undefined) window.clearTimeout(marbleRebuildTimer);
-  marbleRebuildTimer = window.setTimeout(rebuildMarbleScene, 100);
+  const delayMs = nextMarbleRequestDelay(performance.now(), marbleLastRequestAt);
+  if (delayMs <= 0) {
+    rebuildMarbleScene();
+    return;
+  }
+  marbleRebuildTimer = window.setTimeout(rebuildMarbleScene, delayMs);
 }
 
 function updateMarbleMotionMix(changed: keyof MarbleMotionMix, bindingPane: BindingPane): void {
@@ -416,7 +399,6 @@ function updateMarbleMotionMix(changed: keyof MarbleMotionMix, bindingPane: Bind
   }
   previousMarbleMotionMix = { ...marbleMotionMix };
   bindingPane.refresh();
-  marblePlanner.invalidate();
   scheduleMarbleRebuild();
 }
 
@@ -428,8 +410,8 @@ function addMarbleMotionBinding(bindingPane: BindingPane, key: keyof MarbleMotio
 async function loadConcept(concept: string): Promise<void> {
   if (marbleRebuildTimer !== undefined) window.clearTimeout(marbleRebuildTimer);
   marbleRebuildTimer = undefined;
-  if (marbleActivationTimer !== undefined) window.clearTimeout(marbleActivationTimer);
-  marbleActivationTimer = undefined;
+  marbleLastRequestAt = Number.NEGATIVE_INFINITY;
+  marblePlanner.invalidate();
   pendingMarbleActivationResult = undefined;
   const wasThree = scene?.backendKind === "three";
   destroyActiveScene();
@@ -438,7 +420,7 @@ async function loadConcept(concept: string): Promise<void> {
   if (!song) return;
   statusTitle.textContent = "Building world";
   statusDetail.textContent = concept;
-  pane = new Pane({ container: document.querySelector<HTMLDivElement>("#tweakpane")! });
+  pane = new Pane({ container: tweakpaneContainer });
   const bindingPane = pane as unknown as BindingPane;
   if (concept === "metro") {
     const backend = await ensurePixiBackend();
