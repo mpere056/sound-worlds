@@ -375,9 +375,15 @@ Commit and push persistent renderer ownership first, then mesh/geometry pooling.
 - The browser extreme now applies in 2.2 ms and first-renders in 14.6 ms with 11
   live geometries instead of 54. A subsequent balanced route retained the same
   renderer and 11 geometries, applied in 4.5 ms, and first-rendered in 5.8 ms.
-- P3 remains open: stable target groups and route-buffer reuse must remove the
-  remaining object-tree churn, consistently bring application below 4 ms, and
-  pass the 100-change bounded-resource gate.
+- A 100-update settled-input browser run retained renderer identity `1`, one SVG
+  overlay, 7 programs, and 11 geometries. The update counter reached 100, final
+  application cost was 1.3 ms, render p95 was 12.7 ms, and frame p95 was 17.1 ms.
+  Hidden diagnostics now publish application/first-render p95 plus renderer,
+  geometry, and program ranges for repeatable durability checks.
+- P3 remains open for stable target groups and route-buffer reuse. Primitive
+  resources are bounded and the measured endpoint meets the application budget,
+  but aggregate p95 must be captured on the enhanced profiler before declaring
+  the <=4 ms gate complete.
 
 ## Phase P4 - Smooth, collision-aware route transitions
 

@@ -155,6 +155,11 @@ function profilePercentile(values: readonly number[], amount: number): number {
 
 function publishMarbleProfile(): void {
   if (!marbleProfilingEnabled) return;
+  const sceneApplications = marbleBrowserProfile.swaps.map((entry) => entry.sceneReplacementMs);
+  const firstRenders = marbleBrowserProfile.swaps.map((entry) => entry.firstRenderMs);
+  const rendererIdentities = [...new Set(marbleBrowserProfile.swaps.flatMap((entry) => entry.resources ? [entry.resources.rendererIdentity] : []))];
+  const geometryCounts = marbleBrowserProfile.swaps.flatMap((entry) => entry.resources ? [entry.resources.rendererMemory.geometries] : []);
+  const programCounts = marbleBrowserProfile.swaps.flatMap((entry) => entry.resources ? [entry.resources.programs] : []);
   let output = document.querySelector<HTMLScriptElement>("#marble-live-profile");
   if (!output) {
     output = document.createElement("script");
@@ -167,6 +172,11 @@ function publishMarbleProfile(): void {
     frameP95Ms: profilePercentile(marbleBrowserProfile.frameIntervalsMs, 0.95),
     frameMaxMs: Math.max(0, ...marbleBrowserProfile.frameIntervalsMs),
     renderP95Ms: profilePercentile(marbleBrowserProfile.renderMs, 0.95),
+    sceneApplicationP95Ms: profilePercentile(sceneApplications, 0.95),
+    firstRenderP95Ms: profilePercentile(firstRenders, 0.95),
+    rendererIdentities,
+    geometryRange: geometryCounts.length ? [Math.min(...geometryCounts), Math.max(...geometryCounts)] : [0, 0],
+    programRange: programCounts.length ? [Math.min(...programCounts), Math.max(...programCounts)] : [0, 0],
     longTasks: marbleBrowserProfile.longTasks,
     latestSwap: marbleBrowserProfile.swaps.at(-1),
     swapCount: marbleBrowserProfile.swaps.length,
