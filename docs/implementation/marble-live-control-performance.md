@@ -1,6 +1,6 @@
 # Marble live-control performance implementation plan
 
-Status: in progress (P0-P2 complete; P3 renderer ownership and primitive pooling implemented)
+Status: in progress (P0-P3 complete; P4 next)
 
 Last updated: 2026-07-10
 
@@ -318,7 +318,7 @@ compiler changes into one difficult-to-review commit.
   exact-impact, 120 Hz route-clearance, target-overlap, motion-mix, and
   determinism tests remain green.
 
-## Phase P3 - Persistent Three.js scene and resource pooling
+## Phase P3 - Persistent Three.js scene and resource pooling (complete)
 
 ### Work
 
@@ -380,10 +380,14 @@ Commit and push persistent renderer ownership first, then mesh/geometry pooling.
   application cost was 1.3 ms, render p95 was 12.7 ms, and frame p95 was 17.1 ms.
   Hidden diagnostics now publish application/first-render p95 plus renderer,
   geometry, and program ranges for repeatable durability checks.
-- P3 remains open for stable target groups and route-buffer reuse. Primitive
-  resources are bounded and the measured endpoint meets the application budget,
-  but aggregate p95 must be captured on the enhanced profiler before declaring
-  the <=4 ms gate complete.
+- A fresh enhanced-profiler run across 100 accepted updates measured 1.8 ms
+  scene-application p95, 13 ms first-render p95, 12.7 ms render p95, and 17.3 ms
+  frame p95. Geometry stayed exactly 11, programs exactly 7, renderer identity
+  exactly `1`, and the update counter reached 100.
+- The measured gates do not justify further P3 object-pool complexity now.
+  Stable target IDs and retained primitives provide the foundation P4 needs;
+  route-buffer reuse remains an evidence-triggered optimization if future songs
+  introduce rail-heavy application cost.
 
 ## Phase P4 - Smooth, collision-aware route transitions
 
