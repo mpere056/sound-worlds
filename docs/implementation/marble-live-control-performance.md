@@ -445,6 +445,48 @@ transform switch to move between generated maps.
   exact easing endpoints/midpoint, shortest-path rotation, all-target ID pairing,
   and displayed-state retargeting.
 
+### Intermediate-overlap routing architecture
+
+Direct endpoint interpolation is not sufficient as the final P4 policy: two
+valid non-overlapping layouts can still intersect between endpoints. This must
+be solved with the same oriented-box SAT geometry used by the compiler, but the
+search must not execute synchronously inside `transitionPerformance()`.
+
+A 2026-07-10 spike tested deterministic radial staging arcs, 3D SAT sampling,
+and local conflict repair. Synthetic crossings and compiled extreme mixes could
+be made overlap-free, but a sustained 19-platform browser run produced repeated
+466-602 ms main-thread tasks and frame maxima up to 975 ms. Precomputing one OBB
+per platform/sample improved unit cost but did not meet the browser gate. The
+spike was rejected and removed; none of that synchronous search is in the
+runtime.
+
+Implement this as a prepared-transition worker stage:
+
+1. Freeze audio and wall-clock platform interpolation at the currently displayed
+   transforms, not at an older active endpoint.
+2. Serialize flat target transforms and dimensions plus the aligned destination
+   into a dedicated transition-routing worker. Do not bundle Three.js objects.
+3. Search deterministic waypoint/staging arcs and validate the complete morph
+   with precomputed OBBs. Latest request wins and stale routes are discarded.
+4. Return flat per-target waypoints and a sampled zero-overlap certificate.
+5. Start the visible transform only after the newest certificate arrives. The
+   marble remains held during this bounded preparation period.
+6. If no route is found within the worker budget, keep the current layout and
+   continue searching/coalescing; never fall back to an intersecting visible
+   morph.
+
+Worker routing gates:
+
+- Main-thread route preparation and result installation <= 4 ms p95.
+- No transition-routing long task on the UI thread.
+- Zero SAT overlaps across at least 120 uniformly spaced morph samples for the
+  default/extreme mix matrix and direct-swap fixtures.
+- Route-worker p95 <= 100 ms for 19 targets and <= 250 ms for the supported
+  maximum target count.
+- Repeated input while routing activates only the newest certified route.
+- Platform position is continuous when a route request supersedes an active
+  morph.
+
 ## Phase P5 - High-rate control coordinator (in progress)
 
 ### Work
