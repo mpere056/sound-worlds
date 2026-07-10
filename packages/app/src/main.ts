@@ -1,13 +1,14 @@
 import { parsePerformance, parseSong, type Song } from "@reaper-viz/core";
 import type { MarbleCompileProfile, MarbleMotionMix } from "@reaper-viz/compiler-marble";
 import { captureCanvasPng, exportCanvasMp4, PixiBackend, supportsCanvasMp4 } from "@reaper-viz/render";
-import { MarbleScene, type MarblePerformance, type MarbleSceneActivation, type MarbleSceneProfileSnapshot, type MarbleTuning } from "@reaper-viz/scene-marble";
+import { MarbleScene, type MarblePerformance, type MarblePreparedTransition, type MarbleSceneActivation, type MarbleSceneProfileSnapshot, type MarbleTuning } from "@reaper-viz/scene-marble";
 import { MetroScene, type MetroPerformance } from "@reaper-viz/scene-metro";
 import { PaintingScene, type PaintingPerformance } from "@reaper-viz/scene-painting";
 import { RunnerScene, type RunnerPerformance } from "@reaper-viz/scene-runner";
 import { TestPatternScene } from "@reaper-viz/scene-testpattern";
 import { Pane } from "tweakpane";
 import { MarblePlannerClient } from "./marble-planner-client.js";
+import { MarbleTransitionRouterClient } from "./marble-transition-router-client.js";
 import {
   copyMarbleMotionMix,
   marbleMotionMixLabel,
@@ -38,6 +39,7 @@ interface MarbleBrowserSwapProfile {
   plannerRoundTripMs: number;
   sceneReplacementMs: number;
   firstRenderMs: number;
+  routePlanningMs?: number;
   compiler?: MarbleCompileProfile;
   resources?: MarbleSceneProfileSnapshot;
 }
@@ -121,6 +123,7 @@ let profilePublishFrame = 0;
 let marblePlannerRequestedAt = 0;
 let marbleLastRequestAt = Number.NEGATIVE_INFINITY;
 let pendingMarbleActivationResult: MarblePlannerSuccess | undefined;
+let pendingMarbleRoutePlanningMs = 0;
 let marbleResumeAfterTransition = false;
 const marblePlanner = new MarblePlannerClient(
   new Worker(new URL("./marble-planner.worker.ts", import.meta.url), { type: "module" }),
@@ -128,6 +131,9 @@ const marblePlanner = new MarblePlannerClient(
     planned: (result) => applyPlannedMarble(result),
     failed: (error) => reportMarblePlanningFailure(error),
   },
+);
+const marbleTransitionRouter = new MarbleTransitionRouterClient(
+  () => new Worker(new URL("./marble-transition-router.worker.ts", import.meta.url), { type: "module" }),
 );
 
 if (marbleProfilingEnabled) {
@@ -293,11 +299,13 @@ function reportMarbleActivation(activation: MarbleSceneActivation | undefined, f
       plannerRoundTripMs: performance.now() - marblePlannerRequestedAt,
       sceneReplacementMs: activation.applicationMs,
       firstRenderMs,
+      routePlanningMs: pendingMarbleRoutePlanningMs,
       ...(result.compileProfile ? { compiler: result.compileProfile } : {}),
       resources: activeScene.profileSnapshot(),
     }, 400);
     publishMarbleProfile();
   }
+  pendingMarbleRoutePlanningMs = 0;
   statusTitle.textContent = "Marble Music | live motion mix";
   statusDetail.textContent = marbleProfilingEnabled ? marbleLiveStateDetail() : result ? marbleStatus(result.performance) : `${marbleMotionMixLabel(activation.motionMix)}% active`;
   publishMarbleProfile();
@@ -373,6 +381,28 @@ function rebuildMarbleScene(): void {
   });
 }
 
+function beginPreparedMarbleTransition(activeScene: MarbleScene, result: MarblePlannerSuccess, prepared: MarblePreparedTransition): void {
+  void marbleTransitionRouter.route([...prepared.fromTargets.values()], [...prepared.toTargets.values()]).then((routed) => {
+    if (scene !== activeScene || conceptSelect.value !== "marble") return;
+    if (routed.route.overlapCount !== 0) {
+      statusTitle.textContent = "Safe platform route unavailable";
+      statusDetail.textContent = `${routed.route.overlapCount} intermediate overlaps remain; transport is held while you adjust the mix`;
+      return;
+    }
+    pendingMarbleRoutePlanningMs = routed.planningMs;
+    const transition = activeScene.startPreparedTransition(prepared, new Map(routed.route.offsets));
+    pendingMarbleActivationResult = result;
+    statusTitle.textContent = "Moving marble platforms";
+    statusDetail.textContent = `${marbleStatus(result.performance)} | ${transition.platformCount} platforms moving | ${transition.durationMs} ms`;
+    renderAt(audio.currentTime);
+  }).catch((error: unknown) => {
+    if (error instanceof Error && (error.message.includes("superseded") || error.message.includes("invalidated"))) return;
+    if (scene !== activeScene || conceptSelect.value !== "marble") return;
+    statusTitle.textContent = "Platform routing unavailable";
+    statusDetail.textContent = `${error instanceof Error ? error.message : "Transition routing failed"}; transport remains held`;
+  });
+}
+
 function applyPlannedMarble(result: MarblePlannerSuccess): void {
   if (!song || conceptSelect.value !== "marble") return;
   const replacementStartedAt = marbleProfilingEnabled ? performance.now() : 0;
@@ -385,13 +415,13 @@ function applyPlannedMarble(result: MarblePlannerSuccess): void {
       audio.pause();
       marbleResumeAfterTransition = true;
     }
-    const transition = nextScene.transitionPerformance(result.performance, audio.currentTime);
-    pendingMarbleActivationResult = result;
+    const prepared = nextScene.preparePerformanceTransition(result.performance, audio.currentTime);
     play.disabled = true;
     scrub.disabled = true;
-    statusTitle.textContent = "Moving marble platforms";
-    statusDetail.textContent = `${marbleStatus(result.performance)} | ${transition.platformCount} platforms moving | ${transition.durationMs} ms`;
+    statusTitle.textContent = "Planning safe platform movement";
+    statusDetail.textContent = `${marbleStatus(result.performance)} | checking intermediate clearance`;
     renderAt(audio.currentTime);
+    beginPreparedMarbleTransition(nextScene, result, prepared);
     return;
   } else {
     scene = nextScene;
@@ -455,6 +485,7 @@ async function loadConcept(concept: string): Promise<void> {
   play.disabled = false;
   scrub.disabled = false;
   marblePlanner.invalidate();
+  marbleTransitionRouter.invalidate();
   pendingMarbleActivationResult = undefined;
   const wasThree = scene?.backendKind === "three";
   destroyActiveScene();
@@ -730,6 +761,7 @@ void start().catch((error: unknown) => {
   audio.load();
   pane?.dispose();
   marblePlanner.dispose();
+  marbleTransitionRouter.dispose();
   destroyActiveScene();
   destroyPixiBackend();
 });

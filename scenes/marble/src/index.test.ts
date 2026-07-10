@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildFixtureSong } from "@reaper-viz/core";
 import { compileMarble, marbleTargetClearance, sampleMarblePose } from "@reaper-viz/compiler-marble";
 import { PerspectiveCamera, Vector3 } from "three";
-import { blendMarbleCamera, interpolateMarblePathSegment, interpolateMarblePlatformCarrier, interpolateMarbleTarget, marblePlatformCarrierTransform, marblePlatformTransitionDuration, marblePlatformTransitionProgress, marblePlatformVisualSize, prepareMarbleActivation, prepareMarblePerformanceTransition, sampleMarbleCamera, type MarbleCameraPose } from "./index.js";
+import { blendMarbleCamera, interpolateMarblePathSegment, interpolateMarblePlatformCarrier, interpolateMarbleTarget, interpolateMarbleTargetRoute, marblePlatformCarrierTransform, marblePlatformTransitionDuration, marblePlatformTransitionProgress, marblePlatformVisualSize, prepareMarbleActivation, prepareMarblePerformanceTransition, sampleMarbleCamera, type MarbleCameraPose } from "./index.js";
 
 function distance(a: [number, number, number], b: [number, number, number]): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
@@ -159,6 +159,10 @@ describe("Marble live-plan activation", () => {
     expect(middle.pos[1]).toBeCloseTo(target.pos[1] - 0.5, 10);
     expect(middle.pos[2]).toBeCloseTo(target.pos[2] + 1.5, 10);
     expect(Math.abs(middle.rotation[2] - from.rotation[2])).toBeLessThan(0.11);
+    const routedMiddle = interpolateMarbleTargetRoute(from, to, 0.5, [0, 0, 2]);
+    expect(routedMiddle.pos[2]).toBeCloseTo(target.pos[2] + 3.5, 10);
+    expect(interpolateMarbleTargetRoute(from, to, 0, [0, 0, 2]).pos).toEqual(from.pos);
+    expect(interpolateMarbleTargetRoute(from, to, 1, [0, 0, 2]).pos[2]).toBeCloseTo(to.pos[2], 10);
   });
 
   it("aligns a transform-only plan at the held marble time", () => {

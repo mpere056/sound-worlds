@@ -95,6 +95,18 @@ export interface MarblePlatformTransition {
   toCarriers: Map<string, MarblePlatformCarrierTransform>;
   fromPath: Map<string, MarblePathSegment>;
   toPath: Map<string, MarblePathSegment>;
+  targetOffsets: Map<string, [number, number, number]>;
+  performance: MarblePerformance;
+}
+
+export interface MarblePreparedTransition {
+  songT: number;
+  fromTargets: Map<string, MarbleTarget>;
+  toTargets: Map<string, MarbleTarget>;
+  fromCarriers: Map<string, MarblePlatformCarrierTransform>;
+  toCarriers: Map<string, MarblePlatformCarrierTransform>;
+  fromPath: Map<string, MarblePathSegment>;
+  toPath: Map<string, MarblePathSegment>;
   performance: MarblePerformance;
 }
 
@@ -287,6 +299,22 @@ export function interpolateMarbleTarget(from: MarbleTarget, to: MarbleTarget, ra
     contactPos: from.contactPos.map((value, index) => value + (to.contactPos[index]! - value) * progress) as [number, number, number],
     rotation: from.rotation.map((value, index) => interpolateAngle(value, to.rotation[index]!, progress)) as [number, number, number],
     size: from.size.map((value, index) => value + (to.size[index]! - value) * progress) as [number, number, number],
+  };
+}
+
+export function interpolateMarbleTargetRoute(
+  from: MarbleTarget,
+  to: MarbleTarget,
+  raw: number,
+  offset: [number, number, number] = [0, 0, 0],
+): MarbleTarget {
+  const progress = clamp(raw, 0, 1);
+  const target = interpolateMarbleTarget(from, to, progress);
+  const envelope = Math.sin(Math.PI * progress);
+  return {
+    ...target,
+    pos: target.pos.map((value, index) => value + offset[index]! * envelope) as [number, number, number],
+    contactPos: target.contactPos.map((value, index) => value + offset[index]! * envelope) as [number, number, number],
   };
 }
 
@@ -937,7 +965,7 @@ export class MarbleScene {
     const progress = marblePlatformTransitionProgress((nowMs - transition.startedAtMs) / transition.durationMs);
     const targets = new Map([...transition.fromTargets].map(([targetId, from]) => {
       const to = transition.toTargets.get(targetId);
-      return [targetId, to ? interpolateMarbleTarget(from, to, progress) : from];
+      return [targetId, to ? interpolateMarbleTargetRoute(from, to, progress, transition.targetOffsets.get(targetId)) : from];
     }));
     const carriers = new Map([...transition.fromCarriers].map(([targetId, from]) => {
       const to = transition.toCarriers.get(targetId);
@@ -960,7 +988,7 @@ export class MarbleScene {
       const meshes = this.#targetMeshes.get(targetId);
       if (!to || !meshes) continue;
       this.#applyTargetVisual(
-        interpolateMarbleTarget(from, to, progress),
+        interpolateMarbleTargetRoute(from, to, progress, transition.targetOffsets.get(targetId)),
         meshes,
         this.#svgTargets.get(targetId),
         interpolateMarblePlatformCarrierTransform(
@@ -1070,19 +1098,27 @@ export class MarbleScene {
     }
   }
 
-  transitionPerformance(performance: MarblePerformance, currentT: number, durationMs?: number): MarbleTransitionStart {
+  preparePerformanceTransition(performance: MarblePerformance, currentT: number): MarblePreparedTransition {
     const nowMs = this.#now();
     const displayed = this.#platformTransitionState(nowMs);
+    if (this.#platformTransition) {
+      for (const [targetId, target] of displayed.targets) {
+        const meshes = this.#targetMeshes.get(targetId);
+        if (meshes) this.#applyTargetVisual(target, meshes, this.#svgTargets.get(targetId), displayed.carriers.get(targetId));
+      }
+      for (const [segmentId, segment] of displayed.path) {
+        const meshes = this.#railMeshes.get(segmentId);
+        if (meshes) this.#applyRailVisual(segment, meshes);
+      }
+      this.#platformTransition = undefined;
+    }
     const fromTargets = displayed.targets;
     const alignedPerformance = prepareMarblePerformanceTransition(this.#performance, performance, currentT);
     const toTargets = new Map(alignedPerformance.statics.targets.map((target) => [target.id, target]));
     const toCarriers = new Map([...toTargets].map(([targetId, target]) => [targetId, marblePlatformCarrierTransform(target)]));
     const toPath = new Map(alignedPerformance.statics.path.map((segment) => [segment.id, segment]));
-    const resolvedDurationMs = durationMs ?? marblePlatformTransitionDuration(fromTargets, toTargets);
-    this.#platformTransition = {
+    return {
       songT: currentT,
-      startedAtMs: nowMs,
-      durationMs: resolvedDurationMs,
       fromTargets,
       toTargets,
       fromCarriers: displayed.carriers,
@@ -1091,11 +1127,36 @@ export class MarbleScene {
       toPath,
       performance: alignedPerformance,
     };
+  }
+
+  startPreparedTransition(
+    prepared: MarblePreparedTransition,
+    targetOffsets: ReadonlyMap<string, [number, number, number]> = new Map(),
+    durationMs?: number,
+  ): MarbleTransitionStart {
+    const resolvedDurationMs = durationMs ?? marblePlatformTransitionDuration(prepared.fromTargets, prepared.toTargets);
+    this.#platformTransition = {
+      songT: prepared.songT,
+      startedAtMs: this.#now(),
+      durationMs: resolvedDurationMs,
+      fromTargets: prepared.fromTargets,
+      toTargets: prepared.toTargets,
+      fromCarriers: prepared.fromCarriers,
+      toCarriers: prepared.toCarriers,
+      fromPath: prepared.fromPath,
+      toPath: prepared.toPath,
+      targetOffsets: new Map(targetOffsets),
+      performance: prepared.performance,
+    };
     return {
       durationMs: resolvedDurationMs,
-      platformCount: [...fromTargets.keys()].filter((targetId) => toTargets.has(targetId)).length,
-      motionMix: { ...alignedPerformance.statics.motionMix },
+      platformCount: [...prepared.fromTargets.keys()].filter((targetId) => prepared.toTargets.has(targetId)).length,
+      motionMix: { ...prepared.performance.statics.motionMix },
     };
+  }
+
+  transitionPerformance(performance: MarblePerformance, currentT: number, durationMs?: number): MarbleTransitionStart {
+    return this.startPreparedTransition(this.preparePerformanceTransition(performance, currentT), new Map(), durationMs);
   }
 
   isTransitioning(): boolean {

@@ -487,6 +487,31 @@ Worker routing gates:
 - Platform position is continuous when a route request supersedes an active
   morph.
 
+### Implemented slice: prepared-transition routing worker
+
+- The app now captures a `MarblePreparedTransition` from the exact displayed
+  target, carrier, and rail transforms. Any active morph is frozen at that
+  sampled state while audio and marble time remain held.
+- A dedicated transition-routing worker receives flat `MarbleTarget` arrays,
+  never Three.js objects. It samples oriented target boxes, searches
+  deterministic 3D staging arcs, and returns per-target offsets plus a
+  120-sample overlap certificate.
+- Visible movement starts only when the newest worker result reports zero
+  overlaps. An uncertified result holds the current map instead of animating an
+  intersecting fallback.
+- A superseding request terminates the old routing worker and creates a fresh
+  one. This is necessary because a synchronous worker calculation cannot process
+  a cancellation message until it returns.
+- Unit tests cover a direct platform swap, a compiled vertical-heavy extreme,
+  route certification, arc endpoint continuity, and stale-worker termination.
+- In a clean 19-platform browser run, 35/20/45 routing took 27.3 ms in the
+  worker. A rapid change ending at 60/20/20 took 1,890.7 ms in the worker but
+  caused no new main-thread long task: frame p95 stayed 16.8 ms and frame max
+  42.7 ms, then the exact final state activated.
+- Remaining routing work: reduce difficult-route worker p95 toward 100 ms,
+  broaden zero-overlap certification to lateral- and depth-heavy extremes, and
+  add a worker timeout/retry policy before enabling webcam input.
+
 ## Phase P5 - High-rate control coordinator (in progress)
 
 ### Work
