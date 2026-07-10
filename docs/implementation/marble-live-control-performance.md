@@ -539,6 +539,26 @@ Commit and push the coordinator before adding camera access or MediaPipe.
   optional low-latency filtering for noisy gesture input, plus the five-minute
   synthetic stream and final-value catch-up gates.
 
+### Implemented slice: complete visual fallback smoothing
+
+- Safe same-shape future targets continue to use collision-checked position,
+  shortest-path rotation, and size interpolation.
+- Every other non-contact platform now scales smoothly to 4% before activation
+  and grows from 4% at its new validated transform over 350 ms. This covers
+  shape changes, withheld collision morphs, and already-played platforms that
+  previously rebuilt all at once.
+- Crossfades inherit each target's currently displayed scale when another plan
+  arrives, so reversing or continuing a slider drag cannot pop a shrinking
+  platform back to full size.
+- The contact platform remains solid through impact. After activation it shrinks
+  at the old transform, switches transforms only while nearly invisible, and
+  grows back as the marble departs.
+- The reference 20/40/40 drag reports 18 transitioning platforms out of 19; the
+  sole pre-impact exception is the contact platform handled by the post-impact
+  transition. Frame p95 remained 17.4 ms during the continuous drag.
+- Tests cover safe transform morphing, intersecting-layout crossfade fallback,
+  smooth scale endpoints/midpoint, and the contact-platform two-stage scale.
+
 ## Phase P6 - MediaPipe hand-control adapter
 
 ### Design

@@ -341,7 +341,7 @@ function applyPlannedMarble(result: MarblePlannerSuccess): void {
     if (boundary) {
       pendingMarbleActivationResult = result;
       statusTitle.textContent = "Marble plan ready";
-      statusDetail.textContent = `${marbleStatus(result.performance)} | ${boundary.morphTargetCount} future targets morphing | activates at ${formatTime(boundary.activationT)}`;
+      statusDetail.textContent = `${marbleStatus(result.performance)} | ${boundary.morphTargetCount} platforms transitioning | activates at ${formatTime(boundary.activationT)}`;
       return;
     }
   } else {

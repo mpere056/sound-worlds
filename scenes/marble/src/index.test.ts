@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildFixtureSong } from "@reaper-viz/core";
 import { compileMarble, marbleTargetClearance, sampleMarblePose } from "@reaper-viz/compiler-marble";
 import { PerspectiveCamera, Vector3 } from "three";
-import { blendMarbleCamera, interpolateMarbleTarget, prepareMarbleActivation, prepareMarbleTargetMorph, sampleMarbleCamera, type MarbleCameraPose } from "./index.js";
+import { blendMarbleCamera, interpolateMarbleScale, interpolateMarbleTarget, marbleBoundaryTransitionScale, prepareMarbleActivation, prepareMarbleTargetMorph, sampleMarbleCamera, type MarbleCameraPose } from "./index.js";
 
 function distance(a: [number, number, number], b: [number, number, number]): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
@@ -146,7 +146,7 @@ describe("Marble live-plan activation", () => {
     expect(Math.abs(middle.rotation[2] - from.rotation[2])).toBeLessThan(0.11);
   });
 
-  it("accepts safe future-target morphs and rejects an intersecting endpoint", () => {
+  it("accepts safe future-target morphs and crossfades an intersecting fallback", () => {
     const song = buildFixtureSong({ bars: 3, patterns: [{ role: "keys", beats: [0, 3, 6, 9], pitch: 52, kind: "note" }] });
     const active = compileMarble(song);
     const activation = prepareMarbleActivation(active, active, 0);
@@ -161,6 +161,19 @@ describe("Marble live-plan activation", () => {
     const stationaryTarget = unsafePerformance.statics.targets[activation!.noteIndex]!;
     movingTarget.pos = [...stationaryTarget.pos];
     movingTarget.contactPos = [...stationaryTarget.contactPos];
-    expect(prepareMarbleTargetMorph(active, unsafePerformance, 0, activation!)).toBeUndefined();
+    const fallback = prepareMarbleTargetMorph(active, unsafePerformance, 0, activation!);
+    expect(fallback?.targetIds).toHaveLength(0);
+    expect(fallback?.fadeTargetIds.length).toBeGreaterThan(0);
+    expect(fallback?.fadeTargetIds).not.toContain(active.statics.impacts[activation!.noteIndex]!.targetId);
+  });
+
+  it("smoothly scales withheld platforms out and back in", () => {
+    expect(interpolateMarbleScale(1, 0.04, 0)).toBe(1);
+    expect(interpolateMarbleScale(1, 0.04, 1)).toBeCloseTo(0.04, 10);
+    expect(interpolateMarbleScale(0.04, 1, 0.5)).toBeCloseTo(0.52, 10);
+    expect(interpolateMarbleScale(0.04, 1, 1)).toBe(1);
+    expect(marbleBoundaryTransitionScale(0)).toBe(1);
+    expect(marbleBoundaryTransitionScale(0.5)).toBeCloseTo(0.04, 10);
+    expect(marbleBoundaryTransitionScale(1)).toBe(1);
   });
 });
