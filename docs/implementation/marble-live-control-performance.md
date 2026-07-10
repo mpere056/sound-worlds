@@ -546,19 +546,66 @@ Commit and push the coordinator before adding camera access or MediaPipe.
 ### Design
 
 The three percentages have only two independent degrees of freedom because they
-must total 100. Represent them as barycentric coordinates inside a triangular
-control surface rather than trying to infer three unrelated hand dimensions.
+must total 100. Expose three direct relative controls, but project every update
+back onto the bounded 100% simplex instead of treating the sliders as three
+independent values.
 
-Suggested first mapping:
+First one-hand mapping:
 
-- index fingertip/palm horizontal motion selects lateral versus depth emphasis;
-- vertical motion selects vertical emphasis;
-- the triangle conversion produces all three percentages summing to 100;
-- pinch engages control;
-- open hand releases and holds the last stable mix;
-- loss of tracking holds the last value and times out safely;
-- optional second-hand gestures switch mapping modes only after the one-hand
-  interaction is accepted.
+| Pinch | Controlled percentage | Motion |
+| --- | --- | --- |
+| Thumb + index fingertip | Up/down | Hand up increases; hand down decreases |
+| Thumb + middle fingertip | Left/right | Hand up increases; hand down decreases |
+| Thumb + ring fingertip | Front/back | Hand up increases; hand down decreases |
+
+Each pinch is a relative grab, not an absolute screen coordinate. On engagement,
+capture the hand's filtered vertical position and the current desired mix. Map
+subsequent vertical displacement to the selected percentage, then distribute the
+opposite delta across the other two percentages in proportion to their available
+room. Respect the existing 10-80 bounds and preserve an exact integer total of
+100. This avoids a jump when control starts and makes every finger mapping usable
+at every camera position.
+
+Only one pinch owns control at a time. Determine the active finger from
+thumb-tip distance normalized by palm size, require a short stable engagement,
+and use separate engage/release thresholds. If two pinches are ambiguous, retain
+the current owner or remain disengaged; never alternate controls frame by frame.
+Releasing the pinch holds the last stable mix. Tracking loss also holds, then
+disengages after a bounded timeout without inventing a final movement.
+
+The camera preview is mirrored for the performer, while landmark coordinates
+are normalized explicitly so mirroring cannot reverse the vertical control.
+Provide a brief neutral-position and motion-range calibration. Keep gain,
+direction, pinch thresholds, and handedness configurable in development rather
+than baking one person's hand geometry into the interaction.
+
+Use Hand Landmarker landmarks directly for the first release. The stock Gesture
+Recognizer does not provide these three application-specific pinch controls;
+distance and joint geometry are simpler to test, calibrate, and tune than a
+custom trained gesture classifier. Reconsider a custom model only if real-user
+recordings show that geometric recognition cannot meet the false-switch gate.
+
+### Architecture
+
+Keep TypeScript for the application, gesture state machine, filtering, workers,
+and slider integration. MediaPipe already executes its model through its web
+runtime/WASM, so moving the surrounding control code to C++ would add a second
+toolchain without reducing the dominant inference cost.
+
+```text
+webcam -> frame sampler -> vision worker -> landmarks
+       -> pinch state machine -> relative delta -> bounded mix projection
+       -> One Euro filter/deadband -> MarbleMotionInput coordinator
+       -> immediate control display + coalesced planner worker
+```
+
+Run at most one inference at a time and drop superseded camera frames rather
+than queueing them. Start with a 30 FPS, 640x480 camera stream and measure before
+raising either value. Use `requestVideoFrameCallback()` when available, transfer
+an `ImageBitmap` or `VideoFrame` to the dedicated vision worker, and retain a
+portable canvas/image fallback. Close transferred frame resources immediately
+after inference. The planner worker remains separate so route compilation can
+neither delay hand tracking nor consume its frame queue.
 
 ### Work
 
@@ -569,17 +616,30 @@ Suggested first mapping:
   not delay hand inference.
 - Transfer frames efficiently where supported; do not send camera frames to a
   server.
-- Filter landmark noise with a One Euro filter or equivalent low-latency filter.
-- Add confidence thresholds, hysteresis, mirroring, calibration, and no-hand
-  behavior.
+- Add a pure, unit-tested pinch recognizer using palm-normalized thumb-to-index,
+  thumb-to-middle, and thumb-to-ring distances plus finger joint geometry.
+- Add an explicit gesture state machine: `idle -> candidate -> engaged ->
+  releasing -> idle`, with stable ownership and timestamps.
+- Filter the controlling hand coordinate with a One Euro filter. Apply a small
+  output deadband and percentage slew limit after mix projection; do not filter
+  pinch ownership so heavily that engagement feels delayed.
+- Implement bounded mix projection as a shared pure function used by both hand
+  input and slider tests.
+- Add confidence thresholds, engage/release hysteresis, mirrored preview,
+  calibration, handedness selection, and no-hand behavior.
 - Map landmarks to the existing `MarbleMotionInput` interface.
 - Request camera permission only from an explicit user action.
 - Keep camera input local and stop tracks when the adapter is disabled.
+- Expose a compact camera status and active-control indicator, but keep the
+  webcam preview optional so the marble remains the primary visual.
 
 References:
 
 - [MediaPipe Hand Landmarker for Web](https://developers.google.com/edge/mediapipe/solutions/vision/hand_landmarker/web_js)
 - [MDN: Using Web Workers](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Using_web_workers)
+- [MDN: `getUserMedia()`](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia)
+- [MDN: `requestVideoFrameCallback()`](https://developer.mozilla.org/en-US/docs/Web/API/HTMLVideoElement/requestVideoFrameCallback)
+- [MDN: `VideoFrame`](https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame)
 - [Three.js: How to update things](https://threejs.org/manual/en/how-to-update-things.html)
 
 ### Gate
@@ -588,14 +648,36 @@ References:
 - p95 hand-to-visible-control latency <= 140 ms.
 - No main-thread inference long tasks.
 - A stationary hand produces no visible platform jitter.
+- A pinch engages only after 3 consecutive confident results or 80 ms,
+  whichever requires more evidence; release uses independent hysteresis.
+- Wrong-control switches during a two-minute scripted gesture fixture: 0.
+- Every emitted mix remains within 10-80 per axis and sums exactly to 100.
+- A 10% hand movement can be held within 1 percentage point after settling.
 - A five-minute hand-control session has no stale plan activation, queue growth,
   renderer recreation, or console errors.
 - Camera disable/re-enable and permission denial leave slider control usable.
 
+### Delivery slices
+
+1. Finish P5 diagnostics, filtering hooks, synthetic 60 Hz durability test, and
+   intermediate platform-overlap routing before introducing camera input.
+2. Add camera lifecycle and a worker benchmark with recorded/synthetic frames;
+   no gesture-to-slider behavior yet.
+3. Add the pure pinch state machine, bounded mix projection, and prerecorded
+   landmark fixtures for all three fingers, ambiguity, and tracking loss.
+4. Connect landmarks to the existing coordinator and show active control,
+   calibration, and permission/error states.
+5. Tune with the actual webcam under stationary, slow, fast, partial-hand,
+   crossed-finger, and poor-light conditions; run the latency and five-minute
+   resource gates.
+6. Only after those gates pass, evaluate two hands, horizontal gestures, or a
+   custom recognizer as separate enhancements.
+
 ### Commit point
 
-Commit and push the worker-based detector, then gesture mapping, then UX/safety
-states. Do not land MediaPipe as one opaque commit.
+Commit and push camera lifecycle, worker inference, geometric recognition,
+coordinator integration, and UX/safety states separately. Do not land MediaPipe
+as one opaque commit.
 
 ## Phase P7 - C++/Rust WebAssembly decision gate
 
