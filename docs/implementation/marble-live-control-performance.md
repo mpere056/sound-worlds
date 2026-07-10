@@ -1,6 +1,6 @@
 # Marble live-control performance implementation plan
 
-Status: in progress (P0-P2 complete; P3 renderer ownership implemented, pooling next)
+Status: in progress (P0-P2 complete; P3 renderer ownership and primitive pooling implemented)
 
 Last updated: 2026-07-10
 
@@ -353,7 +353,7 @@ queuePerformance(plan: PreparedMarblePlan, transition: RouteTransition): void;
 
 Commit and push persistent renderer ownership first, then mesh/geometry pooling.
 
-### Implemented slice: persistent renderer ownership
+### Implemented slices: persistent renderer and primitive pooling
 
 - `MarbleScene.replacePerformance()` now keeps the WebGL renderer, context,
   Three.js scene, camera, lights, wall, marble, tuning object, and SVG overlay
@@ -367,9 +367,17 @@ Commit and push persistent renderer ownership first, then mesh/geometry pooling.
   `1`, update count advanced from `1` to `2`, and the overlay count remained `1`.
   Scene application measured 8.8-11.7 ms and first render measured 20.3-24.7 ms,
   down from the P1 119 ms first-render baseline.
-- P3 remains open: target/rail geometry and materials are still rebuilt. Pooling
-  and transform updates must bring validated-plan application below 4 ms and
-  keep geometry/program counts bounded across the 100-change gate.
+- Unit box, cylinder, sphere, and circle geometry is shared across target bases,
+  hardware, rods, rail ties, and supports. Static hardware, target-color, rod,
+  rail, tie, and support materials are cached for the scene lifetime; plan-
+  specific route tubes and animated glow/shadow materials remain owned by the
+  active performance.
+- The browser extreme now applies in 2.2 ms and first-renders in 14.6 ms with 11
+  live geometries instead of 54. A subsequent balanced route retained the same
+  renderer and 11 geometries, applied in 4.5 ms, and first-rendered in 5.8 ms.
+- P3 remains open: stable target groups and route-buffer reuse must remove the
+  remaining object-tree churn, consistently bring application below 4 ms, and
+  pass the 100-change bounded-resource gate.
 
 ## Phase P4 - Smooth, collision-aware route transitions
 

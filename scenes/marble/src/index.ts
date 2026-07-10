@@ -1,5 +1,6 @@
 import {
   AmbientLight,
+  BufferGeometry,
   BoxGeometry,
   CanvasTexture,
   CatmullRomCurve3,
@@ -61,6 +62,7 @@ interface TargetMeshes {
   base: Mesh<BoxGeometry | CylinderGeometry, MeshStandardMaterial>;
   home: Vector3;
   baseRotation: [number, number, number];
+  baseScale: Vector3;
   glow: Mesh<SphereGeometry, MeshBasicLike>;
   shadow: Mesh<CircleGeometry, MeshBasicMaterial>;
   hardware: Group;
@@ -225,35 +227,32 @@ function createCompatibleWebGlContext(canvas: HTMLCanvasElement): WebGL2Renderin
   return context;
 }
 
-function targetGeometry(target: MarbleTarget): BoxGeometry | CylinderGeometry {
-  if (target.kind === "peg" || target.kind === "chime") {
-    return new CylinderGeometry(target.size[1] * 0.9, target.size[1] * 0.9, target.size[0], 18);
-  }
-  return new BoxGeometry(target.size[0], target.size[1], target.size[2]);
+interface TargetPrimitivePool {
+  box: BoxGeometry;
+  cylinder: CylinderGeometry;
+  sphere: SphereGeometry;
 }
 
-function targetMaterial(target: MarbleTarget): MeshStandardMaterial {
-  const color = hexNumber(target.color);
-  if (target.material === "brass") return new MeshStandardMaterial({ color: 0xd6a63e, metalness: 0.72, roughness: 0.28 });
-  if (target.material === "rubber") return new MeshStandardMaterial({ color, metalness: 0.1, roughness: 0.72 });
-  if (target.material === "glow") return new MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.24, metalness: 0.18, roughness: 0.32 });
-  return new MeshStandardMaterial({ color, metalness: 0.42, roughness: 0.36 });
+interface TargetMaterialPool {
+  darkMetal: MeshStandardMaterial;
+  screwMetal: MeshStandardMaterial;
+  accent: MeshStandardMaterial;
 }
 
-function addTargetHardware(target: MarbleTarget, group: Group): Group {
+function addTargetHardware(target: MarbleTarget, group: Group, geometry: TargetPrimitivePool, materials: TargetMaterialPool): Group {
   const hardware = new Group();
-  const darkMetal = new MeshStandardMaterial({ color: 0x1d232b, metalness: 0.82, roughness: 0.23 });
-  const screwMetal = new MeshStandardMaterial({ color: 0xdcecf4, metalness: 0.66, roughness: 0.18 });
-  const accent = new MeshStandardMaterial({ color: hexNumber(target.color), emissive: hexNumber(target.color), emissiveIntensity: 0.16, metalness: 0.22, roughness: 0.3, transparent: true, opacity: 0.8 });
-  const backplate = new Mesh(new BoxGeometry(target.size[0] * 1.1, Math.max(0.035, target.size[1] * 0.35), target.size[2] * 1.16), darkMetal);
+  const backplate = new Mesh(geometry.box, materials.darkMetal);
+  backplate.scale.set(target.size[0] * 1.1, Math.max(0.035, target.size[1] * 0.35), target.size[2] * 1.16);
   backplate.position.set(0, -target.size[1] * 0.58, -0.07);
   hardware.add(backplate);
 
   if (target.kind === "peg" || target.kind === "chime") {
-    const cap = new Mesh(new SphereGeometry(target.size[1] * 1.15, 18, 10), accent);
+    const cap = new Mesh(geometry.sphere, materials.accent);
+    cap.scale.setScalar(target.size[1] * 1.15);
     cap.position.set(0, 0.03, 0.02);
     hardware.add(cap);
-    const collar = new Mesh(new CylinderGeometry(target.size[1] * 1.22, target.size[1] * 1.22, 0.035, 18), screwMetal);
+    const collar = new Mesh(geometry.cylinder, materials.screwMetal);
+    collar.scale.set(target.size[1] * 1.22, 0.035, target.size[1] * 1.22);
     collar.rotation.x = Math.PI / 2;
     collar.position.set(0, 0, -0.025);
     hardware.add(collar);
@@ -261,11 +260,13 @@ function addTargetHardware(target: MarbleTarget, group: Group): Group {
     const screwOffsetX = target.size[0] * 0.38;
     const screwOffsetZ = target.size[2] * 0.32;
     for (const [x, z] of [[-screwOffsetX, -screwOffsetZ], [screwOffsetX, -screwOffsetZ], [-screwOffsetX, screwOffsetZ], [screwOffsetX, screwOffsetZ]] as const) {
-      const screw = new Mesh(new CylinderGeometry(0.045, 0.045, 0.025, 16), screwMetal.clone());
+      const screw = new Mesh(geometry.cylinder, materials.screwMetal);
+      screw.scale.set(0.045, 0.025, 0.045);
       screw.rotation.x = Math.PI / 2;
       screw.position.set(x, target.size[1] * 0.72, z);
       hardware.add(screw);
-      const slot = new Mesh(new BoxGeometry(0.062, 0.01, 0.012), darkMetal.clone());
+      const slot = new Mesh(geometry.box, materials.darkMetal);
+      slot.scale.set(0.062, 0.01, 0.012);
       slot.position.set(x, target.size[1] * 0.737, z);
       slot.rotation.y = (x + z) > 0 ? 0.6 : -0.6;
       hardware.add(slot);
@@ -274,7 +275,8 @@ function addTargetHardware(target: MarbleTarget, group: Group): Group {
 
   const compact = target.kind === "peg" || target.kind === "chime";
   const bracketLength = compact ? 0.18 : 0.52;
-  const bracket = new Mesh(new CylinderGeometry(0.018, 0.018, bracketLength, 8), darkMetal.clone());
+  const bracket = new Mesh(geometry.cylinder, materials.darkMetal);
+  bracket.scale.set(0.018, bracketLength, 0.018);
   bracket.rotation.z = Math.PI / 2;
   bracket.position.set(-target.size[0] * 0.55, compact ? -0.08 : -0.2, compact ? -0.12 : -0.22);
   hardware.add(bracket);
@@ -288,6 +290,24 @@ export class MarbleScene {
   #performance: MarblePerformance;
   readonly #renderer: WebGLRenderer;
   readonly #rendererIdentity = nextRendererIdentity++;
+  readonly #primitiveGeometry = {
+    box: new BoxGeometry(1, 1, 1),
+    cylinder: new CylinderGeometry(1, 1, 1, 18),
+    sphere: new SphereGeometry(1, 20, 12),
+    circle: new CircleGeometry(1, 28),
+  };
+  readonly #sharedMaterials = {
+    darkMetal: new MeshStandardMaterial({ color: 0x1d232b, metalness: 0.82, roughness: 0.23 }),
+    screwMetal: new MeshStandardMaterial({ color: 0xdcecf4, metalness: 0.66, roughness: 0.18 }),
+    rod: new MeshStandardMaterial({ color: 0x1b1d23, metalness: 0.75, roughness: 0.26 }),
+    rail: new MeshStandardMaterial({ color: 0x75c5d0, emissive: 0x0e2c36, emissiveIntensity: 0.12, metalness: 0.54, roughness: 0.38, transparent: true, opacity: 0.62 }),
+    support: new MeshStandardMaterial({ color: 0x151a20, metalness: 0.8, roughness: 0.26 }),
+    tie: new MeshStandardMaterial({ color: 0x24323b, metalness: 0.38, roughness: 0.45 }),
+  };
+  readonly #targetMaterials = new Map<string, MeshStandardMaterial>();
+  readonly #accentMaterials = new Map<string, MeshStandardMaterial>();
+  readonly #sharedGeometries = new Set<BufferGeometry>(Object.values(this.#primitiveGeometry));
+  readonly #sharedMaterialSet = new Set<Material>(Object.values(this.#sharedMaterials));
   readonly #scene = new Scene();
   readonly #camera: PerspectiveCamera;
   readonly #targetMeshes = new Map<string, TargetMeshes>();
@@ -306,6 +326,33 @@ export class MarbleScene {
   readonly #svgMarbleCore: SVGCircleElement;
   #disposed = false;
   #performanceUpdates = 0;
+
+  #targetMaterial(target: MarbleTarget): MeshStandardMaterial {
+    const key = `${target.material}:${target.color}`;
+    const cached = this.#targetMaterials.get(key);
+    if (cached) return cached;
+    const color = hexNumber(target.color);
+    const material = target.material === "brass"
+      ? new MeshStandardMaterial({ color: 0xd6a63e, metalness: 0.72, roughness: 0.28 })
+      : target.material === "rubber"
+        ? new MeshStandardMaterial({ color, metalness: 0.1, roughness: 0.72 })
+        : target.material === "glow"
+          ? new MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.24, metalness: 0.18, roughness: 0.32 })
+          : new MeshStandardMaterial({ color, metalness: 0.42, roughness: 0.36 });
+    this.#targetMaterials.set(key, material);
+    this.#sharedMaterialSet.add(material);
+    return material;
+  }
+
+  #accentMaterial(colorValue: string): MeshStandardMaterial {
+    const cached = this.#accentMaterials.get(colorValue);
+    if (cached) return cached;
+    const color = hexNumber(colorValue);
+    const material = new MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.16, metalness: 0.22, roughness: 0.3, transparent: true, opacity: 0.8 });
+    this.#accentMaterials.set(colorValue, material);
+    this.#sharedMaterialSet.add(material);
+    return material;
+  }
 
   constructor(canvas: HTMLCanvasElement, performance: MarblePerformance, tuning?: MarbleTuning) {
     this.tuning = tuning ?? { glow: 0.78, camera: 0.88, targetScale: 1, tail: 0.8 };
@@ -490,31 +537,40 @@ export class MarbleScene {
       const group = new Group();
       group.position.set(...target.pos);
       group.rotation.set(target.rotation[0], target.rotation[1], target.rotation[2]);
-      const base = new Mesh(targetGeometry(target), targetMaterial(target));
-      if (target.kind === "peg" || target.kind === "chime") base.rotation.z += Math.PI / 2;
-      const hardware = addTargetHardware(target, group);
+      const compact = target.kind === "peg" || target.kind === "chime";
+      const base = new Mesh(compact ? this.#primitiveGeometry.cylinder : this.#primitiveGeometry.box, this.#targetMaterial(target));
+      const baseScale = compact
+        ? new Vector3(target.size[1] * 0.9, target.size[0], target.size[1] * 0.9)
+        : new Vector3(...target.size);
+      base.scale.copy(baseScale);
+      if (compact) base.rotation.z += Math.PI / 2;
+      const hardware = addTargetHardware(target, group, this.#primitiveGeometry, {
+        darkMetal: this.#sharedMaterials.darkMetal,
+        screwMetal: this.#sharedMaterials.screwMetal,
+        accent: this.#accentMaterial(target.color),
+      });
       group.add(base);
       const glowMaterial = new MeshStandardMaterial({ color: hexNumber(target.color), emissive: hexNumber(target.color), emissiveIntensity: 0, transparent: true, opacity: 0 });
-      const glow = new Mesh(new SphereGeometry(0.42, 20, 12), glowMaterial);
+      const glow = new Mesh(this.#primitiveGeometry.sphere, glowMaterial);
       glow.position.copy(group.position);
       glow.scale.setScalar(1);
       const shadow = new Mesh(
-        new CircleGeometry(0.42, 28),
+        this.#primitiveGeometry.circle,
         new MeshBasicMaterial({ color: 0x020813, transparent: true, opacity: 0.2, depthWrite: false }),
       );
       shadow.position.set(target.pos[0] - 0.08, target.pos[1] - 0.1, -0.405);
       shadow.scale.set(1.4, 0.46, 1);
-      this.#targetMeshes.set(target.id, { group, base, home: group.position.clone(), baseRotation: [group.rotation.x, group.rotation.y, group.rotation.z], glow, shadow, hardware });
+      this.#targetMeshes.set(target.id, { group, base, home: group.position.clone(), baseRotation: [group.rotation.x, group.rotation.y, group.rotation.z], baseScale, glow, shadow, hardware });
       this.#performanceObjects.add(shadow, group, glow);
     }
   }
 
   #addRods(): void {
     const targets = this.#performance.statics.targets;
-    const rodMaterial = new MeshStandardMaterial({ color: 0x1b1d23, metalness: 0.75, roughness: 0.26 });
     for (const target of targets) {
       if (target.kind === "peg" || target.kind === "chime") continue;
-      const rod = new Mesh(new CylinderGeometry(0.026, 0.026, 0.86, 10), rodMaterial);
+      const rod = new Mesh(this.#primitiveGeometry.cylinder, this.#sharedMaterials.rod);
+      rod.scale.set(0.026, 0.86, 0.026);
       rod.position.set(target.pos[0] - 0.44, target.pos[1] - 0.18, target.pos[2] - 0.18);
       rod.rotation.z = Math.PI / 2 + target.rotation[2] * 0.45;
       this.#performanceObjects.add(rod);
@@ -541,9 +597,6 @@ export class MarbleScene {
   }
 
   #addRails(): void {
-    const railMaterial = new MeshStandardMaterial({ color: 0x75c5d0, emissive: 0x0e2c36, emissiveIntensity: 0.12, metalness: 0.54, roughness: 0.38, transparent: true, opacity: 0.62 });
-    const supportMaterial = new MeshStandardMaterial({ color: 0x151a20, metalness: 0.8, roughness: 0.26 });
-    const tieMaterial = new MeshStandardMaterial({ color: 0x24323b, metalness: 0.38, roughness: 0.45 });
     for (const segment of this.#performance.statics.path) {
       if (segment.kind !== "rail") continue;
       const points = this.#segmentPoints(segment);
@@ -553,14 +606,15 @@ export class MarbleScene {
       const rightPoints = points.map((point, index) => point.clone().add(railSideAt(points, index).multiplyScalar(-railGap)));
       for (const sidePoints of [leftPoints, rightPoints]) {
         const curve = new CatmullRomCurve3(sidePoints, false, "centripetal", 0.35);
-        const tube = new Mesh(new TubeGeometry(curve, Math.max(8, sidePoints.length * 3), 0.018, 8, false), railMaterial.clone());
+        const tube = new Mesh(new TubeGeometry(curve, Math.max(8, sidePoints.length * 3), 0.018, 8, false), this.#sharedMaterials.rail);
         this.#rails.add(tube);
       }
       const tieStep = 4;
       for (let index = 1; index < points.length - 1; index += tieStep) {
         const point = points[index]!;
         const side = railSideAt(points, index);
-        const tie = new Mesh(new CylinderGeometry(0.012, 0.012, railGap * 2.42, 6), tieMaterial.clone());
+        const tie = new Mesh(this.#primitiveGeometry.cylinder, this.#sharedMaterials.tie);
+        tie.scale.set(0.012, railGap * 2.42, 0.012);
         tie.position.copy(point);
         tie.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), side);
         this.#rails.add(tie);
@@ -569,11 +623,13 @@ export class MarbleScene {
       for (const index of supportIndexes) {
         const point = points[index]!;
         const supportLength = Math.max(0.18, point.z + 0.42);
-        const support = new Mesh(new CylinderGeometry(0.016, 0.016, supportLength, 8), supportMaterial.clone());
+        const support = new Mesh(this.#primitiveGeometry.cylinder, this.#sharedMaterials.support);
+        support.scale.set(0.016, supportLength, 0.016);
         support.position.set(point.x, point.y, (point.z - 0.42) / 2);
         support.rotation.x = Math.PI / 2;
         this.#rails.add(support);
-        const collar = new Mesh(new CylinderGeometry(0.038, 0.038, 0.018, 12), supportMaterial.clone());
+        const collar = new Mesh(this.#primitiveGeometry.cylinder, this.#sharedMaterials.support);
+        collar.scale.set(0.038, 0.018, 0.038);
         collar.position.copy(point);
         collar.rotation.x = Math.PI / 2;
         this.#rails.add(collar);
@@ -645,15 +701,19 @@ export class MarbleScene {
         meshes.baseRotation[1] - recoil * 0.22,
         meshes.baseRotation[2] + Math.sin(t * 20 + targetId.length) * intensity * 0.08,
       );
-      meshes.base.scale.set(this.tuning.targetScale * (1 + intensity * 0.08), this.tuning.targetScale * (1 - Math.max(0, recoil) * 0.18), this.tuning.targetScale * (1 + intensity * 0.05));
+      meshes.base.scale.set(
+        meshes.baseScale.x * this.tuning.targetScale * (1 + intensity * 0.08),
+        meshes.baseScale.y * this.tuning.targetScale * (1 - Math.max(0, recoil) * 0.18),
+        meshes.baseScale.z * this.tuning.targetScale * (1 + intensity * 0.05),
+      );
       meshes.hardware.scale.setScalar(1 + intensity * 0.035);
       meshes.glow.material.opacity = clamp(intensity * 0.18, 0, 0.16);
       meshes.glow.material.emissiveIntensity = intensity * 1.25;
       meshes.glow.position.set(meshes.home.x, meshes.home.y, meshes.home.z + recoil * 0.6);
-      meshes.glow.scale.setScalar(0.48 + intensity * 0.45 + Math.abs(recoil) * 0.7);
+      meshes.glow.scale.setScalar(0.42 * (0.48 + intensity * 0.45 + Math.abs(recoil) * 0.7));
       meshes.shadow.position.set(meshes.home.x - 0.08 - recoil * 0.25, meshes.home.y - 0.1 - recoil * 0.12, -0.405);
       meshes.shadow.material.opacity = clamp(0.16 + intensity * 0.1, 0.08, 0.28);
-      meshes.shadow.scale.set(1.4 + Math.abs(recoil) * 2.2, 0.46 + Math.abs(recoil) * 0.42, 1);
+      meshes.shadow.scale.set(0.42 * (1.4 + Math.abs(recoil) * 2.2), 0.42 * (0.46 + Math.abs(recoil) * 0.42), 1);
     }
     const cameraPose = sampleMarbleCamera(this.#performance.statics.path, t, this.tuning.camera);
     this.#camera.position.set(...cameraPose.position);
@@ -667,10 +727,10 @@ export class MarbleScene {
     if (this.#disposed) return;
     this.#performanceObjects.traverse((object: Object3D) => {
       const mesh = object as Mesh;
-      if (mesh.geometry) mesh.geometry.dispose();
+      if (mesh.geometry && !this.#sharedGeometries.has(mesh.geometry)) mesh.geometry.dispose();
       const material = mesh.material;
-      if (Array.isArray(material)) material.forEach((entry) => disposeMaterial(entry));
-      else if (material) disposeMaterial(material);
+      if (Array.isArray(material)) material.filter((entry) => !this.#sharedMaterialSet.has(entry)).forEach((entry) => disposeMaterial(entry));
+      else if (material && !this.#sharedMaterialSet.has(material)) disposeMaterial(material);
     });
     this.#performanceObjects.clear();
     this.#rails.clear();
@@ -716,6 +776,8 @@ export class MarbleScene {
       if (Array.isArray(material)) material.forEach((entry) => disposeMaterial(entry));
       else if (material) disposeMaterial(material);
     });
+    for (const geometry of this.#sharedGeometries) geometry.dispose();
+    for (const material of this.#sharedMaterialSet) disposeMaterial(material);
     this.#renderer.dispose();
   }
 }
