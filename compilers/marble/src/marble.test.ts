@@ -119,7 +119,7 @@ describe("Marble Music compiler", () => {
     expect(Math.max(...averageSpeeds)).toBeLessThan(3.3);
     expect(Math.max(...averageSpeeds) / Math.min(...averageSpeeds)).toBeLessThan(2);
     for (const segment of moving) {
-      expect(segment.gravityScale).toBeCloseTo(3, 6);
+      expect(segment.gravityScale).toBeCloseTo(2.4, 6);
       expect(segment.kind === "arc" || segment.kind === "rattle" || segment.kind === "cascade").toBe(true);
     }
   });
@@ -180,9 +180,14 @@ describe("Marble Music compiler", () => {
     const song = buildFixtureSong({ bars: 3, patterns: [{ role: "keys", beats: [0, 1.5, 3.5, 5.5, 7.5, 9.5], pitch: 52, kind: "note" }] });
     const performance = compileMarble(song);
     const depths = performance.statics.targets.map((target) => target.contactPos[2]);
-    expect(Math.max(...depths) - Math.min(...depths)).toBeGreaterThan(2);
+    expect(Math.max(...depths) - Math.min(...depths)).toBeGreaterThan(6.5);
     expect(Math.min(...depths)).toBeGreaterThanOrEqual(0.25);
-    expect(Math.max(...depths)).toBeLessThanOrEqual(4.25);
+    expect(Math.max(...depths)).toBeLessThanOrEqual(24.75);
+    const depthDeltas = performance.statics.targets.slice(1)
+      .map((target, index) => target.contactPos[2] - performance.statics.targets[index]!.contactPos[2])
+      .filter((delta) => Math.abs(delta) > 1e-6);
+    expect(depthDeltas.filter((delta) => delta > 0).length / depthDeltas.length).toBeGreaterThan(0.75);
+    expect(depthDeltas.some((delta) => delta < 0)).toBe(true);
     expect(performance.statics.targets.some((target) => Math.abs(target.rotation[0]) > 0.08)).toBe(true);
     for (const impact of performance.statics.impacts) {
       const target = performance.statics.targets[impact.noteIndex]!;

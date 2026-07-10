@@ -31,16 +31,17 @@ describe("Marble camera", () => {
     }
   });
 
-  it("keeps a stable depth anchor and zoom throughout the route", () => {
+  it("follows route depth continuously with stable zoom", () => {
     const song = buildFixtureSong({ bars: 2, patterns: [{ role: "keys", beats: [0, 1, 2.5, 4, 6], pitch: 55, kind: "note" }] });
     const performance = compileMarble(song);
     const samples = Array.from({ length: 121 }, (_, index) => sampleMarbleCamera(performance.statics.path, performance.durationSec * index / 120, 0.88));
     const zooms = samples.map((sample) => sample.zoom);
     const cameraDepths = samples.map((sample) => sample.position[2]);
     expect(Math.max(...zooms) - Math.min(...zooms)).toBeLessThan(0.0001);
-    expect(Math.max(...cameraDepths) - Math.min(...cameraDepths)).toBeLessThan(0.0001);
+    expect(Math.max(...cameraDepths) - Math.min(...cameraDepths)).toBeGreaterThan(1);
     for (let index = 1; index < samples.length; index += 1) {
       expect(distance(samples[index - 1]!.position, samples[index]!.position)).toBeLessThan(0.32);
+      expect(distance(samples[index - 1]!.lookAt, samples[index]!.lookAt)).toBeLessThan(0.32);
     }
   });
 
@@ -57,7 +58,7 @@ describe("Marble camera", () => {
     const y = projections.map((projection) => projection.y);
     const radii = projections.map((projection) => projection.radius);
     expect(Math.max(...y) - Math.min(...y)).toBeGreaterThan(0.12);
-    expect(Math.max(...radii) / Math.min(...radii)).toBeGreaterThan(1.15);
+    expect(Math.max(...radii) / Math.min(...radii)).toBeGreaterThan(1.05);
 
     const axisContribution = [0, 0, 0];
     for (const segment of performance.statics.path.filter((entry) => entry.kind !== "drop" && entry.kind !== "settle" && entry.kind !== "hold")) {
@@ -74,7 +75,7 @@ describe("Marble camera", () => {
       });
     }
     const totalContribution = axisContribution.reduce((sum, value) => sum + value, 0);
-    expect(axisContribution[2]! / totalContribution).toBeGreaterThan(0.22);
-    expect(axisContribution[0]! / totalContribution).toBeLessThan(0.58);
+    expect(axisContribution[2]! / totalContribution).toBeGreaterThan(0.52);
+    expect(axisContribution[0]! / totalContribution).toBeLessThan(0.3);
   });
 });

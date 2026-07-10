@@ -113,11 +113,12 @@ export function sampleMarbleCamera(path: readonly MarblePathSegment[], t: number
   const routeDepthCenter = routeDepths.length ? (Math.min(...routeDepths) + Math.max(...routeDepths)) / 2 : 0;
   const cameraLift = Math.sin(t * 0.33) * 0.04 * cameraTuning;
   const orbit = Math.sin(t * 0.21) * 0.035 * cameraTuning;
-  const distance = 8.8 - (cameraTuning - 0.88) * 0.45;
+  const distance = 8 - (cameraTuning - 0.88) * 0.45;
+  const depthOffset = focus.z - routeDepthCenter;
   return {
-    position: [focus.x + 0.7 + orbit, focus.y + cameraLift + 6.8, routeDepthCenter + distance],
-    lookAt: [focus.x + lead.x, focus.y - 0.35 + lead.y * 0.3, routeDepthCenter + (focus.z - routeDepthCenter) * 0.08 + lead.z * 0.12],
-    zoom: clamp(1.06 + (cameraTuning - 0.88) * 0.08, 1, 1.12),
+    position: [focus.x + 0.55 + orbit, focus.y + cameraLift + 12, routeDepthCenter + distance + depthOffset * 0.72],
+    lookAt: [focus.x + lead.x, focus.y - 0.42 + lead.y * 0.3, routeDepthCenter + depthOffset * 0.88 + lead.z * 0.08],
+    zoom: clamp(1.16 + (cameraTuning - 0.88) * 0.08, 1.08, 1.26),
   };
 }
 

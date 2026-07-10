@@ -21,13 +21,13 @@ const DENSE_RATTLE = 0.09;
 const DENSE_CASCADE = 0.22;
 const EPS = 1e-6;
 const MARBLE_RADIUS = 0.28;
-const MARBLE_GRAVITY = 3;
-const MARBLE_HORIZONTAL_SPEED = 0.75;
-const MARBLE_DEPTH_SPEED = 1.4;
+const MARBLE_GRAVITY = 2.4;
+const MARBLE_HORIZONTAL_SPEED = 0.23;
+const MARBLE_DEPTH_SPEED = 1.45;
 const MARBLE_INITIAL_DROP_SPEED = 1.6;
 const MARBLE_X_LIMIT = 3.1;
 const MARBLE_DEPTH_MIN = 0.25;
-const MARBLE_DEPTH_MAX = 4.25;
+const MARBLE_DEPTH_MAX = 24.75;
 const ARC_SAMPLE_COUNT = 24;
 const ROUTE_SAMPLE_RATE = 120;
 const ROUTE_CLEARANCE = 0.012;
@@ -500,12 +500,12 @@ function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics
   const positions: Vec3[] = [[0, 5.65, 0.75]];
   const outgoingVelocities: Vec3[] = [];
   let horizontalSign = -1;
-  let depthSign = 1;
 
   for (let index = 0; index < notes.length - 1; index += 1) {
     const gap = Math.max(EPS, notes[index + 1]!.t - notes[index]!.t);
     const from = positions[index]!;
-    const choices = [horizontalSign, -horizontalSign].flatMap((sign) => [depthSign, -depthSign].map((candidateDepthSign) => {
+    const plannedDepthSign = (index + 1) % 6 === 0 ? -1 : 1;
+    const choices = [horizontalSign, -horizontalSign].flatMap((sign) => [plannedDepthSign, -plannedDepthSign].map((candidateDepthSign) => {
       const velocityX = sign * MARBLE_HORIZONTAL_SPEED;
       const candidateZ = clamp(from[2] + candidateDepthSign * MARBLE_DEPTH_SPEED * gap, MARBLE_DEPTH_MIN, MARBLE_DEPTH_MAX);
       const velocityZ = (candidateZ - from[2]) / gap;
@@ -516,16 +516,15 @@ function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics
     const viable = choices.filter((choice) => choice.inBounds);
     const minimumDepthTravel = Math.min(0.12, MARBLE_DEPTH_SPEED * gap * 0.45);
     const depthMoving = viable.filter((choice) => choice.depthTravel >= minimumDepthTravel);
-    const chosen = (depthMoving.length ? depthMoving : viable).sort((a, b) => b.clearance - a.clearance || b.depthTravel - a.depthTravel)[0]
+    const plannedDepthMoving = depthMoving.filter((choice) => choice.depthSign === plannedDepthSign);
+    const chosen = (plannedDepthMoving.length ? plannedDepthMoving : depthMoving.length ? depthMoving : viable).sort((a, b) => b.clearance - a.clearance || b.depthTravel - a.depthTravel)[0]
       ?? choices.sort((a, b) => Math.abs(a.candidate[0]) - Math.abs(b.candidate[0]))[0]!;
     horizontalSign = chosen.sign;
-    depthSign = chosen.depthSign;
     const velocityX = chosen.velocityX;
     const velocity: Vec3 = [velocityX, 0, chosen.velocityZ];
     outgoingVelocities.push(velocity);
     positions.push(chosen.candidate);
     if ((index + 1) % 2 === 0) horizontalSign *= -1;
-    if ((index + 1) % 3 === 0 || chosen.candidate[2] <= MARBLE_DEPTH_MIN + 0.02 || chosen.candidate[2] >= MARBLE_DEPTH_MAX - 0.02) depthSign *= -1;
   }
 
   const routeSamples = samplePlannedRoute(notes, positions);
@@ -958,7 +957,7 @@ export function compileMarble(song: Song, options: CompileMarbleOptions = {}): M
     curves: { energy: song.master.energy },
     events: compileEvents(impacts, clusters, tail),
     statics: {
-      compilerVersion: 9,
+      compilerVersion: 10,
       source: {
         trackId: selected.track.id,
         trackName: selected.track.name,
