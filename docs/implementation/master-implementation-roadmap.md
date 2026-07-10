@@ -41,6 +41,12 @@ depth while preserving exact compiled note arrivals. After the one-track
 generator feels satisfying, extend to a two-track marble duet, then larger
 arrangements.
 
+The linked motion controls now have a dedicated
+[Marble live-control performance plan](marble-live-control-performance.md).
+Execute its instrumentation, worker planner, compiler optimization, persistent
+scene, and safe morphing phases before adding MediaPipe hand input. C++/Rust
+WebAssembly remains a measured decision gate rather than a prerequisite.
+
 A separate [Realtime Marble Music future plan](realtime-marble-music.md) is now
 recorded for a later live-performance mode. It uses a continuously falling
 marble, a dedicated low-latency REAPER MIDI telemetry path, and note-spawned

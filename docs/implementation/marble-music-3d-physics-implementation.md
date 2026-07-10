@@ -6,6 +6,9 @@ The goal is **realistic-looking 3D physics**, not physically exact simulation.
 The marble must feel like it has weight, spin, contact, momentum, and depth,
 while the compiler continues to guarantee exact musical arrivals.
 
+The performance, smooth route-transition, and future hand-control work is
+sequenced separately in [Marble live-control performance](marble-live-control-performance.md).
+
 ## Design decision
 
 Do **not** make a runtime physics engine the timing authority for Marble Music
