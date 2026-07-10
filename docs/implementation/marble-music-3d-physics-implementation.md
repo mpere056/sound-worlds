@@ -860,7 +860,7 @@ Before this gate can pass, review at least:
       drop, full-interval travel, exact arrivals, and accumulated roll
 - [x] Compiler tests bound average speed and prove pitch does not change route
       geometry
-- [x] Compiler v10 separates platform centers from marble contact poses, samples
+- [x] Compiler v11 separates platform centers from marble contact poses, samples
       pre/contact/post clearance, ranks target candidates against a 120 Hz
       sample of the full route, and validates sphere-to-3D-oriented-box
       clearance plus full 3D platform separating axes
@@ -872,6 +872,12 @@ Before this gate can pass, review at least:
 - [x] Pose-follow camera uses a weighted time window, follows route depth at
       damped position/aim rates, and keeps stable zoom; continuity tests cover
       both sides of every impact tangent and sampled movement throughout the route
+- [x] Three linked motion-mix sliders load the compiled default, maintain a 100%
+      total, and rebuild the deterministic collision route at the current
+      playback timestamp after a short debounce; compiler tests cover lateral-,
+      vertical-, and depth-heavy profiles
+- [ ] Move live motion recompilation to a Web Worker before enabling this control
+      for substantially larger songs
 - [x] `untitled-project-418cb58f` compiles 19 targets with zero footprint
       intersections; dense hardware is converted to compact pegs/chimes
 - [x] Initial browser frame keeps the marble clearly visible with nearby

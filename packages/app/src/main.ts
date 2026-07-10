@@ -1,6 +1,7 @@
 import { parsePerformance, parseSong, type Song } from "@reaper-viz/core";
+import { compileMarble, type MarbleMotionMix } from "@reaper-viz/compiler-marble";
 import { captureCanvasPng, exportCanvasMp4, PixiBackend, supportsCanvasMp4 } from "@reaper-viz/render";
-import { MarbleScene, type MarblePerformance } from "@reaper-viz/scene-marble";
+import { MarbleScene, type MarblePerformance, type MarbleTuning } from "@reaper-viz/scene-marble";
 import { MetroScene, type MetroPerformance } from "@reaper-viz/scene-metro";
 import { PaintingScene, type PaintingPerformance } from "@reaper-viz/scene-painting";
 import { RunnerScene, type RunnerPerformance } from "@reaper-viz/scene-runner";
@@ -13,6 +14,7 @@ interface ActiveScene { backendKind: "pixi" | "three"; tuning: object; renderFra
 interface BindingApi { on(event: "change", handler: () => void): BindingApi; }
 interface BindingPane {
   addBinding<T extends object, K extends keyof T>(target: T, key: K, options: Record<string, unknown>): BindingApi;
+  refresh(): void;
 }
 interface HotModule {
   dispose(callback: () => void): void;
@@ -75,6 +77,11 @@ let animationFrame = 0;
 let previousBeat = -1;
 let pane: Pane | undefined;
 let renderFailure: string | undefined;
+let marbleRebuildTimer: number | undefined;
+let marbleSourceTrackId: string | undefined;
+const marbleMotionMix: MarbleMotionMix = { leftRight: 20, upDown: 20, frontBack: 60 };
+let previousMarbleMotionMix: MarbleMotionMix = { ...marbleMotionMix };
+const marbleTuning: MarbleTuning = { glow: 0.78, camera: 0.88, targetScale: 1, tail: 0.8 };
 
 function destroyActiveScene(): void {
   scene?.destroy();
@@ -182,7 +189,65 @@ function addTuningBinding<T extends object, K extends keyof T>(
   bindingPane.addBinding(target, key, options).on("change", () => renderAt(audio.currentTime));
 }
 
+function marbleStatus(performance: MarblePerformance): string {
+  const mix = performance.statics.motionMix ?? { leftRight: 20, upDown: 20, frontBack: 60 };
+  const clusters = performance.statics.clusters.filter((cluster) => cluster.kind !== "single").length;
+  return `${performance.statics.source.trackName} | ${performance.statics.source.noteCount} note impacts | ${clusters} clusters | ${mix.leftRight}/${mix.upDown}/${mix.frontBack}%`;
+}
+
+function rebuildMarbleScene(): void {
+  marbleRebuildTimer = undefined;
+  if (!song || conceptSelect.value !== "marble") return;
+  statusTitle.textContent = "Rebalancing marble world";
+  statusDetail.textContent = `${marbleMotionMix.leftRight}% left/right | ${marbleMotionMix.upDown}% up/down | ${marbleMotionMix.frontBack}% front/back`;
+  try {
+    const performance = compileMarble(song, {
+      ...(marbleSourceTrackId ? { sourceTrackId: marbleSourceTrackId } : {}),
+      motionMix: marbleMotionMix,
+    });
+    destroyActiveScene();
+    scene = new MarbleScene(canvas, performance, marbleTuning);
+    previousBeat = -1;
+    renderAt(audio.currentTime);
+    statusTitle.textContent = "Marble Music | live motion mix";
+    statusDetail.textContent = marbleStatus(performance);
+  } catch (error) {
+    statusTitle.textContent = "Motion mix unavailable";
+    statusDetail.textContent = error instanceof Error ? error.message : "The route could not be rebuilt";
+  }
+}
+
+function scheduleMarbleRebuild(): void {
+  if (marbleRebuildTimer !== undefined) window.clearTimeout(marbleRebuildTimer);
+  marbleRebuildTimer = window.setTimeout(rebuildMarbleScene, 100);
+}
+
+function updateMarbleMotionMix(changed: keyof MarbleMotionMix, bindingPane: BindingPane): void {
+  const keys: Array<keyof MarbleMotionMix> = ["leftRight", "upDown", "frontBack"];
+  marbleMotionMix[changed] = Math.max(10, Math.min(80, Math.round(marbleMotionMix[changed])));
+  const others = keys.filter((key) => key !== changed);
+  const remainder = 100 - marbleMotionMix[changed];
+  const previousRemainder = previousMarbleMotionMix[others[0]!] + previousMarbleMotionMix[others[1]!];
+  const firstShare = previousRemainder > 0 ? previousMarbleMotionMix[others[0]!] / previousRemainder : 0.5;
+  marbleMotionMix[others[0]!] = Math.max(10, Math.round(remainder * firstShare));
+  marbleMotionMix[others[1]!] = 100 - marbleMotionMix[changed] - marbleMotionMix[others[0]!];
+  if (marbleMotionMix[others[1]!] < 10) {
+    marbleMotionMix[others[1]!] = 10;
+    marbleMotionMix[others[0]!] = remainder - 10;
+  }
+  previousMarbleMotionMix = { ...marbleMotionMix };
+  bindingPane.refresh();
+  scheduleMarbleRebuild();
+}
+
+function addMarbleMotionBinding(bindingPane: BindingPane, key: keyof MarbleMotionMix, label: string): void {
+  bindingPane.addBinding(marbleMotionMix, key, { min: 10, max: 80, step: 1, label })
+    .on("change", () => updateMarbleMotionMix(key, bindingPane));
+}
+
 async function loadConcept(concept: string): Promise<void> {
+  if (marbleRebuildTimer !== undefined) window.clearTimeout(marbleRebuildTimer);
+  marbleRebuildTimer = undefined;
   const wasThree = scene?.backendKind === "three";
   destroyActiveScene();
   if (wasThree) destroyPixiBackend();
@@ -242,15 +307,22 @@ async function loadConcept(concept: string): Promise<void> {
     const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.marble.json`);
     if (!response.ok) throw new Error(`Marble performance request failed: ${response.status}`);
     const performance = parsePerformance(await response.json()) as MarblePerformance;
-    const marble = new MarbleScene(canvas, performance);
+    marbleSourceTrackId = performance.statics.source.trackId;
+    Object.assign(marbleMotionMix, performance.statics.motionMix ?? { leftRight: 20, upDown: 20, frontBack: 60 });
+    previousMarbleMotionMix = { ...marbleMotionMix };
+    Object.assign(marbleTuning, { glow: 0.78, camera: 0.88, targetScale: 1, tail: 0.8 });
+    const marble = new MarbleScene(canvas, performance, marbleTuning);
     scene = marble;
-    addTuningBinding(bindingPane, marble.tuning, "glow", { min: 0, max: 1.6, step: 0.01, label: "Glow" });
-    addTuningBinding(bindingPane, marble.tuning, "camera", { min: 0.4, max: 1.8, step: 0.02, label: "Camera" });
-    addTuningBinding(bindingPane, marble.tuning, "targetScale", { min: 0.7, max: 1.4, step: 0.01, label: "Targets" });
-    addTuningBinding(bindingPane, marble.tuning, "tail", { min: 0, max: 1.5, step: 0.01, label: "Tail" });
+    addMarbleMotionBinding(bindingPane, "leftRight", "Left/right %");
+    addMarbleMotionBinding(bindingPane, "upDown", "Up/down %");
+    addMarbleMotionBinding(bindingPane, "frontBack", "Front/back %");
+    addTuningBinding(bindingPane, marbleTuning, "glow", { min: 0, max: 1.6, step: 0.01, label: "Glow" });
+    addTuningBinding(bindingPane, marbleTuning, "camera", { min: 0.4, max: 1.8, step: 0.02, label: "Camera" });
+    addTuningBinding(bindingPane, marbleTuning, "targetScale", { min: 0.7, max: 1.4, step: 0.01, label: "Targets" });
+    addTuningBinding(bindingPane, marbleTuning, "tail", { min: 0, max: 1.5, step: 0.01, label: "Tail" });
     sceneLabel.textContent = "Marble Music · M0/M1";
     statusTitle.textContent = "Marble Music · one-track machine";
-    statusDetail.textContent = `${performance.statics.source.trackName} · ${performance.statics.source.noteCount} note impacts · ${performance.statics.clusters.filter((cluster) => cluster.kind !== "single").length} clusters`;
+    statusDetail.textContent = marbleStatus(performance);
   } else {
     const backend = await ensurePixiBackend();
     const diagnostics = new TestPatternScene(backend, song);

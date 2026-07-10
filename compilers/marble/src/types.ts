@@ -30,6 +30,12 @@ export interface MarbleTrackMetrics {
   denseClusterCount: number;
 }
 
+export interface MarbleMotionMix {
+  leftRight: number;
+  upDown: number;
+  frontBack: number;
+}
+
 export interface MarbleTarget {
   id: string;
   kind: MarbleTargetKind;
@@ -119,6 +125,7 @@ export interface MarblePose {
 
 export interface MarbleStatics extends Record<string, unknown> {
   compilerVersion: number;
+  motionMix: MarbleMotionMix;
   source: MarbleSource;
   metrics: MarbleTrackMetrics;
   targets: MarbleTarget[];
@@ -136,4 +143,5 @@ export interface MarblePerformance extends Performance {
 
 export interface CompileMarbleOptions {
   sourceTrackId?: string;
+  motionMix?: Partial<MarbleMotionMix>;
 }

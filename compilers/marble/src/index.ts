@@ -5,6 +5,7 @@ import type {
   MarbleClusterKind,
   MarbleDiagnostics,
   MarbleImpact,
+  MarbleMotionMix,
   MarblePathKind,
   MarblePathSegment,
   MarblePerformance,
@@ -36,6 +37,15 @@ const PITCH_COLORS = ["#6ee7ff", "#8df5c8", "#f7d06a", "#ff9bd6", "#9ea7ff", "#f
 type Vec3 = [number, number, number];
 type Quat = [number, number, number, number];
 
+interface MarbleMotionProfile {
+  mix: MarbleMotionMix;
+  gravity: number;
+  horizontalSpeed: number;
+  depthSpeed: number;
+}
+
+const DEFAULT_MOTION_MIX: MarbleMotionMix = { leftRight: 20, upDown: 20, frontBack: 60 };
+
 interface SelectedTrack {
   track: SongTrack;
   notes: SongEvent[];
@@ -49,6 +59,28 @@ function clamp(value: number, min: number, max: number): number {
 
 function round(value: number, places = 6): number {
   return Number(value.toFixed(places));
+}
+
+function compileMotionProfile(input: Partial<MarbleMotionMix> | undefined): MarbleMotionProfile {
+  const values = {
+    leftRight: Math.max(0, input?.leftRight ?? DEFAULT_MOTION_MIX.leftRight),
+    upDown: Math.max(0, input?.upDown ?? DEFAULT_MOTION_MIX.upDown),
+    frontBack: Math.max(0, input?.frontBack ?? DEFAULT_MOTION_MIX.frontBack),
+  };
+  const total = values.leftRight + values.upDown + values.frontBack;
+  if (total <= EPS) throw new Error("Marble motion mix requires at least one non-zero axis");
+  const mix: MarbleMotionMix = {
+    leftRight: round(values.leftRight * 100 / total, 3),
+    upDown: round(values.upDown * 100 / total, 3),
+    frontBack: round(values.frontBack * 100 / total, 3),
+  };
+  mix.frontBack = round(100 - mix.leftRight - mix.upDown, 3);
+  return {
+    mix,
+    gravity: MARBLE_GRAVITY * mix.upDown / DEFAULT_MOTION_MIX.upDown,
+    horizontalSpeed: MARBLE_HORIZONTAL_SPEED * mix.leftRight / DEFAULT_MOTION_MIX.leftRight,
+    depthSpeed: MARBLE_DEPTH_SPEED * mix.frontBack / DEFAULT_MOTION_MIX.frontBack,
+  };
 }
 
 function vecRound(value: Vec3, places = 6): Vec3 {
@@ -401,7 +433,7 @@ export function marbleTargetClearance(target: MarbleTarget, marbleCenter: Vec3):
   return Math.hypot(...distances) - MARBLE_RADIUS;
 }
 
-function samplePlannedRoute(notes: readonly SongEvent[], positions: readonly Vec3[]): Vec3[] {
+function samplePlannedRoute(notes: readonly SongEvent[], positions: readonly Vec3[], motion: MarbleMotionProfile): Vec3[] {
   const samples: Vec3[] = [];
   const firstNote = notes[0];
   const firstPosition = positions[0];
@@ -411,7 +443,7 @@ function samplePlannedRoute(notes: readonly SongEvent[], positions: readonly Vec
     const duration = firstNote.t;
     const from: Vec3 = [
       firstPosition[0],
-      firstPosition[1] + MARBLE_INITIAL_DROP_SPEED * duration + 0.5 * MARBLE_GRAVITY * duration * duration,
+      firstPosition[1] + MARBLE_INITIAL_DROP_SPEED * duration + 0.5 * motion.gravity * duration * duration,
       firstPosition[2] + 0.18,
     ];
     const steps = Math.max(1, Math.ceil(duration * ROUTE_SAMPLE_RATE));
@@ -419,7 +451,7 @@ function samplePlannedRoute(notes: readonly SongEvent[], positions: readonly Vec
       const raw = step / steps;
       const elapsed = raw * duration;
       const point = vecMix(from, firstPosition, raw);
-      point[1] = from[1] - MARBLE_INITIAL_DROP_SPEED * elapsed - 0.5 * MARBLE_GRAVITY * elapsed * elapsed;
+      point[1] = from[1] - MARBLE_INITIAL_DROP_SPEED * elapsed - 0.5 * motion.gravity * elapsed * elapsed;
       samples.push(point);
     }
   } else {
@@ -434,7 +466,7 @@ function samplePlannedRoute(notes: readonly SongEvent[], positions: readonly Vec
     for (let step = 1; step <= steps; step += 1) {
       const raw = step / steps;
       const point = vecMix(from, to, raw);
-      point[1] += 0.5 * MARBLE_GRAVITY * duration * duration * raw * (1 - raw);
+      point[1] += 0.5 * motion.gravity * duration * duration * raw * (1 - raw);
       samples.push(point);
     }
   }
@@ -495,7 +527,7 @@ function placeTarget(
   };
 }
 
-function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics): MarbleTarget[] {
+function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics, motion: MarbleMotionProfile): MarbleTarget[] {
   const span = Math.max(1, metrics.pitchRange);
   const positions: Vec3[] = [[0, 5.65, 0.75]];
   const outgoingVelocities: Vec3[] = [];
@@ -506,15 +538,15 @@ function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics
     const from = positions[index]!;
     const plannedDepthSign = (index + 1) % 6 === 0 ? -1 : 1;
     const choices = [horizontalSign, -horizontalSign].flatMap((sign) => [plannedDepthSign, -plannedDepthSign].map((candidateDepthSign) => {
-      const velocityX = sign * MARBLE_HORIZONTAL_SPEED;
-      const candidateZ = clamp(from[2] + candidateDepthSign * MARBLE_DEPTH_SPEED * gap, MARBLE_DEPTH_MIN, MARBLE_DEPTH_MAX);
+      const velocityX = sign * motion.horizontalSpeed;
+      const candidateZ = clamp(from[2] + candidateDepthSign * motion.depthSpeed * gap, MARBLE_DEPTH_MIN, MARBLE_DEPTH_MAX);
       const velocityZ = (candidateZ - from[2]) / gap;
-      const candidate: Vec3 = [from[0] + velocityX * gap, from[1] - 0.5 * MARBLE_GRAVITY * gap * gap, candidateZ];
+      const candidate: Vec3 = [from[0] + velocityX * gap, from[1] - 0.5 * motion.gravity * gap * gap, candidateZ];
       const clearance = positions.slice(0, Math.max(0, positions.length - 1)).reduce((nearest, position) => Math.min(nearest, vecDistance(candidate, position)), Number.POSITIVE_INFINITY);
       return { sign, depthSign: candidateDepthSign, velocityX, velocityZ, candidate, clearance, depthTravel: Math.abs(candidateZ - from[2]), inBounds: Math.abs(candidate[0]) <= MARBLE_X_LIMIT };
     }));
     const viable = choices.filter((choice) => choice.inBounds);
-    const minimumDepthTravel = Math.min(0.12, MARBLE_DEPTH_SPEED * gap * 0.45);
+    const minimumDepthTravel = Math.min(0.12, motion.depthSpeed * gap * 0.45);
     const depthMoving = viable.filter((choice) => choice.depthTravel >= minimumDepthTravel);
     const plannedDepthMoving = depthMoving.filter((choice) => choice.depthSign === plannedDepthSign);
     const chosen = (plannedDepthMoving.length ? plannedDepthMoving : depthMoving.length ? depthMoving : viable).sort((a, b) => b.clearance - a.clearance || b.depthTravel - a.depthTravel)[0]
@@ -527,7 +559,7 @@ function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics
     if ((index + 1) % 2 === 0) horizontalSign *= -1;
   }
 
-  const routeSamples = samplePlannedRoute(notes, positions);
+  const routeSamples = samplePlannedRoute(notes, positions, motion);
 
   const targets: MarbleTarget[] = [];
   for (let index = 0; index < notes.length; index += 1) {
@@ -537,10 +569,10 @@ function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics
     const gap = index > 0 ? note.t - notes[index - 1]!.t : null;
     const kind = clusterKind(gap);
     const incoming = index === 0
-      ? [0, -(MARBLE_INITIAL_DROP_SPEED + MARBLE_GRAVITY * Math.max(0, note.t)), 0] as Vec3
+      ? [0, -(MARBLE_INITIAL_DROP_SPEED + motion.gravity * Math.max(0, note.t)), 0] as Vec3
       : [
           outgoingVelocities[index - 1]![0],
-          -MARBLE_GRAVITY * Math.max(EPS, note.t - notes[index - 1]!.t),
+          -motion.gravity * Math.max(EPS, note.t - notes[index - 1]!.t),
           outgoingVelocities[index - 1]![2],
         ] as Vec3;
     const outgoing = outgoingVelocities[index] ?? [incoming[0] * 0.35, -0.35, incoming[2] * 0.35] as Vec3;
@@ -683,13 +715,13 @@ function compileImpacts(notes: readonly SongEvent[], targets: readonly MarbleTar
   });
 }
 
-function compilePath(song: Song, notes: readonly SongEvent[], targets: readonly MarbleTarget[], clusters: readonly MarbleCluster[], diagnostics: MarbleDiagnostics): MarblePathSegment[] {
+function compilePath(song: Song, notes: readonly SongEvent[], targets: readonly MarbleTarget[], clusters: readonly MarbleCluster[], diagnostics: MarbleDiagnostics, motion: MarbleMotionProfile): MarblePathSegment[] {
   const path: MarblePathSegment[] = [];
   if (!targets.length) return path;
   const first = targets[0]!;
   const firstNote = notes[0]!;
   if (firstNote.t > EPS) {
-    const dropHeight = MARBLE_INITIAL_DROP_SPEED * firstNote.t + 0.5 * MARBLE_GRAVITY * firstNote.t * firstNote.t;
+    const dropHeight = MARBLE_INITIAL_DROP_SPEED * firstNote.t + 0.5 * motion.gravity * firstNote.t * firstNote.t;
     path.push(enrichSegment({
       id: `path:${path.length}`,
       t0: 0,
@@ -698,7 +730,7 @@ function compilePath(song: Song, notes: readonly SongEvent[], targets: readonly 
       to: first.contactPos,
       kind: "drop",
       easing: pathEasing("drop"),
-      gravityScale: MARBLE_GRAVITY,
+      gravityScale: motion.gravity,
       contactNormalStart: [0, 0, 1],
       contactNormal: targetSurfaceNormal(first.rotation[2], first.rotation[0]),
       tangentIn: [0, -1, 0],
@@ -723,10 +755,10 @@ function compilePath(song: Song, notes: readonly SongEvent[], targets: readonly 
     const direction = vecNormalize(vecSub(to.contactPos, from.contactPos), [1, 0, 0]);
     const startVelocity: Vec3 = [
       (to.contactPos[0] - from.contactPos[0]) / gap,
-      (to.contactPos[1] - from.contactPos[1] + 0.5 * MARBLE_GRAVITY * gap * gap) / gap,
+      (to.contactPos[1] - from.contactPos[1] + 0.5 * motion.gravity * gap * gap) / gap,
       (to.contactPos[2] - from.contactPos[2]) / gap,
     ];
-    const endVelocity: Vec3 = [startVelocity[0], startVelocity[1] - MARBLE_GRAVITY * gap, startVelocity[2]];
+    const endVelocity: Vec3 = [startVelocity[0], startVelocity[1] - motion.gravity * gap, startVelocity[2]];
     const segment: MarblePathSegment = {
       id: `path:${path.length}`,
       t0: Number(currentNote.t.toFixed(6)),
@@ -735,6 +767,7 @@ function compilePath(song: Song, notes: readonly SongEvent[], targets: readonly 
       to: to.contactPos,
       kind,
       easing: pathEasing(kind),
+      gravityScale: motion.gravity,
       contactNormalStart: targetSurfaceNormal(from.rotation[2], from.rotation[0]),
       contactNormal: targetSurfaceNormal(to.rotation[2], to.rotation[0]),
       tangentOut: vecNormalize(startVelocity, direction),
@@ -921,8 +954,9 @@ export function sampleMarblePath(path: readonly MarblePathSegment[], t: number):
 
 export function compileMarble(song: Song, options: CompileMarbleOptions = {}): MarblePerformance {
   const selected = selectTrack(song, options);
+  const motion = compileMotionProfile(options.motionMix);
   const metrics = compileMetrics(selected.notes);
-  const targets = compileTargets(selected.notes, metrics);
+  const targets = compileTargets(selected.notes, metrics, motion);
   validateTargetLayout(targets);
   const clusters = compileClusters(selected.notes, targets);
   const impacts = compileImpacts(selected.notes, targets, clusters);
@@ -937,11 +971,12 @@ export function compileMarble(song: Song, options: CompileMarbleOptions = {}): M
       `notes: ${selected.notes.length}`,
       `pitch: ${metrics.pitchMin}-${metrics.pitchMax}`,
       "motion: continuous impact-to-impact trajectories",
-      `physics: gravity ${MARBLE_GRAVITY}, horizontal launch speed ${MARBLE_HORIZONTAL_SPEED}, depth launch speed ${MARBLE_DEPTH_SPEED}`,
+      `motion mix: ${motion.mix.leftRight}% lateral, ${motion.mix.upDown}% vertical, ${motion.mix.frontBack}% depth`,
+      `physics: gravity ${round(motion.gravity)}, horizontal launch speed ${round(motion.horizontalSpeed)}, depth launch speed ${round(motion.depthSpeed)}`,
       "collision: radius-offset contact poses and non-overlapping target footprints",
     ],
   };
-  const path = compilePath(song, selected.notes, targets, clusters, diagnostics);
+  const path = compilePath(song, selected.notes, targets, clusters, diagnostics, motion);
   validateMarble(selected.notes, impacts, path, diagnostics);
   const tail = compileTail(song, impacts);
   const palette = solvePalette(null, [selected.track.role, "keys", "fx"]);
@@ -957,7 +992,8 @@ export function compileMarble(song: Song, options: CompileMarbleOptions = {}): M
     curves: { energy: song.master.energy },
     events: compileEvents(impacts, clusters, tail),
     statics: {
-      compilerVersion: 10,
+      compilerVersion: 11,
+      motionMix: motion.mix,
       source: {
         trackId: selected.track.id,
         trackName: selected.track.name,

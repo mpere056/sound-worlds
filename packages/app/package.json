@@ -9,6 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@reaper-viz/compiler-marble": "workspace:*",
     "@reaper-viz/core": "workspace:*",
     "@reaper-viz/render": "workspace:*",
     "@reaper-viz/scene-marble": "workspace:*",

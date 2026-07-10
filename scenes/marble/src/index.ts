@@ -271,7 +271,7 @@ function addTargetHardware(target: MarbleTarget, group: Group): Group {
 
 export class MarbleScene {
   readonly backendKind = "three";
-  readonly tuning: MarbleTuning = { glow: 0.78, camera: 0.88, targetScale: 1, tail: 0.8 };
+  readonly tuning: MarbleTuning;
   readonly #performance: MarblePerformance;
   readonly #renderer: WebGLRenderer;
   readonly #scene = new Scene();
@@ -290,7 +290,8 @@ export class MarbleScene {
   readonly #svgMarbleCore: SVGCircleElement;
   #disposed = false;
 
-  constructor(canvas: HTMLCanvasElement, performance: MarblePerformance) {
+  constructor(canvas: HTMLCanvasElement, performance: MarblePerformance, tuning?: MarbleTuning) {
+    this.tuning = tuning ?? { glow: 0.78, camera: 0.88, targetScale: 1, tail: 0.8 };
     this.#performance = performance;
     this.#renderer = new WebGLRenderer({ canvas, context: createCompatibleWebGlContext(canvas), antialias: true, alpha: false });
     this.#renderer.setSize(performance.resolution.w, performance.resolution.h, false);

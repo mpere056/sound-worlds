@@ -197,6 +197,31 @@ describe("Marble Music compiler", () => {
     }
   });
 
+  it("recompiles collision-safe routes for normalized live motion mixes", () => {
+    const song = buildFixtureSong({ bars: 2, patterns: [{ role: "keys", beats: [0, 1, 2.5, 4, 6], pitch: 55, kind: "note" }] });
+    for (const motionMix of [
+      { leftRight: 80, upDown: 10, frontBack: 10 },
+      { leftRight: 10, upDown: 80, frontBack: 10 },
+      { leftRight: 10, upDown: 10, frontBack: 80 },
+    ]) {
+      const performance = compileMarble(song, { motionMix });
+      expect(performance.statics.motionMix).toEqual(motionMix);
+      for (let left = 0; left < performance.statics.targets.length; left += 1) {
+        for (let right = left + 1; right < performance.statics.targets.length; right += 1) {
+          const leftTarget = performance.statics.targets[left]!;
+          const rightTarget = performance.statics.targets[right]!;
+          const bothCompact = (leftTarget.kind === "peg" || leftTarget.kind === "chime")
+            && (rightTarget.kind === "peg" || rightTarget.kind === "chime");
+          if (bothCompact) continue;
+          expect(marbleTargetsOverlap(leftTarget, rightTarget, 0)).toBe(false);
+        }
+      }
+      for (const impact of performance.statics.impacts) {
+        expect(sampleMarblePose(performance.statics.path, impact.t).pos).toEqual(performance.statics.targets[impact.noteIndex]!.contactPos);
+      }
+    }
+  });
+
   it("adds monotonic arc-length samples and distance-based spin to moving segments", () => {
     const song = buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [0, 1.5, 3], pitch: 55, kind: "note" }] });
     const performance = compileMarble(song);

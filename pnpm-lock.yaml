@@ -44,6 +44,9 @@ importers:
 
   packages/app:
     dependencies:
+      '@reaper-viz/compiler-marble':
+        specifier: workspace:*
+        version: link:../../compilers/marble
       '@reaper-viz/core':
         specifier: workspace:*
         version: link:../core
