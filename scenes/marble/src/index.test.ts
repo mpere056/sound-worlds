@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildFixtureSong } from "@reaper-viz/core";
 import { compileMarble, marbleTargetClearance, sampleMarblePose } from "@reaper-viz/compiler-marble";
 import { PerspectiveCamera, Vector3 } from "three";
-import { blendMarbleCamera, interpolateMarbleOpacity, interpolateMarbleTarget, marbleBoundaryTransitionOpacity, marbleGhostTransitionOpacity, marblePlatformVisualSize, marbleTargetMorphOpacity, prepareMarbleActivation, prepareMarbleTargetMorph, sampleMarbleCamera, type MarbleCameraPose } from "./index.js";
+import { blendMarbleCamera, interpolateMarblePlatformCarrier, interpolateMarbleTarget, marblePlatformCarrierTransform, marblePlatformTransitionProgress, marblePlatformVisualSize, prepareMarbleActivation, prepareMarblePerformanceTransition, sampleMarbleCamera, type MarbleCameraPose } from "./index.js";
 
 function distance(a: [number, number, number], b: [number, number, number]): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
@@ -89,6 +89,10 @@ describe("Marble live-plan activation", () => {
     expect(marblePlatformVisualSize(tinyCompact)).toEqual([0.58, 0.11, 0.28]);
     expect(marblePlatformVisualSize(hugePlate)).toEqual([1.35, 0.28, 0.7]);
     expect(marblePlatformVisualSize(tinyCompact)[0]).toBeGreaterThan(0.56);
+    const middleCarrier = interpolateMarblePlatformCarrier(tinyCompact, hugePlate, 0.5);
+    const fromCarrier = marblePlatformCarrierTransform(tinyCompact);
+    const toCarrier = marblePlatformCarrierTransform(hugePlate);
+    middleCarrier.scale.forEach((value, index) => expect(value).toBeCloseTo((fromCarrier.scale[index]! + toCarrier.scale[index]!) / 2, 10));
     expect(tinyCompact.size).toEqual([0.005, 0.002, 0.004]);
   });
 
@@ -157,39 +161,28 @@ describe("Marble live-plan activation", () => {
     expect(Math.abs(middle.rotation[2] - from.rotation[2])).toBeLessThan(0.11);
   });
 
-  it("accepts safe future-target morphs and crossfades an intersecting fallback", () => {
-    const song = buildFixtureSong({ bars: 3, patterns: [{ role: "keys", beats: [0, 3, 6, 9], pitch: 52, kind: "note" }] });
-    const active = compileMarble(song);
-    const activation = prepareMarbleActivation(active, active, 0);
-    expect(activation).toBeDefined();
-    const safe = prepareMarbleTargetMorph(active, activation!.performance, 0, activation!);
-    expect(safe?.targetIds.length).toBeGreaterThan(0);
-    expect(safe?.startT).toBe(0);
-
-    const unsafePerformance = structuredClone(activation!.performance);
-    const futureImpact = unsafePerformance.statics.impacts.find((impact) => impact.noteIndex > activation!.noteIndex)!;
-    const movingTarget = unsafePerformance.statics.targets.find((target) => target.id === futureImpact.targetId)!;
-    const stationaryTarget = unsafePerformance.statics.targets[activation!.noteIndex]!;
-    movingTarget.pos = [...stationaryTarget.pos];
-    movingTarget.contactPos = [...stationaryTarget.contactPos];
-    const fallback = prepareMarbleTargetMorph(active, unsafePerformance, 0, activation!);
-    expect(fallback?.targetIds).toHaveLength(0);
-    expect(fallback?.fadeTargetIds.length).toBeGreaterThan(0);
-    expect(fallback?.fadeTargetIds).not.toContain(active.statics.impacts[activation!.noteIndex]!.targetId);
-    const withheldTargetId = fallback!.fadeTargetIds[0]!;
-    expect(marbleTargetMorphOpacity(fallback!, withheldTargetId, fallback!.endT - 0.001)).toBe(1);
+  it("aligns a transform-only plan at the held marble time", () => {
+    const song = buildFixtureSong({ bars: 3, patterns: [{ role: "keys", beats: [0, 1.5, 3.5, 5.5, 7.5, 9.5], pitch: 52, kind: "note" }] });
+    const active = compileMarble(song, { motionMix: { leftRight: 20, upDown: 20, frontBack: 60 } });
+    const incoming = compileMarble(song, { motionMix: { leftRight: 45, upDown: 35, frontBack: 20 } });
+    const incomingBefore = JSON.stringify(incoming);
+    const songT = 2.25;
+    const aligned = prepareMarblePerformanceTransition(active, incoming, songT);
+    expect(distance(sampleMarblePose(active.statics.path, songT).pos, sampleMarblePose(aligned.statics.path, songT).pos)).toBeLessThan(1e-9);
+    expect(aligned.statics.targets.map((target) => target.id)).toEqual(active.statics.targets.map((target) => target.id));
+    expect(JSON.stringify(incoming)).toBe(incomingBefore);
   });
 
-  it("smoothly crossfades replacement platforms at stable size", () => {
-    expect(interpolateMarbleOpacity(1, 0, 0)).toBe(1);
-    expect(interpolateMarbleOpacity(1, 0, 1)).toBe(0);
-    expect(interpolateMarbleOpacity(0, 1, 0.5)).toBeCloseTo(0.5, 10);
-    expect(interpolateMarbleOpacity(0, 1, 1)).toBe(1);
-    expect(marbleBoundaryTransitionOpacity(0)).toBe(1);
-    expect(marbleBoundaryTransitionOpacity(0.5)).toBe(0);
-    expect(marbleBoundaryTransitionOpacity(1)).toBe(1);
-    expect(marbleGhostTransitionOpacity(0)).toBe(1);
-    expect(marbleGhostTransitionOpacity(0.5)).toBeCloseTo(0.5, 10);
-    expect(marbleGhostTransitionOpacity(1)).toBe(0);
+  it("uses continuous transform easing and supports displayed-state retargeting", () => {
+    expect(marblePlatformTransitionProgress(-1)).toBe(0);
+    expect(marblePlatformTransitionProgress(0.5)).toBeCloseTo(0.5, 10);
+    expect(marblePlatformTransitionProgress(2)).toBe(1);
+    const song = buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [0, 1, 2, 3], pitch: 55, kind: "note" }] });
+    const active = compileMarble(song);
+    const target = active.statics.targets[0]!;
+    const firstDestination = { ...target, pos: [target.pos[0] + 2, target.pos[1] - 1, target.pos[2] + 1] as [number, number, number] };
+    const displayed = interpolateMarbleTarget(target, firstDestination, marblePlatformTransitionProgress(0.4));
+    const secondDestination = { ...target, pos: [target.pos[0] - 1, target.pos[1] + 2, target.pos[2] - 2] as [number, number, number] };
+    expect(interpolateMarbleTarget(displayed, secondDestination, 0).pos).toEqual(displayed.pos);
   });
 });

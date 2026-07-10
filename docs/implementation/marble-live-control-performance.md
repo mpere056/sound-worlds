@@ -389,98 +389,58 @@ Commit and push persistent renderer ownership first, then mesh/geometry pooling.
   route-buffer reuse remains an evidence-triggered optimization if future songs
   introduce rail-heavy application cost.
 
-## Phase P4 - Smooth, collision-aware route transitions
+## Phase P4 - Smooth transform-only route transitions
 
 ### Transition policy
 
-Do not replace the marble's current flight in midair.
+Use one visible platform set. Never use opacity, duplicate geometry, or a hidden
+transform switch to move between generated maps.
 
-1. Freeze the active route through the current impact interval.
-2. Choose the next feasible impact as `activationImpact`.
-3. Keep the current target and any already-played targets unchanged.
-4. Morph future targets over 250-500 ms with smoothstep position/scale and
-   quaternion slerp rotation.
-5. Activate the new marble path exactly at the agreed impact.
-6. If a safe transition cannot be proven, defer by one impact.
-
-### Work
-
-- Key targets by note index/target ID so old and new plans pair deterministically.
-- Add old/new transforms and transition timing to pooled target state.
-- Morph only targets sufficiently ahead of the marble.
-- Validate intermediate target OBBs at transition samples.
-- Stagger or defer individual targets whose straight transform path intersects
-  another platform or the active marble corridor.
-- Rebuild rails into the inactive buffer, then crossfade or reveal them without
-  resizing the layout.
-- Preserve camera continuity using the existing weighted pose sampler and blend
-  old/new camera focus over the same transition window.
-- If activation requires different current pose/velocity, compile a bounded
-  Hermite/ballistic bridge from the active impact to a future new target and run
-  the same clearance checks over it.
+1. Hold transport and marble time at the current song position when a validated
+   worker plan arrives.
+2. Rigidly align the incoming route to the held marble center.
+3. Smoothstep every paired platform's position, shortest-path rotation, collision
+   body dimensions, colored carrier, and support rod for 450 ms.
+4. If another slider plan arrives, sample the transforms currently on screen and
+   use them as the next transition's starting state.
+5. Install the validated incoming physics only after all visible platforms reach
+   their destinations, then resume transport automatically when it was playing.
+6. Keep scrubbing locked during the brief re-layout so route alignment cannot be
+   invalidated halfway through the movement.
 
 ### Gate
 
-- No marble position jump greater than 0.02 world units at activation.
-- No camera position jump greater than the existing continuity threshold.
-- No target intersections at sampled transition states.
-- The marble never intersects a transitioning platform.
-- The next activated impact still occurs at the exact note time.
-- Scrubbing remains deterministic; live transition state is not serialized into
-  offline export unless explicitly designed later.
+- Exactly one visible platform group exists per target throughout re-layout.
+- Platform opacity never participates in route transition state.
+- The marble and audio timeline remain fixed while platforms are moving.
+- A repeated slider update starts from the currently displayed transform with no
+  reset to an older endpoint.
+- Final platform positions, collision bodies, route clearances, and note timings
+  come only from the validated incoming compiler plan.
+- Backward seeking after re-layout shows the complete active platform set.
 
-### Commit point
+### Implemented slice: held transform-only re-layout
 
-Commit and push target morphing, route activation, and bridge validation as
-separate slices with visual evidence for each.
-
-### Implemented slices: activation alignment and deferred playback
-
-- `prepareMarbleActivation()` selects the next note-index impact shared by the
-  active and incoming plans after a configurable lead time.
-- It samples both deterministic routes at that exact timestamp and rigidly
-  translates the incoming path, targets, contact points, controls, and camera
-  keys so the two marble centers coincide at activation.
-- A single rigid translation preserves all relative platform spacing, route
-  geometry, sphere/OBB clearances, and exact note timestamps. The worker result
-  remains immutable.
-- Tests prove sub-nanometer activation-position continuity, translated impact
-  clearance, preserved target spacing, input immutability, and no-boundary
-  behavior after the final shared impact.
-- `MarbleScene.queuePerformance()` now replaces older queued plans and waits for
-  transport to cross the selected impact before replacing performance-owned
-  scene data. Paused playback reports the exact pending activation time instead
-  of pretending the requested mix is already active.
-- The first activated frame uses the old camera pose; position, look-at, and zoom
-  then smoothstep to the translated incoming camera over 350 ms. A pure camera-
-  blend test proves exact endpoints and near-zero initial movement.
-- Deferred activation reports its actual scene-application and first-render cost
-  back to the existing profiler. A browser check queued 20/21/59 for 0.531 s,
-  kept swap count at zero before that boundary, and applied exactly once after a
-  seek crossed it on the same renderer with 11 geometries.
-- Collision-checked future-target morphing remains open. Targets currently adopt
-  the aligned plan at activation, so P4 is not complete yet.
-
-### Implemented slice: collision-checked future-target morphing
-
-- Plans now reserve at least 400 ms before activation and use the final 350 ms
-  to smoothstep future same-shape targets toward their aligned positions,
-  shortest-path rotations, and base dimensions.
-- The boundary target and every already-played target remain fixed, so the active
-  platform cannot move under the marble.
-- Twelve transition samples rebuild the mixed old/new target set and reject the
-  entire morph if any pair has a 3D SAT overlap or any target violates the active
-  marble's sphere/OBB clearance. Shape-changing or missing targets are withheld.
-- Tests accept a safe sparse route, reject a deliberately intersecting endpoint,
-  verify shortest-path angle interpolation, and preserve the existing activation
-  and camera guarantees. Dense fixtures with pre-existing fallback overlaps are
-  conservatively withheld instead of worsening them.
-- The reference project accepted 18 future targets for a 20/21/59 update. At
-  0.350 s the targets were visibly between plans with zero swaps; crossing the
-  0.531 s boundary activated once on renderer `1` with 11 geometries and 16.8 ms
-  frame p95.
-- P4 remains open for retaining safe already-played target transforms and for a
-  full audio watch-through at naturally advancing activation boundaries.
+- `prepareMarblePerformanceTransition()` samples active and incoming routes at
+  the held song time and rigidly translates the incoming path, targets, contact
+  points, controls, and camera keys so the marble center is continuous.
+- `MarbleScene.transitionPerformance()` stores one old/new target pair per stable
+  ID and drives a 450 ms wall-clock smoothstep. Position, shortest-path rotation,
+  base size, marble-relative colored carrier size, and target support rods all
+  move continuously. No target material is cloned and no transition opacity,
+  reveal, ghost, or duplicate target group exists.
+- The app pauses audio only when it was already playing, renders the held marble
+  while the platforms move, disables play/scrub for the 450 ms re-layout, and
+  resumes automatically after the validated plan is installed.
+- Continuous slider input retargets from the displayed interpolation state. The
+  final plan therefore catches up 450 ms after release without snapping back to
+  any intermediate worker result.
+- The pooled renderer is retained. Rebuilding decorative route rails at the final
+  validated endpoint remains a smaller follow-up; target bodies, carriers,
+  hardware groups, and support rods already have continuous transforms.
+- Tests prove arbitrary-time marble-center alignment, incoming-plan immutability,
+  exact easing endpoints/midpoint, shortest-path rotation, all-target ID pairing,
+  and displayed-state retargeting.
 
 ## Phase P5 - High-rate control coordinator (in progress)
 
@@ -539,25 +499,19 @@ Commit and push the coordinator before adding camera access or MediaPipe.
   optional low-latency filtering for noisy gesture input, plus the five-minute
   synthetic stream and final-value catch-up gates.
 
-### Implemented slice: persistent handoffs and marble-relative size bounds
+### Implemented slice: visible transform continuity and size bounds
 
-- Safe same-shape future targets continue to use collision-checked position,
-  shortest-path rotation, and size interpolation.
-- Unsafe non-contact targets no longer fade away while the old route is still
-  active. At activation, the renderer snapshots those outgoing mechanisms as
-  geometry-sharing visual ghosts, installs the validated incoming route, and
-  crossfades old and new over 350 ms. A continuing slider drag does not clear an
-  in-progress ghost before its fade completes.
-- Per-target material instances preserve pooled geometry and shader programs
-  while allowing independent incoming and outgoing opacity. The old collision
-  bodies are visual only after activation; physics immediately belongs to the
-  validated incoming route.
-- The contact platform remains solid through impact. After activation it fades
-  at the old transform, switches transforms only while invisible, and fades back
-  in as the marble departs.
-- The reference 20/40/40 drag reports 18 transitioning platforms out of 19; the
-  sole pre-impact exception is the contact platform handled by the post-impact
-  transition.
+- All targets use one transform-only transition. Every platform remains fully
+  visible while position, shortest-path rotation, base size, colored carrier,
+  hardware group, and support rod move toward the latest validated plan.
+- A new worker result samples the transforms currently displayed by an active
+  transition before retargeting. Repeated slider changes therefore preserve
+  position continuity instead of restarting from an old map.
+- Transport and marble time are held for the 450 ms settle window. The incoming
+  path is aligned at that held timestamp, installed only after platform movement
+  finishes, and playback resumes automatically when it was previously running.
+- The runtime contains no map-transition opacity, duplicate target geometry,
+  ghost target, reveal state, or invisible transform switch.
 - The final-note fallback now synthesizes an upward rebound velocity. This gives
   the screenshot's 15/26/59 final impact a regular visible target instead of the
   old 0.048 x 0.024 x 0.048 emergency speck.
@@ -573,12 +527,16 @@ Commit and push the coordinator before adding camera access or MediaPipe.
   smaller than the marble and could disappear in perspective. Browser checks at
   12/78/10 and 5.728 s plus 43/47/10 and 1.381 s now retain clearly colored,
   marble-scale platform faces.
+- Backward timeline seeks no longer interact with transition state because the
+  re-layout is complete before scrub is unlocked. A slider-change regression
+  can settle, advance to 4.0 s, and seek to 1.589 s with the same complete,
+  fully opaque active platform set.
 - A proposed global route expansion was rejected because it raised marble speed
   to 5.78 world units/s, beyond the proven 3.3 realism ceiling. Bounded carriers
   preserve the exact collision pad and route instead of hiding a physics change.
-- Tests cover safe transform morphing, persistent unsafe outgoing opacity, ghost
-  fade endpoints/midpoint, contact-platform two-stage fading, final rebound
-  size, visual carrier bounds, and unchanged collision target data.
+- Tests cover transform easing, displayed-state retargeting, arbitrary-time path
+  alignment, final rebound size, visual carrier bounds, and unchanged collision
+  target data.
 
 ## Phase P6 - MediaPipe hand-control adapter
 

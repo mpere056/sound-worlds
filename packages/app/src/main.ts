@@ -110,6 +110,7 @@ let profilePublishFrame = 0;
 let marblePlannerRequestedAt = 0;
 let marbleLastRequestAt = Number.NEGATIVE_INFINITY;
 let pendingMarbleActivationResult: MarblePlannerSuccess | undefined;
+let marbleResumeAfterTransition = false;
 const marblePlanner = new MarblePlannerClient(
   new Worker(new URL("./marble-planner.worker.ts", import.meta.url), { type: "module" }),
   {
@@ -276,6 +277,20 @@ function reportMarbleActivation(activation: MarbleSceneActivation | undefined, f
   }
   statusTitle.textContent = "Marble Music | live motion mix";
   statusDetail.textContent = result ? marbleStatus(result.performance) : `${activation.motionMix.leftRight}/${activation.motionMix.upDown}/${activation.motionMix.frontBack}% active`;
+  play.disabled = false;
+  scrub.disabled = false;
+  if (marbleResumeAfterTransition) {
+    marbleResumeAfterTransition = false;
+    void audio.play().then(() => {
+      play.textContent = "â…¡";
+      play.setAttribute("aria-label", "Pause");
+    }).catch((error: unknown) => {
+      play.textContent = "â–¶";
+      play.setAttribute("aria-label", "Play");
+      statusTitle.textContent = "Playback paused after re-layout";
+      statusDetail.textContent = error instanceof Error ? error.message : "The browser could not resume audio playback";
+    });
+  }
 }
 
 function tick(): void {
@@ -286,7 +301,7 @@ function tick(): void {
     profilePublishFrame += 1;
     if (profilePublishFrame % 60 === 0) publishMarbleProfile();
   }
-  if (!audio.paused) renderAt(audio.currentTime);
+  if (!audio.paused || (scene instanceof MarbleScene && scene.isTransitioning())) renderAt(audio.currentTime);
   animationFrame = requestAnimationFrame(tick);
 }
 
@@ -337,13 +352,19 @@ function applyPlannedMarble(result: MarblePlannerSuccess): void {
   const replacementStartedAt = marbleProfilingEnabled ? performance.now() : 0;
   const nextScene = scene instanceof MarbleScene ? scene : new MarbleScene(canvas, result.performance, marbleTuning, () => globalThis.performance.now());
   if (scene === nextScene) {
-    const boundary = nextScene.queuePerformance(result.performance, audio.currentTime);
-    if (boundary) {
-      pendingMarbleActivationResult = result;
-      statusTitle.textContent = "Marble plan ready";
-      statusDetail.textContent = `${marbleStatus(result.performance)} | ${boundary.morphTargetCount} platforms transitioning | activates at ${formatTime(boundary.activationT)}`;
-      return;
+    const wasPlaying = !audio.paused;
+    if (wasPlaying) {
+      audio.pause();
+      marbleResumeAfterTransition = true;
     }
+    const transition = nextScene.transitionPerformance(result.performance, audio.currentTime);
+    pendingMarbleActivationResult = result;
+    play.disabled = true;
+    scrub.disabled = true;
+    statusTitle.textContent = "Moving marble platforms";
+    statusDetail.textContent = `${marbleStatus(result.performance)} | ${transition.platformCount} platforms moving | ${transition.durationMs} ms`;
+    renderAt(audio.currentTime);
+    return;
   } else {
     scene = nextScene;
   }
@@ -411,6 +432,9 @@ async function loadConcept(concept: string): Promise<void> {
   if (marbleRebuildTimer !== undefined) window.clearTimeout(marbleRebuildTimer);
   marbleRebuildTimer = undefined;
   marbleLastRequestAt = Number.NEGATIVE_INFINITY;
+  marbleResumeAfterTransition = false;
+  play.disabled = false;
+  scrub.disabled = false;
   marblePlanner.invalidate();
   pendingMarbleActivationResult = undefined;
   const wasThree = scene?.backendKind === "three";
