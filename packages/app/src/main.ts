@@ -612,7 +612,7 @@ async function startMarbleHandTracking(): Promise<void> {
     };
     marbleHandWorker.postMessage({
       type: "initialize",
-      wasmRoot: "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm",
+      wasmRoot: new URL("/mediapipe-wasm", window.location.href).href,
       modelPath: new URL("/models/hand_landmarker.task", window.location.href).href,
     });
     handState.textContent = "Loading hand model";

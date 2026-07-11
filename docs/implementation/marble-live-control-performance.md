@@ -798,7 +798,8 @@ References:
   totals, ambiguous multi-pinches, noisy release hysteresis, and temporary versus
   sustained tracking loss.
 - `@mediapipe/tasks-vision` 0.10.35 now runs the Hand Landmarker in a dedicated
-  CPU worker with a locally served float16 model. The app starts at 640x480 and
+  CPU module worker with locally served ESM WASM assets and a float16 model. The
+  app starts at 640x480 and
   30 FPS, transfers one `ImageBitmap` at a time, and drops frames while inference
   is busy so camera input cannot build an unbounded queue.
 - Camera access requires the explicit Enable camera action. The mirrored preview

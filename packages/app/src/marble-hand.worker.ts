@@ -14,7 +14,9 @@ scope.onmessage = async (event: MessageEvent<MarbleHandWorkerInbound>) => {
   const message = event.data;
   if (message.type === "initialize") {
     try {
-      const vision = await FilesetResolver.forVisionTasks(message.wasmRoot);
+      // Module workers cannot expose ModuleFactory from MediaPipe's classic
+      // importScripts loader. Select the ESM loader explicitly.
+      const vision = await FilesetResolver.forVisionTasks(message.wasmRoot, true);
       landmarker = await HandLandmarker.createFromOptions(vision, {
         baseOptions: { modelAssetPath: message.modelPath, delegate: "CPU" },
         runningMode: "VIDEO",
