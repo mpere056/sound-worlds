@@ -53,11 +53,12 @@ marble, a dedicated low-latency REAPER MIDI telemetry path, and note-spawned
 physics platforms whose angle and restitution respond to pitch and velocity.
 It starts only after offline one-track Marble Music passes its human gate.
 
-A future [Music-Synced Brick Breaker plan](brick-breaker-implementation.md) is
-also recorded. It compiles the minimum song-specific brick set and a legal
-brick/wall/paddle collision itinerary so each grouped note destroys one brick
-and the final brick breaks exactly on the final note. It is planning-only until
-the current Marble Music gate is complete.
+The [Music-Synced Brick Breaker plan](brick-breaker-implementation.md) and
+[implementation work orders](brick-breaker-work-orders.md) compile the minimum
+song-specific brick set and a legal brick/wall/paddle collision itinerary so
+each grouped note destroys one brick and the final brick breaks exactly on the
+final note. Headless B0-B5 compiler work may proceed alongside Marble Music;
+scene polish begins only after its deterministic solver gates pass.
 
 Metro-specific consequence: that export can validate MIDI station timing,
 train arrivals, line identity, and fallback honesty, but it cannot validate

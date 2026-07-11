@@ -51,6 +51,7 @@ what works today, what was verified, and what should be built next.
   falling marble, and note-spawned physics platforms; not part of the current
   offline implementation.
 - [Music-Synced Brick Breaker future plan](implementation/brick-breaker-implementation.md)
+- [Music-Synced Brick Breaker work orders](implementation/brick-breaker-work-orders.md)
   - a deterministic one-ball generator that compiles exact note-time brick
   destruction, legal brick/wall/paddle itineraries, and a final-note final hit.
 - [Waveform Runner implementation](implementation/waveform-runner-implementation.md)

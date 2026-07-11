@@ -1,7 +1,9 @@
 # Music-Synced Brick Breaker future plan
 
-This is a future Sound Worlds generator. It is recorded now, but implementation
-must wait until the current one-track Marble Music acceptance gate is complete.
+This is the next Sound Worlds generator. Contract, fixture, compiler, and
+headless trajectory work may begin while Marble Music remains in human tuning.
+Interactive scene polish and export acceptance should wait until the headless
+solver passes B0-B5.
 
 ## Product idea
 
@@ -177,6 +179,10 @@ increase speed without a bound.
 6. B5: chord compound bricks, dense local chains, and impossible-gap reports.
 7. B6: Three.js scene, fragments, camera, audio watch-through, and export gate.
 
+The implementation-ready tasks, dependencies, artifacts, test matrix, and
+commit boundaries are defined in the
+[Brick Breaker work orders](brick-breaker-work-orders.md).
+
 ## First acceptance gate
 
 - Generated brick count equals distinct grouped note-on times.
@@ -192,10 +198,10 @@ increase speed without a bound.
 - Recompilation and random seek order produce byte-identical compiled output and
   identical sampled poses.
 
-## Explicit non-goals for current work
+## Explicit non-goals for the first implementation pass
 
-- Do not implement Brick Breaker before offline one-track Marble Music passes
-  its human watch-through and viewport gates.
+- Do not begin visual polish before the deterministic headless solver and
+  validator pass B0-B5.
 - Do not make runtime physics the timing authority.
 - Do not start with power-ups, multiple balls, lives, scoring, bosses, or player
   input; first prove one deterministic music-synced ball and paddle.
