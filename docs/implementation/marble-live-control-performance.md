@@ -810,6 +810,10 @@ References:
   landmarks through a typed protocol. CPU is the conservative first delegate
   because worker GPU support varies across browsers; measure the user's machine
   before considering a GPU/main-thread fallback.
+- Palm x/y and apparent hand scale now pass through independent timestamp-aware
+  One Euro filters before spatial deltas are calculated. The adaptive cutoff
+  suppresses stationary landmark noise while preserving faster intentional
+  movement; pinch ownership remains raw and hysteretic so engagement stays crisp.
 - Remaining P6 gate: validate successful permission and sustained inference with
   the actual webcam, capture median/p95 hand-to-visible latency, and tune pinch
   thresholds, gain, filtering, and low-light behavior from observed recordings.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MarbleMotionMix } from "@reaper-viz/compiler-marble";
-import { MarbleHandController, type HandLandmark, type MarblePinchFinger } from "./marble-hand-control.js";
+import { MarbleHandController, OneEuroFilter, type HandLandmark, type MarblePinchFinger } from "./marble-hand-control.js";
 
 const initial: MarbleMotionMix = { leftRight: 20, upDown: 20, frontBack: 60 };
 
@@ -27,6 +27,18 @@ function engage(controller: MarbleHandController, finger: MarblePinchFinger): vo
 }
 
 describe("Marble hand control", () => {
+  it("attenuates stationary landmark noise while retaining fast motion", () => {
+    const filter = new OneEuroFilter();
+    const noisy = [0.5, 0.512, 0.489, 0.51, 0.491, 0.506];
+    const filtered = noisy.map((value, index) => filter.update(value, index * 33));
+    const rawRange = Math.max(...noisy) - Math.min(...noisy);
+    const settledRange = Math.max(...filtered.slice(2)) - Math.min(...filtered.slice(2));
+    expect(settledRange).toBeLessThan(rawRange * 0.45);
+    const moved = filter.update(0.7, 220);
+    expect(moved).toBeGreaterThan(0.55);
+    expect(moved).toBeLessThan(0.7);
+  });
+
   it("maps index-thumb spatial movement to all three motion axes", () => {
     const controller = new MarbleHandController();
     engage(controller, "index");
