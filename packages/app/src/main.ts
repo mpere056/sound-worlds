@@ -8,9 +8,12 @@ import { RunnerScene, type RunnerPerformance } from "@reaper-viz/scene-runner";
 import { TestPatternScene } from "@reaper-viz/scene-testpattern";
 import { Pane } from "tweakpane";
 import { MarblePlannerClient } from "./marble-planner-client.js";
+import { MarbleHandController } from "./marble-hand-control.js";
+import type { MarbleHandWorkerOutbound } from "./marble-hand-worker-protocol.js";
 import { MarbleTransitionRouterClient } from "./marble-transition-router-client.js";
 import {
   copyMarbleMotionMix,
+  filterMarbleMotionMix,
   marbleMotionMixLabel,
   nextMarbleRequestDelay,
   projectMarbleMotionMix,
@@ -70,6 +73,7 @@ root.innerHTML = `
       <section class="control-group"><div class="eyebrow">Transport</div><div class="transport"><button class="play" id="play" aria-label="Play">▶</button><span class="timecode" id="time">00:00.000 / 00:00.000</span></div><input id="scrub" aria-label="Timeline" type="range" min="0" max="1" value="0" step="0.001" /><audio id="audio" preload="auto"></audio></section>
       <section class="checks"><label class="check">Sync flash <input id="sync" type="checkbox" checked /></label><label class="check">Metro audit <input id="audit" type="checkbox" /></label><label class="check">9:16 safe area <input id="guides" type="checkbox" /></label></section>
       <section class="tuning"><div class="eyebrow">Scene tuning</div><div id="tweakpane"></div></section>
+      <section class="hand-controls" id="hand-controls" hidden><div class="eyebrow">Hand control</div><div class="hand-actions"><button id="hand-toggle" type="button">Enable camera</button><span id="hand-state">Off</span></div><video id="hand-video" autoplay muted playsinline hidden></video></section>
       <section class="exports"><div class="eyebrow">Export</div><div class="export-actions"><button id="export-mp4" disabled>Render 3s MP4</button><button id="export-png">Save PNG</button></div><div class="export-progress" id="export-progress"><span></span></div><p>Preview MP4 is silent; the mastered WAV is attached in the delivery step.</p></section>
       <div class="status"><strong id="status-title">Waiting for project</strong><span id="status-detail">Analyzer output appears here automatically.</span></div>
     </aside>
@@ -96,6 +100,10 @@ const exportProgress = document.querySelector<HTMLDivElement>("#export-progress"
 const sceneLabel = document.querySelector<HTMLSpanElement>("#scene-label")!;
 const metroAudit = document.querySelector<HTMLDivElement>("#metro-audit")!;
 const tweakpaneContainer = document.querySelector<HTMLDivElement>("#tweakpane")!;
+const handControls = document.querySelector<HTMLElement>("#hand-controls")!;
+const handToggle = document.querySelector<HTMLButtonElement>("#hand-toggle")!;
+const handState = document.querySelector<HTMLSpanElement>("#hand-state")!;
+const handVideo = document.querySelector<HTMLVideoElement>("#hand-video")!;
 
 let backend: PixiBackend | undefined;
 let scene: ActiveScene | undefined;
@@ -125,6 +133,15 @@ let marbleLastRequestAt = Number.NEGATIVE_INFINITY;
 let pendingMarbleActivationResult: MarblePlannerSuccess | undefined;
 let pendingMarbleRoutePlanningMs = 0;
 let marbleResumeAfterTransition = false;
+const marbleHandController = new MarbleHandController();
+let marbleHandWorker: Worker | undefined;
+let marbleHandStream: MediaStream | undefined;
+let marbleHandFramePending = false;
+let marbleHandVideoCallback: number | undefined;
+let marbleHandFallbackTimer: number | undefined;
+let marbleHandLastResultAt = Number.NEGATIVE_INFINITY;
+let marbleHandPermissionTimer: number | undefined;
+let marbleHandGeneration = 0;
 const marblePlanner = new MarblePlannerClient(
   new Worker(new URL("./marble-planner.worker.ts", import.meta.url), { type: "module" }),
   {
@@ -477,6 +494,135 @@ function addMarbleMotionBinding(bindingPane: BindingPane, key: keyof MarbleMotio
     .on("change", () => updateMarbleMotionMix(key, bindingPane));
 }
 
+function applyMarbleHandMix(nextMix: MarbleMotionMix, timestampMs: number): void {
+  const deltaSec = Number.isFinite(marbleHandLastResultAt) ? Math.max(1 / 120, (timestampMs - marbleHandLastResultAt) / 1000) : 1 / 30;
+  marbleHandLastResultAt = timestampMs;
+  const filtered = filterMarbleMotionMix(nextMix, marbleMotionMix, deltaSec, { deadband: 0.5, slewPerSec: 90 });
+  if (filtered.leftRight === marbleMotionMix.leftRight && filtered.upDown === marbleMotionMix.upDown && filtered.frontBack === marbleMotionMix.frontBack) return;
+  Object.assign(marbleMotionMix, filtered);
+  previousMarbleMotionMix = copyMarbleMotionMix(filtered);
+  marbleLiveMixState.desired = copyMarbleMotionMix(filtered);
+  if (pane) (pane as unknown as BindingPane).refresh();
+  publishMarbleProfile();
+  scheduleMarbleRebuild();
+}
+
+function scheduleMarbleHandFrame(): void {
+  if (!marbleHandWorker || !marbleHandStream || handVideo.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+  const capture = async (timestampMs: number): Promise<void> => {
+    if (!marbleHandWorker || !marbleHandStream || marbleHandFramePending) return;
+    marbleHandFramePending = true;
+    try {
+      const frame = await createImageBitmap(handVideo);
+      marbleHandWorker.postMessage({ type: "frame", frame, timestampMs }, [frame]);
+    } catch (error) {
+      marbleHandFramePending = false;
+      handState.textContent = error instanceof Error ? error.message : "Frame capture failed";
+    }
+  };
+  if ("requestVideoFrameCallback" in handVideo) {
+    marbleHandVideoCallback = handVideo.requestVideoFrameCallback((now) => {
+      void capture(now);
+      scheduleMarbleHandFrame();
+    });
+  } else {
+    marbleHandFallbackTimer = window.setTimeout(() => {
+      void capture(performance.now());
+      scheduleMarbleHandFrame();
+    }, 33);
+  }
+}
+
+function stopMarbleHandTracking(status = "Off"): void {
+  marbleHandGeneration += 1;
+  if (marbleHandVideoCallback !== undefined && "cancelVideoFrameCallback" in handVideo) handVideo.cancelVideoFrameCallback(marbleHandVideoCallback);
+  if (marbleHandFallbackTimer !== undefined) window.clearTimeout(marbleHandFallbackTimer);
+  if (marbleHandPermissionTimer !== undefined) window.clearTimeout(marbleHandPermissionTimer);
+  marbleHandVideoCallback = undefined;
+  marbleHandFallbackTimer = undefined;
+  marbleHandPermissionTimer = undefined;
+  marbleHandWorker?.terminate();
+  marbleHandWorker = undefined;
+  marbleHandStream?.getTracks().forEach((track) => track.stop());
+  marbleHandStream = undefined;
+  marbleHandFramePending = false;
+  marbleHandLastResultAt = Number.NEGATIVE_INFINITY;
+  marbleHandController.reset();
+  handVideo.pause();
+  handVideo.srcObject = null;
+  handVideo.hidden = true;
+  handToggle.textContent = "Enable camera";
+  handState.textContent = status;
+}
+
+async function startMarbleHandTracking(): Promise<void> {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    handState.textContent = "Camera unavailable";
+    return;
+  }
+  handToggle.disabled = true;
+  handState.textContent = "Requesting camera";
+  const generation = ++marbleHandGeneration;
+  marbleHandPermissionTimer = window.setTimeout(() => {
+    if (generation !== marbleHandGeneration || marbleHandStream) return;
+    marbleHandPermissionTimer = undefined;
+    marbleHandGeneration += 1;
+    handToggle.disabled = false;
+    handState.textContent = "Camera permission timed out";
+  }, 12_000);
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30, max: 30 }, facingMode: "user" },
+    });
+    if (generation !== marbleHandGeneration || conceptSelect.value !== "marble") {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+    if (marbleHandPermissionTimer !== undefined) window.clearTimeout(marbleHandPermissionTimer);
+    marbleHandPermissionTimer = undefined;
+    marbleHandStream = stream;
+    handVideo.srcObject = marbleHandStream;
+    handVideo.hidden = false;
+    await handVideo.play();
+    marbleHandWorker = new Worker(new URL("./marble-hand.worker.ts", import.meta.url), { type: "module" });
+    marbleHandWorker.onmessage = (event: MessageEvent<MarbleHandWorkerOutbound>) => {
+      const message = event.data;
+      if (message.type === "ready") {
+        handToggle.disabled = false;
+        handToggle.textContent = "Disable camera";
+        handState.textContent = "Show one hand";
+        scheduleMarbleHandFrame();
+        return;
+      }
+      marbleHandFramePending = false;
+      if (message.type === "failed") {
+        stopMarbleHandTracking(message.error);
+        return;
+      }
+      const control = marbleHandController.update({
+        ...(message.landmarks ? { landmarks: message.landmarks } : {}),
+        confidence: message.confidence,
+        timestampMs: message.timestampMs,
+      }, marbleMotionMix);
+      handState.textContent = control.finger
+        ? `${control.phase} ${control.finger} | ${message.inferenceMs.toFixed(0)} ms`
+        : `Show one hand | ${message.inferenceMs.toFixed(0)} ms`;
+      if (control.mix && conceptSelect.value === "marble") applyMarbleHandMix(control.mix, message.timestampMs);
+    };
+    marbleHandWorker.postMessage({
+      type: "initialize",
+      wasmRoot: "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm",
+      modelPath: new URL("/models/hand_landmarker.task", window.location.href).href,
+    });
+    handState.textContent = "Loading hand model";
+  } catch (error) {
+    stopMarbleHandTracking(error instanceof Error ? error.message : "Camera permission denied");
+  } finally {
+    if (!marbleHandWorker) handToggle.disabled = false;
+  }
+}
+
 async function loadConcept(concept: string): Promise<void> {
   if (marbleRebuildTimer !== undefined) window.clearTimeout(marbleRebuildTimer);
   marbleRebuildTimer = undefined;
@@ -486,6 +632,8 @@ async function loadConcept(concept: string): Promise<void> {
   scrub.disabled = false;
   marblePlanner.invalidate();
   marbleTransitionRouter.invalidate();
+  handControls.hidden = concept !== "marble";
+  if (concept !== "marble") stopMarbleHandTracking();
   pendingMarbleActivationResult = undefined;
   const wasThree = scene?.backendKind === "three";
   destroyActiveScene();
@@ -686,6 +834,10 @@ audio.addEventListener("ended", () => {
 audio.addEventListener("timeupdate", () => updateTransport(audio.currentTime));
 guides.addEventListener("change", () => guide.classList.toggle("visible", guides.checked));
 audit.addEventListener("change", () => renderAt(audio.currentTime));
+handToggle.addEventListener("click", () => {
+  if (marbleHandStream) stopMarbleHandTracking();
+  else void startMarbleHandTracking();
+});
 exportPng.addEventListener("click", async () => {
   if (!song || !scene) return;
   const blob = await captureCanvasPng(canvas);
@@ -760,6 +912,7 @@ void start().catch((error: unknown) => {
   audio.removeAttribute("src");
   audio.load();
   pane?.dispose();
+  stopMarbleHandTracking();
   marblePlanner.dispose();
   marbleTransitionRouter.dispose();
   destroyActiveScene();

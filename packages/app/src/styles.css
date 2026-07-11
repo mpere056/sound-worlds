@@ -24,6 +24,11 @@ input[type='range'] { width: 100%; accent-color: #86d5ff; }
 .check { display: flex; align-items: center; justify-content: space-between; color: #aab5c5; font-size: 13px; }
 .check input { accent-color: #80cfff; }
 .tuning { padding-top: 22px; border-top: 1px solid #1c2533; }
+.hand-controls { padding-top: 22px; border-top: 1px solid #1c2533; display: grid; gap: 10px; }
+.hand-actions { display: flex; align-items: center; gap: 10px; }
+.hand-actions button { min-height: 36px; padding: 8px 12px; font-size: 12px; }
+.hand-actions span { color: #7f8da2; font: 10px 'DM Mono', ui-monospace, monospace; }
+.hand-controls video { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; transform: scaleX(-1); border: 1px solid #26354a; border-radius: 8px; background: #05080d; }
 .exports { padding-top: 22px; border-top: 1px solid #1c2533; display: grid; gap: 11px; }
 .export-actions { display: grid; grid-template-columns: 1.25fr 1fr; gap: 8px; }
 .export-actions button { min-height: 38px; padding: 8px 10px; font-size: 12px; }

@@ -778,7 +778,7 @@ References:
 6. Only after those gates pass, evaluate two hands, horizontal gestures, or a
    custom recognizer as separate enhancements.
 
-### Implemented slice: camera-independent pinch controller
+### Implemented slices: pinch controller and webcam worker
 
 - A pure `MarbleHandController` now consumes MediaPipe-shaped 21-point landmark
   arrays without importing or requesting camera access.
@@ -797,8 +797,24 @@ References:
 - Fixtures cover all three mappings, current-value-relative movement, exact
   totals, ambiguous multi-pinches, noisy release hysteresis, and temporary versus
   sustained tracking loss.
-- Next P6 slice: camera lifecycle and the MediaPipe vision worker, followed by
-  feeding its landmark results into this controller and the existing coordinator.
+- `@mediapipe/tasks-vision` 0.10.35 now runs the Hand Landmarker in a dedicated
+  CPU worker with a locally served float16 model. The app starts at 640x480 and
+  30 FPS, transfers one `ImageBitmap` at a time, and drops frames while inference
+  is busy so camera input cannot build an unbounded queue.
+- Camera access requires the explicit Enable camera action. The mirrored preview
+  remains compact, all frames stay local, tracks stop on disable/world switch/HMR,
+  and an ignored permission prompt restores the control after 12 seconds.
+- Worker landmarks feed the pure controller, then the existing bounded
+  deadband/slew filter and live coordinator. The Tweakpane values update from the
+  same desired mix used by the planner, preserving one control path for mouse and
+  hand input.
+- The current worker reports inference duration, confidence, handedness, and
+  landmarks through a typed protocol. CPU is the conservative first delegate
+  because worker GPU support varies across browsers; measure the user's machine
+  before considering a GPU/main-thread fallback.
+- Remaining P6 gate: validate successful permission and sustained inference with
+  the actual webcam, capture median/p95 hand-to-visible latency, and tune pinch
+  thresholds, gain, filtering, and low-light behavior from observed recordings.
 
 ### Commit point
 
