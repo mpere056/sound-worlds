@@ -33,6 +33,9 @@ export type { MarblePerformance } from "@reaper-viz/compiler-marble";
 export interface MarbleTuning {
   glow: number;
   camera: number;
+  cameraOrbitYaw: number;
+  cameraOrbitPitch: number;
+  cameraOrbitDistance: number;
   targetScale: number;
   tail: number;
 }
@@ -300,6 +303,27 @@ export function interpolateMarbleTarget(from: MarbleTarget, to: MarbleTarget, ra
     contactPos: from.contactPos.map((value, index) => value + (to.contactPos[index]! - value) * progress) as [number, number, number],
     rotation: from.rotation.map((value, index) => interpolateAngle(value, to.rotation[index]!, progress)) as [number, number, number],
     size: from.size.map((value, index) => value + (to.size[index]! - value) * progress) as [number, number, number],
+  };
+}
+
+export function applyMarbleCameraOrbit(
+  pose: MarbleCameraPose,
+  marblePosition: readonly [number, number, number],
+  yaw: number,
+  pitch: number,
+  distanceDelta: number,
+): MarbleCameraPose {
+  if (Math.abs(yaw) < 1e-6 && Math.abs(pitch) < 1e-6 && Math.abs(distanceDelta) < 1e-6) return pose;
+  const target = new Vector3(...marblePosition);
+  const offset = new Vector3(...pose.position).sub(target);
+  const radius = Math.max(3.5, offset.length() + distanceDelta);
+  offset.normalize().multiplyScalar(radius).applyAxisAngle(new Vector3(0, 1, 0), clamp(yaw, -Math.PI, Math.PI));
+  const right = new Vector3(0, 1, 0).cross(offset).normalize();
+  if (right.lengthSq() > 1e-8) offset.applyAxisAngle(right, clamp(pitch, -0.8, 0.8));
+  return {
+    position: target.clone().add(offset).toArray() as [number, number, number],
+    lookAt: [...marblePosition],
+    zoom: pose.zoom,
   };
 }
 
@@ -622,7 +646,7 @@ export class MarbleScene {
   }
 
   constructor(canvas: HTMLCanvasElement, performance: MarblePerformance, tuning?: MarbleTuning, now: () => number = () => 0) {
-    this.tuning = tuning ?? { glow: 0.78, camera: 0.88, targetScale: 1, tail: 0.8 };
+    this.tuning = tuning ?? { glow: 0.78, camera: 0.88, cameraOrbitYaw: 0, cameraOrbitPitch: 0, cameraOrbitDistance: 0, targetScale: 1, tail: 0.8 };
     this.#performance = performance;
     this.#now = now;
     this.#renderer = new WebGLRenderer({ canvas, context: createCompatibleWebGlContext(canvas), antialias: true, alpha: false });
@@ -1075,6 +1099,13 @@ export class MarbleScene {
         cameraPose = blendMarbleCamera(from, cameraPose, raw);
       }
     }
+    cameraPose = applyMarbleCameraOrbit(
+      cameraPose,
+      sampleMarblePose(this.#performance.statics.path, t).pos,
+      this.tuning.cameraOrbitYaw,
+      this.tuning.cameraOrbitPitch,
+      this.tuning.cameraOrbitDistance,
+    );
     this.#camera.position.set(...cameraPose.position);
     this.#camera.zoom = cameraPose.zoom;
     this.#camera.updateProjectionMatrix();

@@ -8,7 +8,7 @@ import { RunnerScene, type RunnerPerformance } from "@reaper-viz/scene-runner";
 import { TestPatternScene } from "@reaper-viz/scene-testpattern";
 import { Pane } from "tweakpane";
 import { MarblePlannerClient } from "./marble-planner-client.js";
-import { MarbleHandController } from "./marble-hand-control.js";
+import { MarbleHandController, type MarbleHandCameraControl } from "./marble-hand-control.js";
 import type { MarbleHandWorkerOutbound } from "./marble-hand-worker-protocol.js";
 import { MarbleTransitionRouterClient } from "./marble-transition-router-client.js";
 import {
@@ -123,7 +123,8 @@ const marbleLiveMixState: MarbleLiveMixState = {
   desired: copyMarbleMotionMix(marbleMotionMix),
   active: copyMarbleMotionMix(marbleMotionMix),
 };
-const marbleTuning: MarbleTuning = { glow: 0.78, camera: 0.88, targetScale: 1, tail: 0.8 };
+const marbleTuning: MarbleTuning = { glow: 0.78, camera: 0.88, cameraOrbitYaw: 0, cameraOrbitPitch: 0, cameraOrbitDistance: 0, targetScale: 1, tail: 0.8 };
+const marbleHandCamera: MarbleHandCameraControl = { yaw: 0, pitch: 0, distance: 0 };
 const marbleProfilingEnabled = new URLSearchParams(window.location.search).has("profileMarble");
 const marbleBrowserProfile: MarbleBrowserProfile = { frameIntervalsMs: [], renderMs: [], longTasks: [], swaps: [] };
 let previousAnimationFrameAt: number | undefined;
@@ -140,6 +141,7 @@ let marbleHandFramePending = false;
 let marbleHandVideoCallback: number | undefined;
 let marbleHandFallbackTimer: number | undefined;
 let marbleHandLastResultAt = Number.NEGATIVE_INFINITY;
+let marbleHandLastCameraAt = Number.NEGATIVE_INFINITY;
 let marbleHandPermissionTimer: number | undefined;
 let marbleHandGeneration = 0;
 const marblePlanner = new MarblePlannerClient(
@@ -507,6 +509,18 @@ function applyMarbleHandMix(nextMix: MarbleMotionMix, timestampMs: number): void
   scheduleMarbleRebuild();
 }
 
+function applyMarbleHandCamera(next: MarbleHandCameraControl, timestampMs: number): void {
+  const deltaSec = Number.isFinite(marbleHandLastCameraAt) ? Math.max(1 / 120, (timestampMs - marbleHandLastCameraAt) / 1000) : 1 / 30;
+  marbleHandLastCameraAt = timestampMs;
+  const blend = 1 - Math.exp(-10 * deltaSec);
+  marbleHandCamera.yaw += (next.yaw - marbleHandCamera.yaw) * blend;
+  marbleHandCamera.pitch += (next.pitch - marbleHandCamera.pitch) * blend;
+  marbleHandCamera.distance += (next.distance - marbleHandCamera.distance) * blend;
+  marbleTuning.cameraOrbitYaw = marbleHandCamera.yaw;
+  marbleTuning.cameraOrbitPitch = marbleHandCamera.pitch;
+  marbleTuning.cameraOrbitDistance = marbleHandCamera.distance;
+}
+
 function scheduleMarbleHandFrame(): void {
   if (!marbleHandWorker || !marbleHandStream || handVideo.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
   const capture = async (timestampMs: number): Promise<void> => {
@@ -547,6 +561,7 @@ function stopMarbleHandTracking(status = "Off"): void {
   marbleHandStream = undefined;
   marbleHandFramePending = false;
   marbleHandLastResultAt = Number.NEGATIVE_INFINITY;
+  marbleHandLastCameraAt = Number.NEGATIVE_INFINITY;
   marbleHandController.reset();
   handVideo.pause();
   handVideo.srcObject = null;
@@ -604,11 +619,12 @@ async function startMarbleHandTracking(): Promise<void> {
         ...(message.landmarks ? { landmarks: message.landmarks } : {}),
         confidence: message.confidence,
         timestampMs: message.timestampMs,
-      }, marbleMotionMix);
+      }, marbleMotionMix, marbleHandCamera);
       handState.textContent = control.finger
-        ? `${control.phase} ${control.finger} | ${message.inferenceMs.toFixed(0)} ms`
+        ? `${control.phase} ${control.finger === "index" ? "motion" : "camera"} | ${message.inferenceMs.toFixed(0)} ms`
         : `Show one hand | ${message.inferenceMs.toFixed(0)} ms`;
       if (control.mix && conceptSelect.value === "marble") applyMarbleHandMix(control.mix, message.timestampMs);
+      if (control.camera && conceptSelect.value === "marble") applyMarbleHandCamera(control.camera, message.timestampMs);
     };
     marbleHandWorker.postMessage({
       type: "initialize",
@@ -701,7 +717,8 @@ async function loadConcept(concept: string): Promise<void> {
     delete marbleLiveMixState.requested;
     delete marbleLiveMixState.planned;
     marbleLiveMixState.active = copyMarbleMotionMix(marbleMotionMix);
-    Object.assign(marbleTuning, { glow: 0.78, camera: 0.88, targetScale: 1, tail: 0.8 });
+    Object.assign(marbleTuning, { glow: 0.78, camera: 0.88, cameraOrbitYaw: 0, cameraOrbitPitch: 0, cameraOrbitDistance: 0, targetScale: 1, tail: 0.8 });
+    Object.assign(marbleHandCamera, { yaw: 0, pitch: 0, distance: 0 });
     const marble = new MarbleScene(canvas, performance, marbleTuning, () => globalThis.performance.now());
     scene = marble;
     addMarbleMotionBinding(bindingPane, "leftRight", "Left/right %");

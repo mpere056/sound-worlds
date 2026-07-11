@@ -655,21 +655,18 @@ must total 100. Expose three direct relative controls, but project every update
 back onto the bounded 100% simplex instead of treating the sliders as three
 independent values.
 
-First one-hand mapping:
+Current one-hand mapping:
 
 | Pinch | Controlled percentage | Motion |
 | --- | --- | --- |
-| Thumb + index fingertip | Up/down | Hand up increases; hand down decreases |
-| Thumb + middle fingertip | Left/right | Hand up increases; hand down decreases |
-| Thumb + ring fingertip | Front/back | Hand up increases; hand down decreases |
+| Thumb + index fingertip | 3D motion mix | Mirrored horizontal motion controls left/right, vertical motion controls up/down, and palm-scale change controls front/back |
+| Thumb + middle fingertip | Camera orbit | Horizontal and vertical motion control yaw/pitch; palm-scale change controls distance while look-at remains locked to the marble |
 
-Each pinch is a relative grab, not an absolute screen coordinate. On engagement,
-capture the hand's filtered vertical position and the current desired mix. Map
-subsequent vertical displacement to the selected percentage, then distribute the
-opposite delta across the other two percentages in proportion to their available
-room. Respect the existing 10-80 bounds and preserve an exact integer total of
-100. This avoids a jump when control starts and makes every finger mapping usable
-at every camera position.
+Each pinch is a relative grab, not an absolute screen coordinate. On index
+engagement, capture palm position, palm scale, and the current desired mix. Map
+the three simultaneous deltas onto the bounded 100% simplex without sequential
+axis bias. On middle engagement, capture the current orbit pose and update only
+camera yaw, pitch, and distance; this path never invokes platform planning.
 
 Only one pinch owns control at a time. Determine the active finger from
 thumb-tip distance normalized by palm size, require a short stable engagement,
@@ -782,8 +779,8 @@ References:
 
 - A pure `MarbleHandController` now consumes MediaPipe-shaped 21-point landmark
   arrays without importing or requesting camera access.
-- Thumb/index owns up/down, thumb/middle owns left/right, and thumb/ring owns
-  front/back. Distances are normalized by palm width so thresholds do not depend
+- Thumb/index now owns the complete 3D motion mix, while thumb/middle owns camera
+  orbit. Pinch distances are normalized by palm width so thresholds do not depend
   directly on camera distance or hand size.
 - Engagement requires both three confident frames and 80 ms. Separate engage
   and release thresholds provide hysteresis, while an ambiguity margin prevents

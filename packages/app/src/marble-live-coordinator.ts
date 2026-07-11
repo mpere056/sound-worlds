@@ -44,6 +44,31 @@ export function projectMarbleMotionMix(
   };
 }
 
+export function projectMarbleMotionVector(requested: MarbleMotionMix): MarbleMotionMix {
+  let low = Math.min(...MIX_AXES.map((axis) => requested[axis] - MARBLE_MIX_MAX));
+  let high = Math.max(...MIX_AXES.map((axis) => requested[axis] - MARBLE_MIX_MIN));
+  for (let iteration = 0; iteration < 40; iteration += 1) {
+    const lambda = (low + high) / 2;
+    const total = MIX_AXES.reduce((sum, axis) => sum + Math.max(MARBLE_MIX_MIN, Math.min(MARBLE_MIX_MAX, requested[axis] - lambda)), 0);
+    if (total > 100) low = lambda;
+    else high = lambda;
+  }
+  const lambda = (low + high) / 2;
+  const values = MIX_AXES.map((axis) => Math.max(MARBLE_MIX_MIN, Math.min(MARBLE_MIX_MAX, requested[axis] - lambda)));
+  const rounded = values.map((value) => Math.floor(value));
+  let missing = 100 - rounded.reduce((sum, value) => sum + value, 0);
+  const order = values
+    .map((value, index) => ({ index, fraction: value - rounded[index]! }))
+    .sort((a, b) => b.fraction - a.fraction || a.index - b.index);
+  for (const entry of order) {
+    if (missing <= 0) break;
+    if (rounded[entry.index]! >= MARBLE_MIX_MAX) continue;
+    rounded[entry.index]! += 1;
+    missing -= 1;
+  }
+  return { leftRight: rounded[0]!, upDown: rounded[1]!, frontBack: rounded[2]! };
+}
+
 export function filterMarbleMotionMix(
   next: MarbleMotionMix,
   previous: MarbleMotionMix,

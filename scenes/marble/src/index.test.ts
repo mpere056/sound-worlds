@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildFixtureSong } from "@reaper-viz/core";
 import { compileMarble, marbleTargetClearance, sampleMarblePose } from "@reaper-viz/compiler-marble";
 import { PerspectiveCamera, Vector3 } from "three";
-import { blendMarbleCamera, interpolateMarblePathSegment, interpolateMarblePlatformCarrier, interpolateMarbleTarget, interpolateMarbleTargetRoute, marblePlatformCarrierTransform, marblePlatformTransitionDuration, marblePlatformTransitionProgress, marblePlatformVisualSize, prepareMarbleActivation, prepareMarblePerformanceTransition, sampleMarbleCamera, type MarbleCameraPose } from "./index.js";
+import { applyMarbleCameraOrbit, blendMarbleCamera, interpolateMarblePathSegment, interpolateMarblePlatformCarrier, interpolateMarbleTarget, interpolateMarbleTargetRoute, marblePlatformCarrierTransform, marblePlatformTransitionDuration, marblePlatformTransitionProgress, marblePlatformVisualSize, prepareMarbleActivation, prepareMarblePerformanceTransition, sampleMarbleCamera, type MarbleCameraPose } from "./index.js";
 
 function distance(a: [number, number, number], b: [number, number, number]): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
@@ -77,6 +77,16 @@ describe("Marble camera", () => {
     const totalContribution = axisContribution.reduce((sum, value) => sum + value, 0);
     expect(axisContribution[2]! / totalContribution).toBeGreaterThan(0.52);
     expect(axisContribution[0]! / totalContribution).toBeLessThan(0.45);
+  });
+
+  it("orbits around the marble while keeping it as the exact look target", () => {
+    const base: MarbleCameraPose = { position: [1, 8, 7], lookAt: [0, 0, 0], zoom: 1.16 };
+    const marble: [number, number, number] = [1, 2, 3];
+    const orbited = applyMarbleCameraOrbit(base, marble, 0.5, -0.2, -1);
+    expect(orbited.lookAt).toEqual(marble);
+    expect(orbited.position).not.toEqual(base.position);
+    expect(distance(orbited.position, marble)).toBeCloseTo(distance(base.position, marble) - 1, 8);
+    expect(applyMarbleCameraOrbit(base, marble, 0, 0, 0)).toBe(base);
   });
 });
 

@@ -4,6 +4,7 @@ import {
   marbleMotionMixLabel,
   nextMarbleRequestDelay,
   projectMarbleMotionMix,
+  projectMarbleMotionVector,
 } from "./marble-live-coordinator.js";
 
 describe("Marble live request coordinator", () => {
@@ -41,6 +42,16 @@ describe("Marble live request coordinator", () => {
     const moved = filterMarbleMotionMix({ leftRight: 60, upDown: 20, frontBack: 20 }, initial, 1 / 60, { slewPerSec: 60 });
     expect(moved).toEqual({ leftRight: 21, upDown: 20, frontBack: 59 });
     expect(moved.leftRight + moved.upDown + moved.frontBack).toBe(100);
+  });
+
+  it("projects simultaneous spatial input without axis-order bias", () => {
+    expect(projectMarbleMotionVector({ leftRight: 40, upDown: 30, frontBack: 70 })).toEqual({
+      leftRight: 27,
+      upDown: 17,
+      frontBack: 56,
+    });
+    const bounded = projectMarbleMotionVector({ leftRight: 200, upDown: -40, frontBack: 20 });
+    expect(bounded).toEqual({ leftRight: 80, upDown: 10, frontBack: 10 });
   });
 
   it("bounds a five-minute 60 Hz stream to the 10 Hz planner cadence", () => {
