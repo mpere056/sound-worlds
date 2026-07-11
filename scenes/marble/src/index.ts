@@ -159,19 +159,13 @@ interface TargetMeshes {
   shadow: Mesh<CircleGeometry, MeshBasicMaterial>;
   hardware: Group;
   carrier: Mesh<BoxGeometry, MeshStandardMaterial>;
+  fasteners: TargetFastener[];
   compact: boolean;
-  rod?: Mesh<CylinderGeometry, MeshStandardMaterial>;
 }
 
 interface RailMeshes {
   left: Mesh<CylinderGeometry, MeshStandardMaterial>[];
   right: Mesh<CylinderGeometry, MeshStandardMaterial>[];
-  ties: Array<{ index: number; mesh: Mesh<CylinderGeometry, MeshStandardMaterial> }>;
-  supports: Array<{
-    index: number;
-    stem: Mesh<CylinderGeometry, MeshStandardMaterial>;
-    collar: Mesh<CylinderGeometry, MeshStandardMaterial>;
-  }>;
 }
 
 type MeshBasicLike = MeshStandardMaterial | MeshPhysicalMaterial;
@@ -534,44 +528,54 @@ interface TargetPrimitivePool {
   sphere: SphereGeometry;
 }
 
+interface TargetFastener {
+  screw: Mesh<CylinderGeometry, MeshStandardMaterial>;
+  slot: Mesh<BoxGeometry, MeshStandardMaterial>;
+  xSign: -1 | 1;
+  zSign: -1 | 1;
+}
+
 interface TargetMaterialPool {
   darkMetal: MeshStandardMaterial;
   screwMetal: MeshStandardMaterial;
   accent: MeshStandardMaterial;
 }
 
-function addTargetHardware(target: MarbleTarget, group: Group, geometry: TargetPrimitivePool, materials: TargetMaterialPool): { group: Group; carrier: Mesh<BoxGeometry, MeshStandardMaterial> } {
-  const hardware = new Group();
+function positionTargetFasteners(target: MarbleTarget, carrierTransform: MarblePlatformCarrierTransform, fasteners: readonly TargetFastener[]): void {
   const visualSize = marblePlatformVisualSize(target);
+  const screwY = carrierTransform.position[1] + carrierTransform.scale[1] / 2 + 0.012;
+  for (const fastener of fasteners) {
+    const x = fastener.xSign * visualSize[0] * 0.38;
+    const z = fastener.zSign * visualSize[2] * 0.32;
+    fastener.screw.position.set(x, screwY, z);
+    fastener.slot.position.set(x, screwY + 0.009, z);
+  }
+}
+
+function addTargetHardware(target: MarbleTarget, group: Group, geometry: TargetPrimitivePool, materials: TargetMaterialPool): { group: Group; carrier: Mesh<BoxGeometry, MeshStandardMaterial>; fasteners: TargetFastener[] } {
+  const hardware = new Group();
   const carrierTransform = marblePlatformCarrierTransform(target);
   const carrier = new Mesh(geometry.box, materials.accent);
   carrier.scale.set(...carrierTransform.scale);
   carrier.position.set(...carrierTransform.position);
   hardware.add(carrier);
 
-  const screwOffsetX = visualSize[0] * 0.38;
-  const screwOffsetZ = visualSize[2] * 0.32;
-  for (const [x, z] of [[-screwOffsetX, -screwOffsetZ], [screwOffsetX, -screwOffsetZ], [-screwOffsetX, screwOffsetZ], [screwOffsetX, screwOffsetZ]] as const) {
+  const fasteners: TargetFastener[] = [];
+  for (const [xSign, zSign] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
     const screw = new Mesh(geometry.cylinder, materials.screwMetal);
     screw.scale.set(0.045, 0.025, 0.045);
     screw.rotation.x = Math.PI / 2;
-    screw.position.set(x, visualSize[1] * 0.72, z);
     hardware.add(screw);
     const slot = new Mesh(geometry.box, materials.darkMetal);
     slot.scale.set(0.062, 0.01, 0.012);
-    slot.position.set(x, visualSize[1] * 0.737, z);
-    slot.rotation.y = (x + z) > 0 ? 0.6 : -0.6;
+    slot.rotation.y = (xSign + zSign) > 0 ? 0.6 : -0.6;
     hardware.add(slot);
+    fasteners.push({ screw, slot, xSign, zSign });
   }
+  positionTargetFasteners(target, carrierTransform, fasteners);
 
-  const bracketLength = Math.max(0.52, visualSize[0] * 0.55);
-  const bracket = new Mesh(geometry.cylinder, materials.darkMetal);
-  bracket.scale.set(0.018, bracketLength, 0.018);
-  bracket.rotation.z = Math.PI / 2;
-  bracket.position.set(-visualSize[0] * 0.55, -0.2, -0.22);
-  hardware.add(bracket);
   group.add(hardware);
-  return { group: hardware, carrier };
+  return { group: hardware, carrier, fasteners };
 }
 
 export class MarbleScene {
@@ -677,7 +681,6 @@ export class MarbleScene {
     this.#addWall();
     this.#machine.add(this.#performanceObjects);
     this.#addTargets();
-    this.#addRods();
     this.#addRails();
     this.#marble = new Mesh(
       new SphereGeometry(0.28, 36, 20),
@@ -744,7 +747,6 @@ export class MarbleScene {
     const targetLayer = svgElement("g");
     targetLayer.classList.add("marble-svg-targets");
     svg.append(targetLayer);
-    this.#addSvgTargets(targetLayer);
 
     const marble = svgElement("g");
     marble.setAttribute("filter", "url(#marble-svg-glow)");
@@ -768,36 +770,6 @@ export class MarbleScene {
 
     parent?.append(svg);
     return { svg, targetLayer, marble, marbleGlow, marbleCore };
-  }
-
-  #addSvgTargets(targetLayer = this.#svgTargetLayer): void {
-    for (const target of this.#performance.statics.targets) {
-      const [x, y] = worldToScreen(target.pos);
-      const group = svgElement("g");
-      const baseTransform = `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${(target.rotation[2] * 57.2958).toFixed(2)})`;
-      group.setAttribute("transform", baseTransform);
-      const glow = svgElement("circle");
-      glow.setAttribute("r", "44");
-      glow.setAttribute("fill", target.color);
-      glow.setAttribute("opacity", "0.08");
-      glow.setAttribute("filter", "url(#marble-svg-glow)");
-      const base = svgElement("rect");
-      const visualSize = marblePlatformVisualSize(target);
-      const width = Math.max(42, visualSize[0] * 88);
-      const height = Math.max(16, visualSize[2] * 52);
-      base.setAttribute("x", String(-width / 2));
-      base.setAttribute("y", String(-height / 2));
-      base.setAttribute("width", String(width));
-      base.setAttribute("height", String(height));
-      base.setAttribute("rx", "8");
-      base.setAttribute("fill", target.material === "brass" ? "#d6a63e" : target.color);
-      base.setAttribute("stroke", "#dff8ff");
-      base.setAttribute("stroke-width", "2");
-      base.setAttribute("opacity", "0.92");
-      group.append(glow, base);
-      targetLayer.append(group);
-      this.#svgTargets.set(target.id, { group, base, glow, baseTransform });
-    }
   }
 
   #addWall(): void {
@@ -841,7 +813,6 @@ export class MarbleScene {
         screwMetal: this.#sharedMaterials.screwMetal,
         accent: this.#accentMaterial(target.color),
       });
-      hardware.group.rotation.y = target.visualRoll ?? 0;
       group.add(base);
       const glowMaterial = new MeshStandardMaterial({ color: hexNumber(target.color), emissive: hexNumber(target.color), emissiveIntensity: 0, transparent: true, opacity: 0 });
       const glow = new Mesh(this.#primitiveGeometry.sphere, glowMaterial);
@@ -857,21 +828,8 @@ export class MarbleScene {
       group.visible = visible;
       shadow.visible = visible;
       glow.visible = visible;
-      this.#targetMeshes.set(target.id, { group, base, home: group.position.clone(), baseRotation: [group.rotation.x, group.rotation.y, group.rotation.z], baseScale, glow, shadow, hardware: hardware.group, carrier: hardware.carrier, compact });
+      this.#targetMeshes.set(target.id, { group, base, home: group.position.clone(), baseRotation: [group.rotation.x, group.rotation.y, group.rotation.z], baseScale, glow, shadow, hardware: hardware.group, carrier: hardware.carrier, fasteners: hardware.fasteners, compact });
       this.#performanceObjects.add(shadow, group, glow);
-    }
-  }
-
-  #addRods(): void {
-    const targets = this.#performance.statics.targets;
-    for (const target of targets) {
-      const rod = new Mesh(this.#primitiveGeometry.cylinder, this.#sharedMaterials.rod);
-      rod.scale.set(0.026, 0.86, 0.026);
-      rod.position.set(target.pos[0] - 0.44, target.pos[1] - 0.18, target.pos[2] - 0.18);
-      rod.rotation.z = Math.PI / 2 + target.rotation[2] * 0.45;
-      const meshes = this.#targetMeshes.get(target.id);
-      if (meshes) meshes.rod = rod;
-      this.#performanceObjects.add(rod);
     }
   }
 
@@ -901,19 +859,9 @@ export class MarbleScene {
       if (points.length < 2) continue;
       const left = Array.from({ length: points.length - 1 }, () => new Mesh(this.#primitiveGeometry.cylinder, this.#sharedMaterials.rail));
       const right = Array.from({ length: points.length - 1 }, () => new Mesh(this.#primitiveGeometry.cylinder, this.#sharedMaterials.rail));
-      const ties = Array.from({ length: Math.max(0, Math.ceil((points.length - 2) / 4)) }, (_, tieIndex) => ({
-        index: 1 + tieIndex * 4,
-        mesh: new Mesh(this.#primitiveGeometry.cylinder, this.#sharedMaterials.tie),
-      })).filter((entry) => entry.index < points.length - 1);
-      const supportIndexes = Array.from(new Set([0, Math.floor(points.length / 2), points.length - 1]));
-      const supports = supportIndexes.map((index) => ({
-        index,
-        stem: new Mesh(this.#primitiveGeometry.cylinder, this.#sharedMaterials.support),
-        collar: new Mesh(this.#primitiveGeometry.cylinder, this.#sharedMaterials.support),
-      }));
-      const meshes: RailMeshes = { left, right, ties, supports };
+      const meshes: RailMeshes = { left, right };
       this.#railMeshes.set(segment.id, meshes);
-      this.#rails.add(...left, ...right, ...ties.map((entry) => entry.mesh), ...supports.flatMap((entry) => [entry.stem, entry.collar]));
+      this.#rails.add(...left, ...right);
       this.#applyRailVisual(segment, meshes);
     }
     this.#performanceObjects.add(this.#rails);
@@ -928,21 +876,6 @@ export class MarbleScene {
     for (let index = 0; index < Math.min(meshes.left.length, leftPoints.length - 1); index += 1) {
       positionCylinder(meshes.left[index]!, leftPoints[index]!, leftPoints[index + 1]!, 0.018);
       positionCylinder(meshes.right[index]!, rightPoints[index]!, rightPoints[index + 1]!, 0.018);
-    }
-    for (const tie of meshes.ties) {
-      const point = points[tie.index];
-      if (!point) continue;
-      const side = railSideAt(points, tie.index).multiplyScalar(railGap * 1.21);
-      positionCylinder(tie.mesh, point.clone().sub(side), point.clone().add(side), 0.012);
-    }
-    for (const support of meshes.supports) {
-      const point = points[support.index];
-      if (!point) continue;
-      const floor = new Vector3(point.x, point.y, -0.42);
-      positionCylinder(support.stem, floor, point, 0.016);
-      support.collar.scale.set(0.038, 0.018, 0.038);
-      support.collar.position.copy(point);
-      support.collar.rotation.x = Math.PI / 2;
     }
   }
 
@@ -1120,11 +1053,7 @@ export class MarbleScene {
     meshes.baseScale.set(...target.size);
     meshes.carrier.scale.set(...carrierTransform.scale);
     meshes.carrier.position.set(...carrierTransform.position);
-    meshes.hardware.rotation.y = target.visualRoll ?? 0;
-    if (meshes.rod) {
-      meshes.rod.position.set(target.pos[0] - 0.44, target.pos[1] - 0.18, target.pos[2] - 0.18);
-      meshes.rod.rotation.z = Math.PI / 2 + target.rotation[2] * 0.45;
-    }
+    positionTargetFasteners(target, carrierTransform, meshes.fasteners);
     if (svgTarget) {
       const [x, y] = worldToScreen(target.pos);
       svgTarget.baseTransform = `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${(target.rotation[2] * 57.2958).toFixed(2)})`;
@@ -1225,9 +1154,7 @@ export class MarbleScene {
     this.#renderer.setSize(performance.resolution.w, performance.resolution.h, false);
     this.#camera.aspect = performance.resolution.w / performance.resolution.h;
     this.#camera.updateProjectionMatrix();
-    this.#addSvgTargets();
     this.#addTargets();
-    this.#addRods();
     this.#addRails();
     this.#performanceUpdates += 1;
   }

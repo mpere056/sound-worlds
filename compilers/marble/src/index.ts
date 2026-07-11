@@ -504,15 +504,12 @@ function targetFootprint(target: MarbleTarget): TargetFootprint {
 
 export function marbleTargetVisualFootprint(target: MarbleTarget): TargetFootprint {
   const basis = targetBasis(target.rotation[2], target.rotation[0]);
-  const roll = target.visualRoll ?? 0;
-  const tangent = vecAdd(vecScale(basis.tangent, Math.cos(roll)), vecScale(basis.binormal, Math.sin(roll)));
-  const binormal = vecAdd(vecScale(basis.binormal, Math.cos(roll)), vecScale(basis.tangent, -Math.sin(roll)));
   const visualSize = marbleTargetVisualSize(target);
   const carrierThickness = Math.max(0.065, visualSize[1] * 0.5);
   const centerOffset = -(targetHalfThickness(target.kind, target.size) + carrierThickness / 2 + 0.018);
   return {
     center: vecAdd(target.pos, vecScale(basis.normal, centerOffset)),
-    axes: [tangent, basis.normal, binormal],
+    axes: [basis.tangent, basis.normal, basis.binormal],
     halfExtents: [visualSize[0] * 1.06 / 2, carrierThickness / 2, visualSize[2] * 1.1 / 2],
   };
 }
@@ -982,7 +979,6 @@ function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics
     target ??= bestTarget ?? placeTarget(`target:${index}`, chosenKind, pitch, pitchClass, contactPos, rotation, depthTilt, [0.048, 0.024, 0.048], "rubber");
     targets.push(target);
   }
-  assignVisualRolls(targets);
   return targets;
 }
 
@@ -1024,29 +1020,6 @@ function validateTargetLayout(targets: readonly MarbleTarget[], profile?: Mutabl
       if (profile) profile.counters.overlapChecks += 1;
       if (marbleTargetsOverlap(a, b, 0)) throw new Error(`Invalid Marble layout: ${a.id} overlaps ${b.id}`);
     }
-  }
-}
-
-function assignVisualRolls(targets: MarbleTarget[]): void {
-  const rolls = [0, Math.PI / 2, Math.PI / 4, -Math.PI / 4, Math.PI / 6, -Math.PI / 6, Math.PI / 3, -Math.PI / 3];
-  for (let pass = 0; pass < 4; pass += 1) {
-    let changed = false;
-    for (let index = 0; index < targets.length; index += 1) {
-      const target = targets[index]!;
-      const others = targets.filter((_, otherIndex) => otherIndex !== index);
-      const currentOverlaps = others.filter((other) => marbleTargetVisualsOverlap(target, other, 0)).length;
-      const selected = rolls
-        .map((roll) => {
-          const candidate = { ...target, visualRoll: roll };
-          return { roll, overlaps: others.filter((other) => marbleTargetVisualsOverlap(candidate, other, 0)).length };
-        })
-        .sort((a, b) => a.overlaps - b.overlaps || Math.abs(a.roll) - Math.abs(b.roll) || a.roll - b.roll)[0]!;
-      if (selected.overlaps < currentOverlaps) {
-        if ((target.visualRoll ?? 0) !== selected.roll) changed = true;
-        target.visualRoll = round(selected.roll, 4);
-      }
-    }
-    if (!changed) break;
   }
 }
 

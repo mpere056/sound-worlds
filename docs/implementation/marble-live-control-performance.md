@@ -823,13 +823,14 @@ References:
 - Peg, chime, plate, and resonator collision semantics now share one visible
   rectangular carrier treatment. Compact collision cylinders remain hidden and
   can no longer protrude through the colored platform.
-- The compiler may roll a rectangular carrier within its contact plane to reduce
-  visual overlap without changing the collision normal, contact point, timing,
-  or bounded marble speed.
 - Dense contacts and any remaining intersecting visible-carrier component receive
   one deterministic representative platform. Internal collision targets remain
   in the certified route, while the renderer cannot display two platforms in the
   same 3D volume.
+- Each visible platform is one carrier-and-fastener assembly. Screws and slots
+  are anchored to the carrier top during static rendering and live transitions;
+  detached target brackets, rods, duplicate SVG target plates, rail ties, and
+  free-standing support collars are no longer rendered.
 - Transition routing uses the visible carrier footprint and understands shared
   visual groups. The scene derives the same groups for older saved performances
   that predate compiler-authored visual-group metadata.
