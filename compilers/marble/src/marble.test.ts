@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildFixtureSong } from "@reaper-viz/core";
-import { compileMarble, marbleTargetClearance, marbleTargetsOverlap, sampleMarblePath, sampleMarblePose, type MarbleCompileProfile } from "./index.js";
+import { compileMarble, marbleTargetClearance, marbleTargetVisualsOverlap, marbleTargetsOverlap, sampleMarblePath, sampleMarblePose, type MarbleCompileProfile } from "./index.js";
 
 function sampledMotionMix(performance: ReturnType<typeof compileMarble>): [number, number, number] {
   const endT = performance.durationSec;
@@ -64,6 +64,25 @@ describe("Marble Music compiler", () => {
     expect(performance.statics.clusters.some((cluster) => cluster.kind === "rattle" || cluster.kind === "cascade")).toBe(true);
     expect(performance.statics.diagnostics.impossibleGaps.length).toBeGreaterThan(0);
     expect(performance.statics.diagnostics.droppedNotes).toBe(0);
+  });
+
+  it("uses one non-overlapping visible carrier for each dense mechanism", () => {
+    const song = buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [0, 0.12, 0.28, 0.44, 1.5, 2.5], pitch: 58, kind: "note" }] });
+    const performance = compileMarble(song);
+    const firstByGroup = new Map<string, string>();
+    for (const target of performance.statics.targets) {
+      if (target.visualGroupId && !firstByGroup.has(target.visualGroupId)) firstByGroup.set(target.visualGroupId, target.id);
+    }
+    const representatives = performance.statics.targets.filter((target) => {
+      if (!target.visualGroupId) return true;
+      return firstByGroup.get(target.visualGroupId) === target.id;
+    });
+    expect(performance.statics.targets.filter((target) => target.visualGroupId).length).toBeGreaterThan(1);
+    for (let left = 0; left < representatives.length; left += 1) {
+      for (let right = left + 1; right < representatives.length; right += 1) {
+        expect(marbleTargetVisualsOverlap(representatives[left]!, representatives[right]!, 0)).toBe(false);
+      }
+    }
   });
 
   it("emits a continuous path and tail coverage", () => {

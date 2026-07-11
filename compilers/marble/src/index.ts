@@ -478,6 +478,17 @@ interface TargetFootprint {
   halfExtents: [number, number, number];
 }
 
+export const MARBLE_TARGET_VISUAL_BOUNDS = {
+  compact: { min: [0.58, 0.11, 0.28], max: [0.82, 0.2, 0.46] },
+  full: { min: [0.68, 0.12, 0.32], max: [1.35, 0.28, 0.7] },
+} as const;
+
+export function marbleTargetVisualSize(target: MarbleTarget): Vec3 {
+  const compact = target.kind === "peg" || target.kind === "chime";
+  const bounds = compact ? MARBLE_TARGET_VISUAL_BOUNDS.compact : MARBLE_TARGET_VISUAL_BOUNDS.full;
+  return target.size.map((value, index) => clamp(value, bounds.min[index]!, bounds.max[index]!)) as Vec3;
+}
+
 function targetHalfThickness(kind: MarbleTarget["kind"], size: Vec3): number {
   return kind === "peg" || kind === "chime" ? size[1] * 0.9 : size[1] / 2;
 }
@@ -488,6 +499,21 @@ function targetFootprint(target: MarbleTarget): TargetFootprint {
     center: target.pos,
     axes: [basis.tangent, basis.normal, basis.binormal],
     halfExtents: [target.size[0] / 2, targetHalfThickness(target.kind, target.size), target.size[2] / 2],
+  };
+}
+
+export function marbleTargetVisualFootprint(target: MarbleTarget): TargetFootprint {
+  const basis = targetBasis(target.rotation[2], target.rotation[0]);
+  const roll = target.visualRoll ?? 0;
+  const tangent = vecAdd(vecScale(basis.tangent, Math.cos(roll)), vecScale(basis.binormal, Math.sin(roll)));
+  const binormal = vecAdd(vecScale(basis.binormal, Math.cos(roll)), vecScale(basis.tangent, -Math.sin(roll)));
+  const visualSize = marbleTargetVisualSize(target);
+  const carrierThickness = Math.max(0.065, visualSize[1] * 0.5);
+  const centerOffset = -(targetHalfThickness(target.kind, target.size) + carrierThickness / 2 + 0.018);
+  return {
+    center: vecAdd(target.pos, vecScale(basis.normal, centerOffset)),
+    axes: [tangent, basis.normal, binormal],
+    halfExtents: [visualSize[0] * 1.06 / 2, carrierThickness / 2, visualSize[2] * 1.1 / 2],
   };
 }
 
@@ -602,6 +628,24 @@ function footprintProjectionRadius(footprint: TargetFootprint, axis: Vec3): numb
 export function marbleTargetsOverlap(a: MarbleTarget, b: MarbleTarget, padding = 0.055): boolean {
   const left = targetFootprint(a);
   const right = targetFootprint(b);
+  const delta = vecSub(right.center, left.center);
+  const axes = [...left.axes, ...right.axes];
+  for (const leftAxis of left.axes) {
+    for (const rightAxis of right.axes) {
+      const cross = vecCross(leftAxis, rightAxis);
+      if (vecLength(cross) > EPS) axes.push(vecNormalize(cross));
+    }
+  }
+  for (const axis of axes) {
+    const distance = Math.abs(vecDot(delta, axis));
+    if (distance >= footprintProjectionRadius(left, axis) + footprintProjectionRadius(right, axis) + padding) return false;
+  }
+  return true;
+}
+
+export function marbleTargetVisualsOverlap(a: MarbleTarget, b: MarbleTarget, padding = 0.035): boolean {
+  const left = marbleTargetVisualFootprint(a);
+  const right = marbleTargetVisualFootprint(b);
   const delta = vecSub(right.center, left.center);
   const axes = [...left.axes, ...right.axes];
   for (const leftAxis of left.axes) {
@@ -938,6 +982,7 @@ function compileTargets(notes: readonly SongEvent[], metrics: MarbleTrackMetrics
     target ??= bestTarget ?? placeTarget(`target:${index}`, chosenKind, pitch, pitchClass, contactPos, rotation, depthTilt, [0.048, 0.024, 0.048], "rubber");
     targets.push(target);
   }
+  assignVisualRolls(targets);
   return targets;
 }
 
@@ -979,6 +1024,65 @@ function validateTargetLayout(targets: readonly MarbleTarget[], profile?: Mutabl
       if (profile) profile.counters.overlapChecks += 1;
       if (marbleTargetsOverlap(a, b, 0)) throw new Error(`Invalid Marble layout: ${a.id} overlaps ${b.id}`);
     }
+  }
+}
+
+function assignVisualRolls(targets: MarbleTarget[]): void {
+  const rolls = [0, Math.PI / 2, Math.PI / 4, -Math.PI / 4, Math.PI / 6, -Math.PI / 6, Math.PI / 3, -Math.PI / 3];
+  for (let pass = 0; pass < 4; pass += 1) {
+    let changed = false;
+    for (let index = 0; index < targets.length; index += 1) {
+      const target = targets[index]!;
+      const others = targets.filter((_, otherIndex) => otherIndex !== index);
+      const currentOverlaps = others.filter((other) => marbleTargetVisualsOverlap(target, other, 0)).length;
+      const selected = rolls
+        .map((roll) => {
+          const candidate = { ...target, visualRoll: roll };
+          return { roll, overlaps: others.filter((other) => marbleTargetVisualsOverlap(candidate, other, 0)).length };
+        })
+        .sort((a, b) => a.overlaps - b.overlaps || Math.abs(a.roll) - Math.abs(b.roll) || a.roll - b.roll)[0]!;
+      if (selected.overlaps < currentOverlaps) {
+        if ((target.visualRoll ?? 0) !== selected.roll) changed = true;
+        target.visualRoll = round(selected.roll, 4);
+      }
+    }
+    if (!changed) break;
+  }
+}
+
+function assignVisualGroups(targets: MarbleTarget[], clusters: readonly MarbleCluster[]): void {
+  const parents = targets.map((_, index) => index);
+  const find = (index: number): number => {
+    let root = index;
+    while (parents[root] !== root) root = parents[root]!;
+    while (parents[index] !== index) {
+      const next = parents[index]!;
+      parents[index] = root;
+      index = next;
+    }
+    return root;
+  };
+  const join = (left: number, right: number): void => {
+    const leftRoot = find(left);
+    const rightRoot = find(right);
+    if (leftRoot === rightRoot) return;
+    parents[Math.max(leftRoot, rightRoot)] = Math.min(leftRoot, rightRoot);
+  };
+  for (const cluster of clusters) {
+    if (cluster.kind === "single") continue;
+    const indices = cluster.targetIds.map((targetId) => targets.findIndex((target) => target.id === targetId)).filter((index) => index >= 0);
+    for (const index of indices.slice(1)) join(indices[0]!, index);
+  }
+  for (let left = 0; left < targets.length; left += 1) {
+    for (let right = left + 1; right < targets.length; right += 1) {
+      if (marbleTargetVisualsOverlap(targets[left]!, targets[right]!, 0)) join(left, right);
+    }
+  }
+  const sizes = new Map<number, number>();
+  for (let index = 0; index < targets.length; index += 1) sizes.set(find(index), (sizes.get(find(index)) ?? 0) + 1);
+  for (let index = 0; index < targets.length; index += 1) {
+    const root = find(index);
+    if ((sizes.get(root) ?? 0) > 1) targets[index]!.visualGroupId = `visual-group:${root}`;
   }
 }
 
@@ -1273,6 +1377,7 @@ export function compileMarble(song: Song, options: CompileMarbleOptions = {}): M
     const compiledClusters = compileClusters(selected.notes, targets);
     return { clusters: compiledClusters, impacts: compileImpacts(selected.notes, targets, compiledClusters) };
   });
+  assignVisualGroups(targets, clusters);
   const diagnostics: MarbleDiagnostics = {
     droppedNotes: 0,
     timingMismatches: 0,

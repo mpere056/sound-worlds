@@ -26,6 +26,7 @@ function targetAt(from: MarbleTarget, to: MarbleTarget, raw: number, offset: Mar
     pos: from.pos.map((value, index) => value + (to.pos[index]! - value) * progress + offset[index]! * envelope) as MarbleTransitionOffset,
     contactPos: from.contactPos.map((value, index) => value + (to.contactPos[index]! - value) * progress + offset[index]! * envelope) as MarbleTransitionOffset,
     rotation: from.rotation.map((value, index) => interpolateAngle(value, to.rotation[index]!, progress)) as MarbleTransitionOffset,
+    visualRoll: interpolateAngle(from.visualRoll ?? 0, to.visualRoll ?? 0, progress),
     size: from.size.map((value, index) => value + (to.size[index]! - value) * progress) as MarbleTransitionOffset,
   };
 }
@@ -33,18 +34,23 @@ function targetAt(from: MarbleTarget, to: MarbleTarget, raw: number, offset: Mar
 function footprint(target: MarbleTarget): Footprint {
   const rotation = target.rotation[2];
   const tilt = target.rotation[0];
-  const sinRotation = Math.sin(rotation);
-  const cosRotation = Math.cos(rotation);
-  const sinTilt = Math.sin(tilt);
-  const cosTilt = Math.cos(tilt);
+  const roll = target.visualRoll ?? 0;
+  const tangent: MarbleTransitionOffset = [Math.cos(rotation), Math.sin(rotation), 0];
+  const normal: MarbleTransitionOffset = [-Math.sin(rotation) * Math.cos(tilt), Math.cos(rotation) * Math.cos(tilt), Math.sin(tilt)];
+  const binormal: MarbleTransitionOffset = [Math.sin(rotation) * Math.sin(tilt), -Math.cos(rotation) * Math.sin(tilt), Math.cos(tilt)];
+  const rolledTangent = tangent.map((value, index) => value * Math.cos(roll) + binormal[index]! * Math.sin(roll)) as MarbleTransitionOffset;
+  const rolledBinormal = binormal.map((value, index) => value * Math.cos(roll) - tangent[index]! * Math.sin(roll)) as MarbleTransitionOffset;
+  const compact = target.kind === "peg" || target.kind === "chime";
+  const minimum = compact ? [0.58, 0.11, 0.28] : [0.68, 0.12, 0.32];
+  const maximum = compact ? [0.82, 0.2, 0.46] : [1.35, 0.28, 0.7];
+  const visualSize = target.size.map((value, index) => Math.max(minimum[index]!, Math.min(maximum[index]!, value))) as MarbleTransitionOffset;
+  const collisionHalfThickness = compact ? target.size[1] * 0.9 : target.size[1] / 2;
+  const carrierThickness = Math.max(0.065, visualSize[1] * 0.5);
+  const centerOffset = -(collisionHalfThickness + carrierThickness / 2 + 0.018);
   return {
-    center: target.pos,
-    axes: [
-      [cosRotation, sinRotation, 0],
-      [-sinRotation * cosTilt, cosRotation * cosTilt, sinTilt],
-      [sinRotation * sinTilt, -cosRotation * sinTilt, cosTilt],
-    ],
-    halfExtents: [target.size[0] / 2, target.kind === "peg" || target.kind === "chime" ? target.size[1] * 0.9 : target.size[1] / 2, target.size[2] / 2],
+    center: target.pos.map((value, index) => value + normal[index]! * centerOffset) as MarbleTransitionOffset,
+    axes: [rolledTangent, normal, rolledBinormal],
+    halfExtents: [visualSize[0] * 1.06 / 2, carrierThickness / 2, visualSize[2] * 1.1 / 2],
   };
 }
 
@@ -91,6 +97,7 @@ export function marbleTransitionOverlapCount(
     const footprints = pairs.map((pair) => footprint(targetAt(pair.from, pair.to, progress, offsets.get(pair.id) ?? [0, 0, 0], timings.get(pair.id))));
     for (let left = 0; left < footprints.length; left += 1) {
       for (let right = left + 1; right < footprints.length; right += 1) {
+        if (pairs[left]!.to.visualGroupId && pairs[left]!.to.visualGroupId === pairs[right]!.to.visualGroupId) continue;
         if (overlaps(footprints[left]!, footprints[right]!)) count += 1;
       }
     }
@@ -115,6 +122,7 @@ function overlappingTargetIds(
     const footprints = pairs.map((pair) => footprint(targetAt(pair.from, pair.to, progress, offsets.get(pair.id) ?? [0, 0, 0])));
     for (let left = 0; left < footprints.length; left += 1) {
       for (let right = left + 1; right < footprints.length; right += 1) {
+        if (pairs[left]!.to.visualGroupId && pairs[left]!.to.visualGroupId === pairs[right]!.to.visualGroupId) continue;
         if (overlaps(footprints[left]!, footprints[right]!)) {
           result.add(pairs[left]!.id);
           result.add(pairs[right]!.id);
@@ -144,6 +152,7 @@ function targetOverlapCount(
     for (const [otherId, otherFrom] of fromById) {
       if (otherId === targetId) continue;
       const otherTo = toById.get(otherId);
+      if (to.visualGroupId && to.visualGroupId === otherTo?.visualGroupId) continue;
       if (otherTo && overlaps(active, footprint(targetAt(otherFrom, otherTo, progress, offsets.get(otherId) ?? [0, 0, 0])))) count += 1;
     }
   }

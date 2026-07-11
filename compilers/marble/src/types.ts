@@ -76,10 +76,12 @@ export interface MarbleTarget {
   pos: [number, number, number];
   contactPos: [number, number, number];
   rotation: [number, number, number];
+  visualRoll?: number;
   size: [number, number, number];
   color: string;
   material: MarbleMaterial;
   familyId: string;
+  visualGroupId?: string;
 }
 
 export interface MarbleImpact {

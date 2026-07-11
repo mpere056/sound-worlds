@@ -818,6 +818,22 @@ References:
   the actual webcam, capture median/p95 hand-to-visible latency, and tune pinch
   thresholds, gain, filtering, and low-light behavior from observed recordings.
 
+### Implemented visual-carrier collision cleanup
+
+- Peg, chime, plate, and resonator collision semantics now share one visible
+  rectangular carrier treatment. Compact collision cylinders remain hidden and
+  can no longer protrude through the colored platform.
+- The compiler may roll a rectangular carrier within its contact plane to reduce
+  visual overlap without changing the collision normal, contact point, timing,
+  or bounded marble speed.
+- Dense contacts and any remaining intersecting visible-carrier component receive
+  one deterministic representative platform. Internal collision targets remain
+  in the certified route, while the renderer cannot display two platforms in the
+  same 3D volume.
+- Transition routing uses the visible carrier footprint and understands shared
+  visual groups. The scene derives the same groups for older saved performances
+  that predate compiler-authored visual-group metadata.
+
 ### Commit point
 
 Commit and push camera lifecycle, worker inference, geometric recognition,
