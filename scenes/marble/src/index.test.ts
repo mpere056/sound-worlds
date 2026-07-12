@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildFixtureSong } from "@reaper-viz/core";
 import { compileMarble, marbleTargetClearance, marbleTargetVisualsOverlap, sampleMarblePose } from "@reaper-viz/compiler-marble";
 import { PerspectiveCamera, Vector3 } from "three";
-import { applyMarbleCameraOrbit, blendMarbleCamera, interpolateMarblePathSegment, interpolateMarblePlatformCarrier, interpolateMarbleTarget, interpolateMarbleTargetRoute, marblePlatformCarrierTransform, marblePlatformTransitionDuration, marblePlatformTransitionProgress, marblePlatformVisualSize, marbleVisibleTargetIds, prepareMarbleActivation, prepareMarblePerformanceTransition, sampleMarbleCamera, type MarbleCameraPose } from "./index.js";
+import { applyMarbleCameraOrbit, blendMarbleCamera, interpolateMarblePathSegment, interpolateMarblePlatformCarrier, interpolateMarbleTarget, interpolateMarbleTargetRoute, marblePlatformCarrierTransform, marblePlatformTransitionDuration, marblePlatformTransitionProgress, marblePlatformVisualSize, marbleTargetVisualGroups, marbleVisibleTargetIds, marbleVisibleTargetIdsAtTime, prepareMarbleActivation, prepareMarblePerformanceTransition, sampleMarbleCamera, type MarbleCameraPose } from "./index.js";
 
 function distance(a: [number, number, number], b: [number, number, number]): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
@@ -101,6 +101,15 @@ describe("Marble live-plan activation", () => {
       for (let right = left + 1; right < representatives.length; right += 1) {
         expect(marbleTargetVisualsOverlap(representatives[left]!, representatives[right]!, 0)).toBe(false);
       }
+    }
+  });
+
+  it("shows every grouped target at its own impact time", () => {
+    const song = buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [0, 0.12, 0.28, 0.44, 1.5, 2.5], pitch: 58, kind: "note" }] });
+    const performance = compileMarble(song);
+    const groups = marbleTargetVisualGroups(performance.statics.targets);
+    for (const impact of performance.statics.impacts) {
+      expect(marbleVisibleTargetIdsAtTime(groups, performance.statics.impacts, impact.t).has(impact.targetId)).toBe(true);
     }
   });
 

@@ -824,9 +824,10 @@ References:
   rectangular carrier treatment. Compact collision cylinders remain hidden and
   can no longer protrude through the colored platform.
 - Dense contacts and any remaining intersecting visible-carrier component receive
-  one deterministic representative platform. Internal collision targets remain
-  in the certified route, while the renderer cannot display two platforms in the
-  same 3D volume.
+  one deterministic time-aware representative platform. The representative is
+  selected from absolute song time, so every internal target becomes visible at
+  its own impact while the renderer never displays two platforms in the same 3D
+  volume. Scrubbing and linear playback select the same target.
 - Each visible platform is one carrier-and-fastener assembly. Screws and slots
   are anchored to the carrier top during static rendering and live transitions;
   detached target brackets, rods, duplicate SVG target plates, rail ties, and
