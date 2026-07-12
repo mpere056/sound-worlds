@@ -70,6 +70,15 @@ export interface AuroraConstantField {
   magnetic: AuroraVec3;
 }
 
+export interface AuroraFiniteSolenoid {
+  center: AuroraVec3;
+  axis: AuroraVec3;
+  axialField: number;
+  halfLength: number;
+  fringeWidth: number;
+  apertureRadius: number;
+}
+
 export interface AuroraPropagationOptions {
   charge: number;
   mass: number;
@@ -80,4 +89,11 @@ export interface AuroraPropagationResult extends AuroraParticleState {
   electricWork: number;
   kineticEnergyDelta: number;
   magneticWork: 0;
+}
+
+export interface AuroraNumericalPropagationResult extends AuroraParticleState {
+  duration: number;
+  electricWork: number;
+  kineticEnergyDelta: number;
+  energyResidual: number;
 }

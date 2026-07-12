@@ -1,4 +1,4 @@
-import type { AuroraConstantField, AuroraParticleState, AuroraPropagationOptions, AuroraPropagationResult, AuroraVec3 } from "./types.js";
+import type { AuroraConstantField, AuroraFiniteSolenoid, AuroraNumericalPropagationResult, AuroraParticleState, AuroraPropagationOptions, AuroraPropagationResult, AuroraVec3 } from "./types.js";
 
 export const AURORA_PHYSICS_EPSILON = 1e-12;
 
@@ -41,6 +41,20 @@ export function auroraKineticEnergy(mass: number, velocity: AuroraVec3): number 
 
 function validateVector(value: AuroraVec3, label: string): void {
   if (!value.every(Number.isFinite)) throw new RangeError(`${label} must contain finite values`);
+}
+
+function positiveFinite(value: number, label: string): void {
+  if (!Number.isFinite(value) || value <= 0) throw new RangeError(`${label} must be a positive finite number`);
+}
+
+function validateFiniteSolenoid(solenoid: AuroraFiniteSolenoid): void {
+  validateVector(solenoid.center, "Aurora solenoid center");
+  validateVector(solenoid.axis, "Aurora solenoid axis");
+  if (!Number.isFinite(solenoid.axialField)) throw new RangeError("Aurora solenoid axial field must be finite");
+  positiveFinite(solenoid.halfLength, "Aurora solenoid half length");
+  positiveFinite(solenoid.fringeWidth, "Aurora solenoid fringe width");
+  positiveFinite(solenoid.apertureRadius, "Aurora solenoid aperture radius");
+  if (auroraLength(solenoid.axis) <= AURORA_PHYSICS_EPSILON) throw new RangeError("Aurora solenoid axis must be non-zero");
 }
 
 function validatePropagation(state: AuroraParticleState, field: AuroraConstantField, duration: number, options: AuroraPropagationOptions): void {
@@ -132,21 +146,105 @@ export function auroraIntegrateBoris(
   validatePropagation(state, field, duration, options);
   if (!Number.isInteger(steps) || steps < 1) throw new RangeError("Aurora Boris integration steps must be a positive integer");
   const dt = duration / steps;
-  const halfElectricKick = auroraScale(field.electric, options.charge * dt / (2 * options.mass));
-  const magneticRotation = auroraScale(field.magnetic, options.charge * dt / (2 * options.mass));
-  const magneticRotationSquared = auroraDot(magneticRotation, magneticRotation);
-  const magneticCorrection = auroraScale(magneticRotation, 2 / (1 + magneticRotationSquared));
   let position: AuroraVec3 = [...state.position];
   let velocity: AuroraVec3 = [...state.velocity];
   for (let step = 0; step < steps; step += 1) {
-    const velocityMinus = auroraAdd(velocity, halfElectricKick);
-    const velocityPrime = auroraAdd(velocityMinus, auroraCross(velocityMinus, magneticRotation));
-    const velocityPlus = auroraAdd(velocityMinus, auroraCross(velocityPrime, magneticCorrection));
-    const nextVelocity = auroraAdd(velocityPlus, halfElectricKick);
+    const nextVelocity = auroraBorisVelocityStep(velocity, field, dt, options);
     position = auroraAdd(position, auroraScale(auroraAdd(velocity, nextVelocity), 0.5 * dt));
     velocity = nextVelocity;
   }
   return { position, velocity };
+}
+
+function auroraBorisVelocityStep(velocity: AuroraVec3, field: AuroraConstantField, dt: number, options: AuroraPropagationOptions): AuroraVec3 {
+  const halfElectricKick = auroraScale(field.electric, options.charge * dt / (2 * options.mass));
+  const magneticRotation = auroraScale(field.magnetic, options.charge * dt / (2 * options.mass));
+  const magneticRotationSquared = auroraDot(magneticRotation, magneticRotation);
+  const magneticCorrection = auroraScale(magneticRotation, 2 / (1 + magneticRotationSquared));
+  const velocityMinus = auroraAdd(velocity, halfElectricKick);
+  const velocityPrime = auroraAdd(velocityMinus, auroraCross(velocityMinus, magneticRotation));
+  const velocityPlus = auroraAdd(velocityMinus, auroraCross(velocityPrime, magneticCorrection));
+  return auroraAdd(velocityPlus, halfElectricKick);
+}
+
+export function auroraSampleFiniteSolenoid(solenoid: AuroraFiniteSolenoid, position: AuroraVec3): AuroraVec3 {
+  validateFiniteSolenoid(solenoid);
+  validateVector(position, "Aurora field sample position");
+
+  const axis = auroraNormalize(solenoid.axis);
+  const delta = auroraSub(position, solenoid.center);
+  const axialPosition = auroraDot(delta, axis);
+  const radialPosition = auroraSub(delta, auroraScale(axis, axialPosition));
+  const entry = Math.tanh((axialPosition + solenoid.halfLength) / solenoid.fringeWidth);
+  const exit = Math.tanh((axialPosition - solenoid.halfLength) / solenoid.fringeWidth);
+  const envelope = 0.5 * (entry - exit);
+  const envelopeDerivative = 0.5 / solenoid.fringeWidth * ((1 - entry * entry) - (1 - exit * exit));
+  return auroraAdd(
+    auroraScale(axis, solenoid.axialField * envelope),
+    auroraScale(radialPosition, -0.5 * solenoid.axialField * envelopeDerivative),
+  );
+}
+
+export function auroraSolenoidParaxialRatio(solenoid: AuroraFiniteSolenoid, position: AuroraVec3): number {
+  validateFiniteSolenoid(solenoid);
+  validateVector(position, "Aurora field sample position");
+  const axis = auroraNormalize(solenoid.axis);
+  const delta = auroraSub(position, solenoid.center);
+  const radial = auroraSub(delta, auroraScale(axis, auroraDot(delta, axis)));
+  return auroraLength(radial) / solenoid.apertureRadius;
+}
+
+export type AuroraFieldSampler = (position: AuroraVec3, t: number) => AuroraConstantField;
+export type AuroraMagneticSampler = (position: AuroraVec3) => AuroraVec3;
+
+export function auroraIntegrateBorisField(
+  state: AuroraParticleState,
+  sampleField: AuroraFieldSampler,
+  duration: number,
+  steps: number,
+  options: AuroraPropagationOptions,
+): AuroraNumericalPropagationResult {
+  validateVector(state.position, "Aurora position");
+  validateVector(state.velocity, "Aurora velocity");
+  if (!Number.isFinite(duration) || duration < 0) throw new RangeError("Aurora propagation duration must be finite and non-negative");
+  positiveFinite(options.mass, "Aurora particle mass");
+  if (!Number.isFinite(options.charge)) throw new RangeError("Aurora particle charge must be finite");
+  if (!Number.isInteger(steps) || steps < 1) throw new RangeError("Aurora Boris integration steps must be a positive integer");
+  const dt = duration / steps;
+  let position: AuroraVec3 = [...state.position];
+  let velocity: AuroraVec3 = [...state.velocity];
+  let electricWork = 0;
+  for (let step = 0; step < steps; step += 1) {
+    const midpointPosition = auroraAdd(position, auroraScale(velocity, 0.5 * dt));
+    const field = sampleField(midpointPosition, (step + 0.5) * dt);
+    validateVector(field.electric, "Aurora sampled electric field");
+    validateVector(field.magnetic, "Aurora sampled magnetic field");
+    const nextVelocity = auroraBorisVelocityStep(velocity, field, dt, options);
+    const displacement = auroraScale(auroraAdd(velocity, nextVelocity), 0.5 * dt);
+    electricWork += options.charge * auroraDot(field.electric, displacement);
+    position = auroraAdd(position, displacement);
+    velocity = nextVelocity;
+  }
+  const kineticEnergyDelta = auroraKineticEnergy(options.mass, velocity) - auroraKineticEnergy(options.mass, state.velocity);
+  return { position, velocity, duration, electricWork, kineticEnergyDelta, energyResidual: kineticEnergyDelta - electricWork };
+}
+
+export function auroraEstimateMagneticDivergence(sampleMagnetic: AuroraMagneticSampler, position: AuroraVec3, spacing = 1e-4): number {
+  validateVector(position, "Aurora divergence sample position");
+  positiveFinite(spacing, "Aurora divergence spacing");
+  let divergence = 0;
+  for (const axis of [0, 1, 2] as const) {
+    const before: AuroraVec3 = [...position];
+    const after: AuroraVec3 = [...position];
+    before[axis] -= spacing;
+    after[axis] += spacing;
+    const beforeField = sampleMagnetic(before);
+    const afterField = sampleMagnetic(after);
+    validateVector(beforeField, "Aurora divergence field sample");
+    validateVector(afterField, "Aurora divergence field sample");
+    divergence += (afterField[axis] - beforeField[axis]) / (2 * spacing);
+  }
+  return divergence;
 }
 
 export function auroraIdealFieldDivergence(): 0 {

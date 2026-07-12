@@ -66,19 +66,23 @@ and the exact `9.916146` second final deadline.
 
 ### A1 - Closed-form Lorentz kernel
 
-**Status: ideal-field core implemented; finite-field promotion work remains.**
-Pure TypeScript propagation handles arbitrary constant electric and magnetic
-fields, circular and helical motion, `E x B` drift, zero-field and neutral
-degeneracies, kinetic/electric work accounting, and absolute duration. Eleven
-focused compiler/physics tests pass, including comparison against a 50,000-step
-Boris integration. Divergence-free finite-coil primitives, fringe propagation,
-and shooting correction remain required before promotion beyond Q0.
+**Status: implemented.** Pure TypeScript propagation handles arbitrary constant
+electric and magnetic fields, circular and helical motion, `E x B` drift,
+zero-field and neutral degeneracies, kinetic/electric work accounting, and
+absolute duration. The finite-field foundation adds arbitrary-axis solenoids
+with smooth paraxial fringe fields, an explicit aperture-validity ratio,
+numerical divergence measurement, and variable-field Boris propagation with
+work-energy diagnostics. Eighteen focused compiler/physics tests pass, including
+a 50,000-step constant-field comparison plus finite-fringe convergence,
+divergence, and energy checks. The bounded shooting correction belongs to A2.
 
 - Implement constant `E/B` propagation, helical basis construction, degenerate
   parallel-field handling, and absolute-time sampling.
 - Cross-check closed form against Boris integration over randomized fields.
 - Add divergence-free field primitives, fringe-region Boris propagation, and
-  electric/magnetic work diagnostics before promotion beyond Q0.
+  electric/magnetic work diagnostics before promotion beyond Q0. Completed
+  with a paraxial finite-solenoid primitive; a higher-fidelity loop-field model
+  remains an optional later refinement outside the certified aperture.
 - Gate: position and velocity agreement below `1e-7` for production ranges.
 
 ### A2 - Inverse field and coil solver
