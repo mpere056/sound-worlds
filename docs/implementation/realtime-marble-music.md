@@ -62,6 +62,21 @@ Prerecorded mode explicitly does not use this window. It compiles every target,
 validates every carrier pair and route clearance, and installs one immutable
 layout for seekable playback and export.
 
+### Implemented foundation
+
+`packages/app/src/marble-live-window.ts` now owns the first runtime contract:
+
+- stable `live-platform:N` identities for the known platform count;
+- a bounded 5-8 slot certainty window;
+- explicit uncertain, solving, certain, and spent states;
+- generation-checked solve results so stale gesture replans cannot activate;
+- strict impact ordering and refusal to consume uncertified geometry;
+- one-slot replenishment after each certified impact.
+
+This state machine contains no renderer or physics assumptions. The next live
+slice should add typed rolling-solver messages that carry collision poses into
+this contract, followed by an instanced uncertainty-vortex renderer.
+
 The offline renderer remains deterministic and seekable. The live mode is
 allowed to use a real runtime rigid-body simulation because future note times
 are unknowable and there is no scrub/export determinism requirement during the
