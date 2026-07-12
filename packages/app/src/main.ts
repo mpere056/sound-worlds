@@ -671,10 +671,11 @@ async function loadConcept(concept: string): Promise<void> {
     addTuningBinding(bindingPane, brickBreaker.tuning, "glow", { min: 0, max: 1.2, step: 0.01, label: "Glow" });
     addTuningBinding(bindingPane, brickBreaker.tuning, "fragments", { min: 0, max: 1.2, step: 0.01, label: "Fragments" });
     addTuningBinding(bindingPane, brickBreaker.tuning, "trail", { min: 0, max: 1, step: 0.01, label: "Trail" });
-    sceneLabel.textContent = "Brick Breaker · B1 Preview";
+    sceneLabel.textContent = "Brick Breaker · B2 Collision Preview";
     statusTitle.textContent = "Brick Breaker · direct-contact preview";
     const wallContacts = performance.statics.ballSegments.filter((segment) => segment.kind === "wall").length;
-    statusDetail.textContent = `${performance.statics.bricks.length} bricks · ${wallContacts} wall bounces · ${performance.statics.paddleContacts.length} paddle returns · final hit ${performance.statics.report.finalHitSec.toFixed(3)}s · occupancy audit next`;
+    const supportBeats = performance.statics.report.groupedHitCount - performance.statics.bricks.length;
+    statusDetail.textContent = `${performance.statics.bricks.length} certified bricks · ${supportBeats} support/free beats · ${wallContacts} wall bounces · ${performance.statics.paddleContacts.length} paddle returns · final hit ${performance.statics.report.finalHitSec.toFixed(3)}s`;
   } else if (concept === "metro") {
     const backend = await ensurePixiBackend();
     const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.metro.json`);
@@ -811,7 +812,7 @@ async function loadProject(id: string): Promise<void> {
   if (project?.concepts.includes("brick-breaker")) {
     const brickBreaker = document.createElement("option");
     brickBreaker.value = "brick-breaker";
-    brickBreaker.textContent = "Brick Breaker · B1 Preview";
+    brickBreaker.textContent = "Brick Breaker · B2 Collision Preview";
     options.push(brickBreaker);
   }
   const testPattern = document.createElement("option");

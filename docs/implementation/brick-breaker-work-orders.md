@@ -106,7 +106,7 @@ steering that preserves horizontal momentum and reverses vertical travel.
 Tests cover speed continuity, exact swept face contact, and support reflection.
 
 An engineering-preview scene is now integrated into the app as
-`Brick Breaker · B1 Preview` when `performance.brick-breaker.json` exists. It
+`Brick Breaker · B2 Collision Preview` when `performance.brick-breaker.json` exists. It
 samples the compiled itinerary, hides each brick at its assigned note, renders
 trajectory-oriented cells and deterministic fragments, animates the paddle to
 compiled return contacts, and preserves the final-brick/final-note contract.
@@ -180,6 +180,16 @@ anchor through a soft cost, never by violating exact timing.
 - A 16-hit direct fixture compiles in less than 50 ms on the reference machine.
 
 ## B2 - Time-varying occupancy and continuous validation
+
+**Status: implemented for the engineering preview.** Compilation now uses a
+deterministic bounded beam search over top/bottom-face, side-face, and steeper
+brick reflection candidates. Every candidate brick is rejected if its oriented
+footprint overlaps another brick or if swept-circle validation finds the ball
+touching it on any segment before its assigned beat. The assigned segment must
+reach the expanded collider at its endpoint. If no safe intermediate brick can
+be placed, that musical deadline remains support/free travel; the final deadline
+must always produce the final brick. The reference song certifies 18 bricks for
+19 deadlines and preserves the exact final-note destruction time.
 
 ### Goal
 

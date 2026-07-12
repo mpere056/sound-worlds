@@ -115,3 +115,17 @@ export function brickSweepCircleAgainstBox(from: BrickVec2, to: BrickVec2, radiu
     normal: brickNormalize(fromBoxLocalDirection(localNormal, box)),
   };
 }
+
+export function brickOrientedBoxesOverlap(left: BrickOrientedBox, right: BrickOrientedBox, clearance = 0): boolean {
+  const leftX: BrickVec2 = [Math.cos(left.rotation), Math.sin(left.rotation)];
+  const leftY: BrickVec2 = [-Math.sin(left.rotation), Math.cos(left.rotation)];
+  const rightX: BrickVec2 = [Math.cos(right.rotation), Math.sin(right.rotation)];
+  const rightY: BrickVec2 = [-Math.sin(right.rotation), Math.cos(right.rotation)];
+  const centerDelta = brickSub(right.center, left.center);
+  for (const axis of [leftX, leftY, rightX, rightY]) {
+    const leftRadius = left.halfExtents[0] * Math.abs(brickDot(axis, leftX)) + left.halfExtents[1] * Math.abs(brickDot(axis, leftY));
+    const rightRadius = right.halfExtents[0] * Math.abs(brickDot(axis, rightX)) + right.halfExtents[1] * Math.abs(brickDot(axis, rightY));
+    if (Math.abs(brickDot(centerDelta, axis)) >= leftRadius + rightRadius + clearance - BRICK_PHYSICS_EPSILON) return false;
+  }
+  return true;
+}

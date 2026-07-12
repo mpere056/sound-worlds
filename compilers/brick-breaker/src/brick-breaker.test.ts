@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildFixtureSong, type SongEvent } from "@reaper-viz/core";
-import { brickDot, brickLength, brickNormalize, brickReflect, brickSub, brickSweepCircleAgainstBox, compileBrickBreaker, compileBrickBreakerPlan, sampleBrickBreakerBall } from "./index.js";
+import { brickDot, brickLength, brickNormalize, brickOrientedBoxesOverlap, brickReflect, brickSub, brickSweepCircleAgainstBox, compileBrickBreaker, compileBrickBreakerPlan, sampleBrickBreakerBall } from "./index.js";
 
 describe("Brick Breaker B0 compiler", () => {
   it("creates exactly one future brick per distinct note deadline", () => {
@@ -134,8 +134,33 @@ describe("Brick Breaker B0 compiler", () => {
         const reflected = brickReflect(incomingSegment.velocity, brick.contactNormal);
         expect(reflected[0]).toBeCloseTo(outgoingSegment.velocity[0], 9);
         expect(reflected[1]).toBeCloseTo(outgoingSegment.velocity[1], 9);
-        expect(Math.sign(outgoingSegment.velocity[1])).toBe(-Math.sign(incomingSegment.velocity[1]));
+        expect(brickDot(brickNormalize(outgoingSegment.velocity), brickNormalize(incomingSegment.velocity))).toBeLessThan(0.985);
       }
     }
+  });
+
+  it("certifies that every live brick is collision-free until its assigned beat", () => {
+    const performance = compileBrickBreaker(buildFixtureSong({ bars: 3, patterns: [{ role: "keys", beats: [0, 0.5, 1, 2, 3], pitch: 60, kind: "note" }] }));
+    const colliders = performance.statics.bricks.map((brick) => ({
+      brick,
+      box: { center: brick.position, halfExtents: [brick.size[0] / 2, brick.size[1] / 2] as [number, number], rotation: brick.rotation },
+    }));
+    for (let left = 0; left < colliders.length; left += 1) {
+      for (let right = left + 1; right < colliders.length; right += 1) {
+        expect(brickOrientedBoxesOverlap(colliders[left]!.box, colliders[right]!.box, 0.08)).toBe(false);
+      }
+    }
+    for (const { brick, box } of colliders) {
+      for (const segment of performance.statics.ballSegments.filter((candidate) => candidate.t0 < brick.destructionT - 1e-9)) {
+        const hit = brickSweepCircleAgainstBox(segment.from, segment.to, performance.statics.ballRadius, box);
+        if (segment.contactBrickId === brick.id) {
+          expect(segment.t1).toBeCloseTo(brick.destructionT, 9);
+          expect(hit?.t).toBeCloseTo(1, 7);
+        } else {
+          expect(hit).toBeUndefined();
+        }
+      }
+    }
+    expect(performance.statics.bricks.at(-1)!.destructionT).toBe(performance.statics.report.finalHitSec);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { brickLength, brickReflect, brickSegmentCircleIntersections, brickSweepCircleAgainstBox } from "./physics.js";
+import { brickLength, brickOrientedBoxesOverlap, brickReflect, brickSegmentCircleIntersections, brickSweepCircleAgainstBox } from "./physics.js";
 
 describe("Brick Breaker physics primitives", () => {
   it("reflects velocity without changing its magnitude", () => {
@@ -31,5 +31,11 @@ describe("Brick Breaker physics primitives", () => {
 
   it("does not report a parallel sweep outside the expanded box", () => {
     expect(brickSweepCircleAgainstBox([-2, 2], [2, 2], 0.2, { center: [0, 0], halfExtents: [1, 0.5], rotation: 0 })).toBeUndefined();
+  });
+
+  it("separates rotated bricks and detects intersecting footprints", () => {
+    const base = { center: [0, 0] as [number, number], halfExtents: [1, 0.4] as [number, number], rotation: Math.PI / 8 };
+    expect(brickOrientedBoxesOverlap(base, { ...base, center: [0.6, 0.1] })).toBe(true);
+    expect(brickOrientedBoxesOverlap(base, { ...base, center: [3, 0] })).toBe(false);
   });
 });
