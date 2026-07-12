@@ -93,21 +93,22 @@ interface BrickBreakerCompileReport {
 
 ## B1 - Direct-contact trajectory kernel
 
-**Status: in progress.** The shared deterministic physics kernel now includes
-2D vector/reflection operations, ordered segment-circle intersections, and
-swept-circle versus rotated-box contact with world-space normals. Thin-collider
-tunneling and tangent-contact cases are covered. Next, add absolute-time ball
-segments and direct deadline-to-deadline placement using these primitives. Use
-the measured B0 gap distribution to select provisional speed bands; do not tune
-only around evenly spaced synthetic notes.
+**Status: implemented for the engineering preview.** The shared deterministic
+physics kernel includes 2D vector/reflection operations, ordered segment-circle
+intersections, and swept-circle versus rotated-box contact with world-space
+normals. The compiler now emits an absolute-time, constant-speed itinerary with
+deterministic brick reflections, side/top wall bounces, and bottom paddle
+returns. Brick positions and rotations are trajectory outputs rather than grid
+waypoints, and tests cover speed continuity plus support-surface reflection.
 
 An engineering-preview scene is now integrated into the app as
 `Brick Breaker · B1 Preview` when `performance.brick-breaker.json` exists. It
-samples one deterministic ball segment per musical deadline, hides each brick
-at its assigned note, renders compound cells and deterministic fragments, and
-preserves the final-brick/final-note contract. This selectable preview does not
-claim B2 occupancy or B3/B4 wall/paddle certification; the in-app status names
-those pending phases explicitly.
+samples the compiled itinerary, hides each brick at its assigned note, renders
+trajectory-oriented cells and deterministic fragments, animates the paddle to
+compiled return contacts, and preserves the final-brick/final-note contract.
+This selectable preview does not yet claim B2 occupancy certification: future
+live bricks can still crowd or overlap until continuous occupancy search is in
+place.
 
 ### Goal
 

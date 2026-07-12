@@ -1,7 +1,7 @@
 import type { Song, SongEvent, SongTrack } from "@reaper-viz/core";
 import type { BrickBreakerCompileOptions, BrickBreakerPlan, BrickBreakerResolvedOptions, BrickHitGroup, BrickHitNote } from "./types.js";
 import type { BrickBreakerBallSegment, BrickBreakerBrick, BrickBreakerPerformance } from "./types.js";
-import { brickNormalize, brickSub, type BrickVec2 } from "./physics.js";
+import { brickAdd, brickDot, brickLength, brickNormalize, brickReflect, brickScale, brickSub, type BrickVec2 } from "./physics.js";
 
 export * from "./types.js";
 export * from "./physics.js";
@@ -138,17 +138,7 @@ export function compileBrickBreakerPlan(song: Song, options: BrickBreakerCompile
 }
 
 const BRICK_COLORS = ["#55d6ff", "#ffd166", "#9da8ff", "#ff7d9b", "#76e6a5", "#f5a65b"];
-
-function previewContact(index: number, total: number, board: { width: number; height: number }): BrickVec2 {
-  const columns = 5;
-  const column = index % columns;
-  const row = Math.floor(index / columns);
-  const direction = row % 2 === 0 ? column : columns - 1 - column;
-  const x = -board.width * 0.36 + direction * board.width * 0.18;
-  const rows = Math.max(1, Math.ceil(total / columns));
-  const y = board.height * 0.32 - row * Math.min(2.2, board.height * 0.56 / Math.max(1, rows - 1));
-  return [Number(x.toFixed(6)), Number(y.toFixed(6))];
-}
+const PREVIEW_BALL_SPEED = 7.2;
 
 export function sampleBrickBreakerBall(segments: readonly BrickBreakerBallSegment[], t: number): BrickVec2 {
   const segment = segments.find((candidate) => t <= candidate.t1 + 1e-9) ?? segments.at(-1);
@@ -162,40 +152,98 @@ export function sampleBrickBreakerBall(segments: readonly BrickBreakerBallSegmen
   ];
 }
 
+interface TracedPath {
+  segments: BrickBreakerBallSegment[];
+  position: BrickVec2;
+  velocity: BrickVec2;
+  paddleContacts: Array<{ t: number; x: number }>;
+}
+
+function traceBoardPath(
+  from: BrickVec2,
+  initialVelocity: BrickVec2,
+  t0: number,
+  t1: number,
+  board: { width: number; height: number },
+  firstKind: BrickBreakerBallSegment["kind"],
+): TracedPath {
+  const inset = 0.36;
+  const minX = -board.width / 2 + inset;
+  const maxX = board.width / 2 - inset;
+  const minY = -board.height / 2 + inset + 0.72;
+  const maxY = board.height / 2 - inset;
+  const segments: BrickBreakerBallSegment[] = [];
+  const paddleContacts: Array<{ t: number; x: number }> = [];
+  let position: BrickVec2 = [...from];
+  let velocity: BrickVec2 = [...initialVelocity];
+  let time = t0;
+  for (let bounce = 0; time < t1 - 1e-9 && bounce < 24; bounce += 1) {
+    const remaining = t1 - time;
+    const tx = velocity[0] > 1e-9 ? (maxX - position[0]) / velocity[0] : velocity[0] < -1e-9 ? (minX - position[0]) / velocity[0] : Number.POSITIVE_INFINITY;
+    const ty = velocity[1] > 1e-9 ? (maxY - position[1]) / velocity[1] : velocity[1] < -1e-9 ? (minY - position[1]) / velocity[1] : Number.POSITIVE_INFINITY;
+    const collisionDt = Math.min(tx > 1e-9 ? tx : Number.POSITIVE_INFINITY, ty > 1e-9 ? ty : Number.POSITIVE_INFINITY);
+    const duration = Math.min(remaining, collisionDt);
+    const next = brickAdd(position, brickScale(velocity, duration));
+    const reachesSupport = collisionDt <= remaining + 1e-9;
+    const hitsVertical = tx <= ty;
+    const supportNormal: BrickVec2 | undefined = reachesSupport
+      ? hitsVertical ? [velocity[0] > 0 ? -1 : 1, 0] : [0, velocity[1] > 0 ? -1 : 1]
+      : undefined;
+    const kind: BrickBreakerBallSegment["kind"] = reachesSupport
+      ? (!hitsVertical && velocity[1] < 0 ? "paddle" : "wall")
+      : segments.length === 0 ? firstKind : "travel";
+    segments.push({ id: "", kind, t0: time, t1: time + duration, from: position, to: next, velocity: [...velocity], ...(supportNormal ? { supportNormal } : {}) });
+    position = next;
+    time += duration;
+    if (!reachesSupport || !supportNormal) break;
+    if (kind === "paddle") paddleContacts.push({ t: time, x: position[0] });
+    velocity = brickReflect(velocity, supportNormal);
+  }
+  return { segments, position, velocity, paddleContacts };
+}
+
+function desiredOutgoing(index: number, incoming: BrickVec2, speed: number): BrickVec2 {
+  const headings: BrickVec2[] = [[0.82, 0.57], [-0.72, 0.69], [0.58, -0.82], [-0.8, -0.6], [0.42, 0.91], [-0.9, 0.44]];
+  let candidate = brickScale(brickNormalize(headings[index % headings.length]!), speed);
+  if (brickDot(brickNormalize(candidate), brickNormalize(incoming)) > 0.82) candidate = [-candidate[0], candidate[1]];
+  return candidate;
+}
+
 export function compileBrickBreaker(song: Song, options: BrickBreakerCompileOptions = {}): BrickBreakerPerformance {
   const plan = compileBrickBreakerPlan(song, options);
-  const contacts = plan.hitGroups.map((_, index) => previewContact(index, plan.hitGroups.length, plan.options.board));
-  const bricks: BrickBreakerBrick[] = plan.hitGroups.map((group, index) => ({
-    id: `brick:${index}`,
-    hitGroupId: group.id,
-    destructionT: group.t,
-    position: contacts[index]!,
-    size: [1.55, 0.62],
-    rotation: 0,
-    color: BRICK_COLORS[((Math.round(group.representativePitch) % BRICK_COLORS.length) + BRICK_COLORS.length) % BRICK_COLORS.length]!,
-    cells: group.notes.length,
-    energy: group.energy,
-  }));
+  const bricks: BrickBreakerBrick[] = [];
   const segments: BrickBreakerBallSegment[] = [];
-  let from: BrickVec2 = [0, -plan.options.board.height * 0.38];
+  const paddleContacts: Array<{ t: number; x: number }> = [];
+  let from: BrickVec2 = [0, -plan.options.board.height * 0.36];
   let t0 = 0;
-  for (let index = 0; index < bricks.length; index += 1) {
-    const brick = bricks[index]!;
-    const to = brick.position;
-    const incoming = brickNormalize(brickSub(to, from), [0, 1]);
-    const next = contacts[index + 1] ?? [0, -plan.options.board.height * 0.38] as BrickVec2;
-    const outgoing = brickNormalize(brickSub(next, to), [0, -1]);
-    segments.push({
-      id: `ball:${index}`,
-      t0,
-      t1: brick.destructionT,
-      from,
-      to,
-      contactBrickId: brick.id,
-      normal: brickNormalize(brickSub(outgoing, incoming), [0, 1]),
-    });
-    from = to;
-    t0 = brick.destructionT;
+  let velocity: BrickVec2 = brickScale(brickNormalize([0.46, 0.89]), PREVIEW_BALL_SPEED);
+  let incoming: BrickVec2 = [...velocity];
+  for (let index = 0; index < plan.hitGroups.length; index += 1) {
+    const group = plan.hitGroups[index]!;
+    const traced = traceBoardPath(from, velocity, t0, group.t, plan.options.board, index === 0 ? "launch" : "travel");
+    traced.segments.forEach((segment) => { segment.id = `ball:${segments.length}`; segments.push(segment); });
+    paddleContacts.push(...traced.paddleContacts);
+    from = traced.position;
+    incoming = traced.velocity;
+    const outgoing = desiredOutgoing(index, incoming, PREVIEW_BALL_SPEED);
+    const normal = brickNormalize(brickSub(outgoing, incoming), [0, 1]);
+    const brick: BrickBreakerBrick = {
+      id: `brick:${index}`,
+      hitGroupId: group.id,
+      destructionT: group.t,
+      position: [...from],
+      size: [1.55, 0.62],
+      rotation: Math.atan2(normal[1], normal[0]) - Math.PI / 2,
+      color: BRICK_COLORS[((Math.round(group.representativePitch) % BRICK_COLORS.length) + BRICK_COLORS.length) % BRICK_COLORS.length]!,
+      cells: group.notes.length,
+      energy: group.energy,
+    };
+    bricks.push(brick);
+    const contactSegment = segments.at(-1);
+    if (contactSegment) contactSegment.contactBrickId = brick.id;
+    velocity = brickReflect(incoming, normal);
+    if (brickLength(brickSub(velocity, outgoing)) > 1e-6) throw new Error(`Brick reflection solve failed at ${brick.id}`);
+    t0 = group.t;
   }
   const finalBrickId = bricks.at(-1)!.id;
   return {
@@ -216,6 +264,8 @@ export function compileBrickBreaker(song: Song, options: BrickBreakerCompileOpti
       ballRadius: 0.24,
       bricks,
       ballSegments: segments,
+      paddleContacts,
+      ballSpeed: PREVIEW_BALL_SPEED,
       finalBrickId,
     },
   };

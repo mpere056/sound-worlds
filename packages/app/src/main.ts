@@ -673,7 +673,8 @@ async function loadConcept(concept: string): Promise<void> {
     addTuningBinding(bindingPane, brickBreaker.tuning, "trail", { min: 0, max: 1, step: 0.01, label: "Trail" });
     sceneLabel.textContent = "Brick Breaker · B1 Preview";
     statusTitle.textContent = "Brick Breaker · direct-contact preview";
-    statusDetail.textContent = `${performance.statics.bricks.length} bricks · final hit ${performance.statics.report.finalHitSec.toFixed(3)}s · wall/paddle search pending`;
+    const wallContacts = performance.statics.ballSegments.filter((segment) => segment.kind === "wall").length;
+    statusDetail.textContent = `${performance.statics.bricks.length} bricks · ${wallContacts} wall bounces · ${performance.statics.paddleContacts.length} paddle returns · final hit ${performance.statics.report.finalHitSec.toFixed(3)}s · occupancy audit next`;
   } else if (concept === "metro") {
     const backend = await ensurePixiBackend();
     const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.metro.json`);

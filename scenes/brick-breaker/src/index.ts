@@ -42,6 +42,31 @@ export class BrickBreakerScene {
     return [marginX + (point[0] / board.width + 0.5) * width, marginY + (0.5 - point[1] / board.height) * height];
   }
 
+  #drawBrick(x: number, y: number, width: number, height: number, rotation: number, color: number, alpha: number): void {
+    const cosine = Math.cos(rotation);
+    const sine = Math.sin(rotation);
+    const corners = ([[-1, -1], [1, -1], [1, 1], [-1, 1]] as const).map(([xSign, ySign]) => {
+      const localX = xSign * width / 2;
+      const localY = ySign * height / 2;
+      return [x + localX * cosine - localY * sine, y + localX * sine + localY * cosine] as const;
+    });
+    this.#board.moveTo(...corners[0]!);
+    for (const corner of corners.slice(1)) this.#board.lineTo(...corner);
+    this.#board.closePath().fill({ color, alpha }).stroke({ color: 0xffffff, width: 2, alpha: 0.26 });
+  }
+
+  #paddleX(t: number): number {
+    const contacts = this.#performance.statics.paddleContacts;
+    if (!contacts.length) return 0;
+    const nextIndex = contacts.findIndex((contact) => contact.t >= t);
+    if (nextIndex <= 0) return contacts[Math.max(0, nextIndex)]?.x ?? contacts.at(-1)!.x;
+    const previous = contacts[nextIndex - 1]!;
+    const next = contacts[nextIndex]!;
+    const raw = Math.max(0, Math.min(1, (t - previous.t) / Math.max(1e-9, next.t - previous.t)));
+    const smooth = raw * raw * raw * (raw * (raw * 6 - 15) + 10);
+    return previous.x + (next.x - previous.x) * smooth;
+  }
+
   renderFrame(t: number): void {
     const { width, height } = this.#backend;
     const board = this.#performance.statics.board;
@@ -60,9 +85,7 @@ export class BrickBreakerScene {
       if (t < brick.destructionT) {
         this.#effects.roundRect(x - brickWidth / 2 - 6, y - brickHeight / 2 - 6, brickWidth + 12, brickHeight + 12, 9)
           .fill({ color: colorNumber(brick.color), alpha: this.tuning.glow * 0.12 });
-        this.#board.roundRect(x - brickWidth / 2, y - brickHeight / 2, brickWidth, brickHeight, 6)
-          .fill({ color: colorNumber(brick.color), alpha: 0.94 })
-          .stroke({ color: 0xffffff, width: 2, alpha: 0.26 });
+        this.#drawBrick(x, y, brickWidth, brickHeight, brick.rotation, colorNumber(brick.color), 0.94);
         if (brick.cells > 1) {
           for (let cell = 1; cell < brick.cells; cell += 1) {
             const cellX = x - brickWidth / 2 + brickWidth * cell / brick.cells;
@@ -83,7 +106,9 @@ export class BrickBreakerScene {
       }
     }
     const paddleY = height - 205;
-    this.#board.roundRect(width / 2 - 120, paddleY, 240, 34, 14).fill({ color: 0x79e6ff, alpha: 0.9 });
+    const paddleWorldX = this.#paddleX(t);
+    const paddleX = this.#screen([paddleWorldX, 0])[0];
+    this.#board.roundRect(paddleX - 120, paddleY, 240, 34, 14).fill({ color: 0x79e6ff, alpha: 0.9 });
     this.#ball.clear();
     for (let sample = 6; sample >= 1; sample -= 1) {
       const trail = this.#screen(sampleBrickBreakerBall(this.#performance.statics.ballSegments, Math.max(0, t - sample * 0.035)));

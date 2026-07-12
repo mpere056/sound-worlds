@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildFixtureSong, type SongEvent } from "@reaper-viz/core";
-import { compileBrickBreaker, compileBrickBreakerPlan, sampleBrickBreakerBall } from "./index.js";
+import { brickLength, brickReflect, compileBrickBreaker, compileBrickBreakerPlan, sampleBrickBreakerBall } from "./index.js";
 
 describe("Brick Breaker B0 compiler", () => {
   it("creates exactly one future brick per distinct note deadline", () => {
@@ -85,5 +85,27 @@ describe("Brick Breaker B0 compiler", () => {
     expect(performance.statics.finalBrickId).toBe(finalBrick.id);
     expect(finalBrick.destructionT).toBe(performance.statics.report.finalHitSec);
     expect(performance.statics.bricks.filter((brick) => brick.destructionT > performance.statics.bricks.at(-2)!.destructionT)).toHaveLength(1);
+  });
+
+  it("authors constant-speed wall and paddle reflections between musical hits", () => {
+    const song = buildFixtureSong({ bars: 3, patterns: [{ role: "keys", beats: [0], pitch: 60, kind: "note" }] });
+    song.tracks[0]!.events = [0.5, 2, 4, 6, 8, 10].map((t, index) => ({ t, dur: 0.2, pitch: 60 + index, vel: 0.7, kind: "note" as const }));
+    const performance = compileBrickBreaker(song);
+    for (const segment of performance.statics.ballSegments) {
+      expect(brickLength(segment.velocity)).toBeCloseTo(performance.statics.ballSpeed, 9);
+    }
+    for (let index = 0; index < performance.statics.ballSegments.length - 1; index += 1) {
+      const current = performance.statics.ballSegments[index]!;
+      const next = performance.statics.ballSegments[index + 1]!;
+      expect(current.to).toEqual(next.from);
+      if (current.supportNormal) {
+        const reflected = brickReflect(current.velocity, current.supportNormal);
+        expect(reflected[0]).toBeCloseTo(next.velocity[0], 9);
+        expect(reflected[1]).toBeCloseTo(next.velocity[1], 9);
+      }
+    }
+    expect(performance.statics.ballSegments.some((segment) => segment.kind === "wall")).toBe(true);
+    expect(performance.statics.ballSegments.some((segment) => segment.kind === "paddle")).toBe(true);
+    expect(performance.statics.paddleContacts.length).toBeGreaterThan(0);
   });
 });

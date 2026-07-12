@@ -65,13 +65,17 @@ export interface BrickBreakerBrick {
 
 export interface BrickBreakerBallSegment {
   id: string;
+  kind: "launch" | "travel" | "wall" | "paddle" | "tail";
   t0: number;
   t1: number;
   from: BrickVec2;
   to: BrickVec2;
-  contactBrickId: string;
-  normal: BrickVec2;
+  velocity: BrickVec2;
+  contactBrickId?: string;
+  supportNormal?: BrickVec2;
 }
+
+export interface BrickBreakerPaddleContact { t: number; x: number; }
 
 export interface BrickBreakerPerformance extends Performance {
   concept: "brick-breaker";
@@ -82,6 +86,8 @@ export interface BrickBreakerPerformance extends Performance {
     ballRadius: number;
     bricks: BrickBreakerBrick[];
     ballSegments: BrickBreakerBallSegment[];
+    paddleContacts: BrickBreakerPaddleContact[];
+    ballSpeed: number;
     finalBrickId: string;
   };
 }
