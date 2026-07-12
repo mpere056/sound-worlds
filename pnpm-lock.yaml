@@ -18,6 +18,12 @@ importers:
         specifier: ^3.2.4
         version: 3.2.6(@types/node@22.20.0)(lightningcss@1.32.0)
 
+  compilers/brick-breaker:
+    dependencies:
+      '@reaper-viz/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+
   compilers/marble:
     dependencies:
       '@reaper-viz/core':

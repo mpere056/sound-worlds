@@ -26,6 +26,14 @@ artifacts out of unrelated commits.
 
 ## B0 - Contracts, grouping, and diagnostics
 
+**Status: implemented.** `@reaper-viz/compiler-brick-breaker` now emits a
+deterministic `brick-breaker.plan.json` artifact with stable grouped deadlines,
+exact brick/cell counts, source-track diagnostics, gap statistics, and exact
+first/final hit times. The app does not advertise this plan as a playable world.
+The 12.5-second reference project currently measures 19 notes, 19 bricks, no
+compound groups, a 0.174479-second minimum gap, six short gaps, eleven medium
+gaps, and one long gap.
+
 ### Goal
 
 Prove how many destructible objects the song requires before solving motion.
@@ -84,6 +92,9 @@ interface BrickBreakerCompileReport {
 - JSON output is byte-identical across repeated runs.
 
 ## B1 - Direct-contact trajectory kernel
+
+**Status: next.** Use the measured B0 gap distribution to select provisional
+speed bands; do not tune only around evenly spaced synthetic notes.
 
 ### Goal
 

@@ -6,6 +6,7 @@
   "scripts": {
     "build": "corepack pnpm -r --workspace-concurrency=1 build",
     "compile:marble": "corepack pnpm --filter @reaper-viz/compiler-marble build && corepack pnpm --filter @reaper-viz/compiler-marble compile",
+    "compile:brick-breaker": "corepack pnpm --filter @reaper-viz/compiler-brick-breaker build && corepack pnpm --filter @reaper-viz/compiler-brick-breaker compile",
     "compile:metro": "corepack pnpm --filter @reaper-viz/compiler-metro build && corepack pnpm --filter @reaper-viz/compiler-metro compile",
     "compile:painting": "corepack pnpm --filter @reaper-viz/compiler-painting build && corepack pnpm --filter @reaper-viz/compiler-painting compile",
     "compile:runner": "corepack pnpm --filter @reaper-viz/compiler-runner build && corepack pnpm --filter @reaper-viz/compiler-runner compile",

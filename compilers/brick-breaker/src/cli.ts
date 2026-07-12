@@ -1,0 +1,22 @@
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseSong } from "@reaper-viz/core";
+import { compileBrickBreakerPlan } from "./index.js";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(HERE, "../../..");
+const args = process.argv.slice(2).filter((value) => value !== "--");
+const projectArg = args[0];
+if (!projectArg) throw new Error("Usage: pnpm compile:brick-breaker -- projects/<project> [--track <track-id>]");
+const trackIndex = args.indexOf("--track");
+const sourceTrackId = trackIndex >= 0 ? args[trackIndex + 1] : undefined;
+if (trackIndex >= 0 && !sourceTrackId) throw new Error("Brick Breaker --track requires a track ID");
+const project = isAbsolute(projectArg) ? projectArg : resolve(ROOT, projectArg);
+const output = resolve(project, "brick-breaker.plan.json");
+const temporary = `${output}.tmp`;
+await mkdir(project, { recursive: true });
+const song = parseSong(JSON.parse(await readFile(resolve(project, "song.json"), "utf8")));
+await writeFile(temporary, `${JSON.stringify(compileBrickBreakerPlan(song, sourceTrackId ? { sourceTrackId } : {}), null, 2)}\n`, "utf8");
+await rename(temporary, output);
+console.log(`WROTE: ${output}`);
