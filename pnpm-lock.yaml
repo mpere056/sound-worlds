@@ -59,6 +59,9 @@ importers:
       '@mediapipe/tasks-vision':
         specifier: ^0.10.35
         version: 0.10.35
+      '@reaper-viz/compiler-aurora':
+        specifier: workspace:*
+        version: link:../../compilers/aurora
       '@reaper-viz/compiler-brick-breaker':
         specifier: workspace:*
         version: link:../../compilers/brick-breaker
@@ -71,6 +74,9 @@ importers:
       '@reaper-viz/render':
         specifier: workspace:*
         version: link:../render
+      '@reaper-viz/scene-aurora':
+        specifier: workspace:*
+        version: link:../../scenes/aurora
       '@reaper-viz/scene-brick-breaker':
         specifier: workspace:*
         version: link:../../scenes/brick-breaker
@@ -129,6 +135,19 @@ importers:
       pixi.js:
         specifier: 8.19.0
         version: 8.19.0
+
+  scenes/aurora:
+    dependencies:
+      '@reaper-viz/compiler-aurora':
+        specifier: workspace:*
+        version: link:../../compilers/aurora
+      three:
+        specifier: 0.170.0
+        version: 0.170.0
+    devDependencies:
+      '@types/three':
+        specifier: 0.170.0
+        version: 0.170.0
 
   scenes/brick-breaker:
     dependencies:

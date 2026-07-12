@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildFixtureSong, type SongEvent } from "@reaper-viz/core";
-import { compileAuroraPlan, groupAuroraDeadlines } from "./index.js";
+import { compileAurora, compileAuroraPlan, groupAuroraDeadlines, sampleAuroraParticle } from "./index.js";
+import { auroraLength, auroraSub } from "./physics.js";
 
 describe("Aurora Cyclotron A0 compiler", () => {
   it("groups one deterministic deadline per distinct note time", () => {
@@ -58,5 +59,53 @@ describe("Aurora Cyclotron A0 compiler", () => {
     const deadlines = groupAuroraDeadlines(song.tracks[0]!, notes, 0.025);
     notes[0]!.pitch = 90;
     expect(deadlines[0]!.notes[0]!.pitch).toBe(60);
+  });
+});
+
+describe("Aurora Cyclotron A2 route compiler", () => {
+  function routeSong() {
+    const song = buildFixtureSong({ bars: 2, patterns: [{ role: "lead", beats: [0], pitch: 60, kind: "note" }] });
+    song.tracks[0]!.events = [
+      { t: 0.4, dur: 0.2, pitch: 60, vel: 0.55, kind: "note" as const },
+      { t: 0.85, dur: 0.2, pitch: 67, vel: 0.8, kind: "note" as const },
+      { t: 1.3, dur: 0.2, pitch: 64, vel: 0.7, kind: "note" as const },
+      { t: 1.9, dur: 0.2, pitch: 72, vel: 0.95, kind: "note" as const },
+    ];
+    return song;
+  }
+
+  it("places one exact coil-center crossing on every grouped deadline", () => {
+    const performance = compileAurora(routeSong());
+    expect(performance.statics.coils).toHaveLength(4);
+    expect(performance.statics.routeReport.deadlineCount).toBe(4);
+    expect(performance.statics.routeReport.exactCrossingError).toBe(0);
+    for (const [index, coil] of performance.statics.coils.entries()) {
+      const sampled = sampleAuroraParticle(performance.statics.route, coil.t);
+      expect(auroraLength(auroraSub(sampled.position, coil.center))).toBeLessThan(1e-10);
+      expect(performance.statics.route[index]!.deadlineId).toBe(coil.deadlineId);
+    }
+  });
+
+  it("keeps every authored segment within the magnetic-field bound", () => {
+    const performance = compileAurora(routeSong(), { charge: -0.7, mass: 1.3, maxMagneticField: 3.5 });
+    expect(performance.statics.routeReport.maximumField).toBeLessThanOrEqual(3.5 + 1e-12);
+    expect(performance.statics.route.filter((segment) => segment.kind === "deadline").every((segment) => segment.fieldMagnitude <= 3.5)).toBe(true);
+  });
+
+  it("is deterministic and uses genuine depth-oriented candidates", () => {
+    const first = compileAurora(routeSong());
+    const second = compileAurora(routeSong());
+    expect(JSON.stringify(second)).toBe(JSON.stringify(first));
+    const depthTravel = first.statics.route.reduce((sum, segment) => sum + Math.abs(segment.end.position[2] - segment.start.position[2]), 0);
+    expect(depthTravel).toBeGreaterThan(0.5);
+    expect(first.statics.routeReport.familyCounts.depth + first.statics.routeReport.familyCounts.inward).toBeGreaterThan(0);
+  });
+
+  it("continues inertially after the final musical crossing", () => {
+    const performance = compileAurora(routeSong());
+    const tail = performance.statics.route.at(-1)!;
+    expect(tail.kind).toBe("tail");
+    const sampled = sampleAuroraParticle(performance.statics.route, performance.durationSec);
+    expect(sampled.position).toEqual(tail.end.position);
   });
 });

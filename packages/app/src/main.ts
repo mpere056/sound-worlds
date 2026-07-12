@@ -3,6 +3,7 @@ import type { MarbleCompileProfile, MarbleMotionMix } from "@reaper-viz/compiler
 import { captureCanvasPng, exportCanvasMp4, PixiBackend, supportsCanvasMp4 } from "@reaper-viz/render";
 import { MarbleScene, type MarblePerformance, type MarblePreparedTransition, type MarbleSceneActivation, type MarbleSceneProfileSnapshot, type MarbleTuning } from "@reaper-viz/scene-marble";
 import { BrickBreakerScene, type BrickBreakerPerformance } from "@reaper-viz/scene-brick-breaker";
+import { AuroraScene, type AuroraPerformance } from "@reaper-viz/scene-aurora";
 import { MetroScene, type MetroPerformance } from "@reaper-viz/scene-metro";
 import { PaintingScene, type PaintingPerformance } from "@reaper-viz/scene-painting";
 import { RunnerScene, type RunnerPerformance } from "@reaper-viz/scene-runner";
@@ -677,6 +678,21 @@ async function loadConcept(concept: string): Promise<void> {
     const supportBeats = performance.statics.report.groupedHitCount - performance.statics.bricks.length;
     const supportHitLabel = supportBeats === 1 ? "hit" : "hits";
     statusDetail.textContent = `${performance.statics.bricks.length} certified bricks · ${supportBeats} beat-aligned support ${supportHitLabel} · ${wallContacts} wall bounces · ${performance.statics.paddleContacts.length} paddle returns · final hit ${performance.statics.report.finalHitSec.toFixed(3)}s`;
+  } else if (concept === "aurora") {
+    destroyPixiBackend();
+    const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.aurora.json`);
+    if (!response.ok) throw new Error(`Aurora performance request failed: ${response.status}`);
+    const performance = parsePerformance(await response.json()) as AuroraPerformance;
+    const aurora = new AuroraScene(canvas, performance);
+    scene = aurora;
+    addTuningBinding(bindingPane, aurora.tuning, "aurora", { min: 0, max: 1.5, step: 0.01, label: "Aurora" });
+    addTuningBinding(bindingPane, aurora.tuning, "coilGlow", { min: 0, max: 1.5, step: 0.01, label: "Coils" });
+    addTuningBinding(bindingPane, aurora.tuning, "trail", { min: 0, max: 1.2, step: 0.01, label: "Trail" });
+    addTuningBinding(bindingPane, aurora.tuning, "cameraDistance", { min: 0.65, max: 1.6, step: 0.01, label: "Camera" });
+    sceneLabel.textContent = "Aurora Cyclotron · A2 Physics Graybox";
+    statusTitle.textContent = "Aurora Cyclotron · exact coil crossings";
+    const report = performance.statics.routeReport;
+    statusDetail.textContent = `${report.deadlineCount} coils · max field ${report.maximumField.toFixed(2)} · ${report.familyCounts.depth + report.familyCounts.inward} spatial arcs · crossing error ${report.exactCrossingError.toExponential(1)}`;
   } else if (concept === "metro") {
     const backend = await ensurePixiBackend();
     const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.metro.json`);
@@ -816,6 +832,12 @@ async function loadProject(id: string): Promise<void> {
     brickBreaker.textContent = "Brick Breaker · B2 Collision Preview";
     options.push(brickBreaker);
   }
+  if (project?.concepts.includes("aurora")) {
+    const aurora = document.createElement("option");
+    aurora.value = "aurora";
+    aurora.textContent = "Aurora Cyclotron · A2 Physics Graybox";
+    options.push(aurora);
+  }
   const testPattern = document.createElement("option");
   testPattern.value = "testpattern";
   testPattern.textContent = "Pipeline Test Pattern";
@@ -840,6 +862,13 @@ async function loadProject(id: string): Promise<void> {
     marble.textContent = "Marble Music · compile required";
     marble.disabled = true;
     options.push(marble);
+  }
+  if (!project?.concepts.includes("aurora")) {
+    const aurora = document.createElement("option");
+    aurora.value = "aurora";
+    aurora.textContent = "Aurora Cyclotron · compile required";
+    aurora.disabled = true;
+    options.push(aurora);
   }
   conceptSelect.replaceChildren(...options);
   await loadConcept(options[0]?.value ?? "testpattern");

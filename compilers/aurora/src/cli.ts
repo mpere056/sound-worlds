@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseSong } from "@reaper-viz/core";
-import { compileAuroraPlan } from "./index.js";
+import { compileAurora, compileAuroraPlan } from "./index.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "../../..");
@@ -15,8 +15,13 @@ if (trackIndex >= 0 && !sourceTrackId) throw new Error("Aurora Cyclotron --track
 const project = isAbsolute(projectArg) ? projectArg : resolve(root, projectArg);
 const output = resolve(project, "aurora.plan.json");
 const temporary = `${output}.tmp`;
+const performanceOutput = resolve(project, "performance.aurora.json");
+const performanceTemporary = `${performanceOutput}.tmp`;
 await mkdir(project, { recursive: true });
 const song = parseSong(JSON.parse(await readFile(resolve(project, "song.json"), "utf8")));
 await writeFile(temporary, `${JSON.stringify(compileAuroraPlan(song, sourceTrackId ? { sourceTrackId } : {}), null, 2)}\n`, "utf8");
 await rename(temporary, output);
+await writeFile(performanceTemporary, `${JSON.stringify(compileAurora(song, sourceTrackId ? { sourceTrackId } : {}), null, 2)}\n`, "utf8");
+await rename(performanceTemporary, performanceOutput);
 console.log(`WROTE: ${output}`);
+console.log(`WROTE: ${performanceOutput}`);

@@ -91,9 +91,13 @@ divergence, and energy checks. The bounded shooting correction belongs to A2.
 constant magnetic field for a requested axis, duration, and turn angle, then
 propagates the resulting circular or helical segment and emits its exact
 coil-center contact, physical coil axis, and separate arrival direction. It
-enforces charge, speed, axis, duration, and maximum-field feasibility. The
-global candidate search, electric acceleration spans, and finite-fringe
-shooting correction remain.
+enforces charge, speed, axis, duration, and maximum-field feasibility. A first
+deterministic route compiler now scores planar, depth-oriented, and inward
+candidate axes for field cost, route compactness, coil spacing, continuity, and
+depth readability. The reference performance certifies 19 exact coil-center
+crossings, a `6.56` maximum field under the `8.0` limit, and `0.899` minimum
+adjacent coil spacing. Electric acceleration spans, full global occupancy, and
+finite-fringe shooting correction remain.
 
 - Solve field axis, magnitude, parallel acceleration, and coil transform for
   every deadline-to-deadline segment.
@@ -112,6 +116,13 @@ shooting correction remain.
 - Gate: one and only one coil crossing per note; final coil on final note.
 
 ### A4 - Aurora shader and scene
+
+**Status: physics graybox implemented.** Aurora Cyclotron is selectable in the
+preview app. Its seek-safe Three.js scene samples the compiled Lorentz route,
+renders solved toroidal coil transforms, follows the charged particle, and uses
+a lightweight fragment shader for polar-night aurora curtains and stars. The
+next five coils carry the visual hierarchy while passed and distant coils
+recede without moving. This is a Q0 visualization, not final art direction.
 
 - Render field-aligned aurora curtains, plasma filaments, coil discharge rings,
   and a depth-readable charged trail. Drive shader coordinates from the same
