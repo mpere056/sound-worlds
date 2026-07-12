@@ -26,7 +26,7 @@ import {
   WebGLRenderer,
 } from "three";
 import { sampleCurve } from "@reaper-viz/core";
-import { marbleTargetVisualSize, marbleTargetVisualsOverlap, sampleMarblePose, type MarbleImpact, type MarblePathSegment, type MarblePerformance, type MarblePose, type MarbleTarget } from "@reaper-viz/compiler-marble";
+import { marbleTargetVisualSize, sampleMarblePose, type MarbleImpact, type MarblePathSegment, type MarblePerformance, type MarblePose, type MarbleTarget } from "@reaper-viz/compiler-marble";
 
 export type { MarblePerformance } from "@reaper-viz/compiler-marble";
 
@@ -44,51 +44,6 @@ export function marblePlatformVisualSize(target: MarbleTarget): [number, number,
   return marbleTargetVisualSize(target);
 }
 
-export function marbleTargetVisualGroups(targets: readonly MarbleTarget[]): string[][] {
-  const parents = targets.map((_, index) => index);
-  const find = (index: number): number => {
-    while (parents[index] !== index) index = parents[index]!;
-    return index;
-  };
-  const join = (left: number, right: number): void => {
-    const leftRoot = find(left);
-    const rightRoot = find(right);
-    if (leftRoot !== rightRoot) parents[Math.max(leftRoot, rightRoot)] = Math.min(leftRoot, rightRoot);
-  };
-  for (let left = 0; left < targets.length; left += 1) {
-    for (let right = left + 1; right < targets.length; right += 1) {
-      const sameAuthoredGroup = targets[left]!.visualGroupId && targets[left]!.visualGroupId === targets[right]!.visualGroupId;
-      if (sameAuthoredGroup || marbleTargetVisualsOverlap(targets[left]!, targets[right]!, 0)) join(left, right);
-    }
-  }
-  const groups = new Map<number, string[]>();
-  for (let index = 0; index < targets.length; index += 1) {
-    const root = find(index);
-    groups.set(root, [...(groups.get(root) ?? []), targets[index]!.id]);
-  }
-  return [...groups.entries()].sort((a, b) => a[0] - b[0]).map(([, ids]) => ids);
-}
-
-export function marbleVisibleTargetIds(targets: readonly MarbleTarget[]): Set<string> {
-  return new Set(marbleTargetVisualGroups(targets).flatMap((ids) => ids[0] ? [ids[0]] : []));
-}
-
-export function marbleVisibleTargetIdsAtTime(
-  groups: readonly (readonly string[])[],
-  impacts: readonly MarbleImpact[],
-  t: number,
-): Set<string> {
-  const impactsByTarget = new Map(impacts.map((impact) => [impact.targetId, impact]));
-  return new Set(groups.flatMap((ids) => {
-    const selected = ids
-      .map((id) => ({ id, impact: impactsByTarget.get(id) }))
-      .sort((a, b) => Math.abs((a.impact?.t ?? Number.POSITIVE_INFINITY) - t) - Math.abs((b.impact?.t ?? Number.POSITIVE_INFINITY) - t)
-        || (a.impact?.t ?? Number.POSITIVE_INFINITY) - (b.impact?.t ?? Number.POSITIVE_INFINITY)
-        || a.id.localeCompare(b.id))[0];
-    return selected ? [selected.id] : [];
-  }));
-}
-
 export interface MarblePlatformCarrierTransform {
   scale: [number, number, number];
   position: [number, number, number];
@@ -101,7 +56,7 @@ export function marblePlatformCarrierTransform(target: MarbleTarget): MarblePlat
   const carrierThickness = Math.max(0.065, visualSize[1] * 0.5);
   return {
     scale: [visualSize[0] * 1.06, carrierThickness, visualSize[2] * 1.1],
-    position: [0, -(collisionHalfThickness + carrierThickness / 2 + 0.018), 0],
+    position: [target.visualOffset?.[0] ?? 0, -(collisionHalfThickness + carrierThickness / 2 + 0.018), target.visualOffset?.[1] ?? 0],
   };
 }
 
@@ -329,12 +284,15 @@ function interpolateAngle(from: number, to: number, progress: number): number {
 
 export function interpolateMarbleTarget(from: MarbleTarget, to: MarbleTarget, raw: number): MarbleTarget {
   const progress = clamp(raw, 0, 1);
+  const fromVisualOffset = from.visualOffset ?? [0, 0];
+  const toVisualOffset = to.visualOffset ?? [0, 0];
   return {
     ...(progress < 1 ? from : to),
     pos: from.pos.map((value, index) => value + (to.pos[index]! - value) * progress) as [number, number, number],
     contactPos: from.contactPos.map((value, index) => value + (to.contactPos[index]! - value) * progress) as [number, number, number],
     rotation: from.rotation.map((value, index) => interpolateAngle(value, to.rotation[index]!, progress)) as [number, number, number],
     size: from.size.map((value, index) => value + (to.size[index]! - value) * progress) as [number, number, number],
+    visualOffset: fromVisualOffset.map((value, index) => value + (toVisualOffset[index]! - value) * progress) as [number, number],
   };
 }
 
@@ -646,7 +604,6 @@ export class MarbleScene {
   #platformTransition: MarblePlatformTransition | undefined;
   #cameraTransition: { path: readonly MarblePathSegment[]; startT: number; durationSec: number } | undefined;
   #completedActivation: MarbleSceneActivation | undefined;
-  #visualTargetGroups: string[][] = [];
 
   #targetMaterial(target: MarbleTarget): MeshStandardMaterial {
     const key = `${target.material}:${target.color}`;
@@ -815,8 +772,6 @@ export class MarbleScene {
   }
 
   #addTargets(): void {
-    this.#visualTargetGroups = marbleTargetVisualGroups(this.#performance.statics.targets);
-    const visibleTargetIds = marbleVisibleTargetIdsAtTime(this.#visualTargetGroups, this.#performance.statics.impacts, 0);
     for (const impact of this.#performance.statics.impacts) {
       const list = this.#impactByTarget.get(impact.targetId) ?? [];
       list.push(impact);
@@ -847,10 +802,6 @@ export class MarbleScene {
       );
       shadow.position.set(target.pos[0] - 0.08, target.pos[1] - 0.1, -0.405);
       shadow.scale.set(1.4, 0.46, 1);
-      const visible = visibleTargetIds.has(target.id);
-      group.visible = visible;
-      shadow.visible = visible;
-      glow.visible = visible;
       this.#targetMeshes.set(target.id, { group, base, home: group.position.clone(), baseRotation: [group.rotation.x, group.rotation.y, group.rotation.z], baseScale, glow, shadow, hardware: hardware.group, carrier: hardware.carrier, fasteners: hardware.fasteners, compact });
       this.#performanceObjects.add(shadow, group, glow);
     }
@@ -1023,12 +974,7 @@ export class MarbleScene {
     this.#marble.scale.setScalar(1 + pulse * 0.16);
     this.#marbleGlow.position.copy(this.#marble.position);
     this.#marbleGlow.intensity = 0.42 + pulse * 1.8;
-    const visibleTargetIds = marbleVisibleTargetIdsAtTime(this.#visualTargetGroups, this.#performance.statics.impacts, t);
     for (const [targetId, meshes] of this.#targetMeshes) {
-      const visible = visibleTargetIds.has(targetId);
-      meshes.group.visible = visible;
-      meshes.shadow.visible = visible;
-      meshes.glow.visible = visible;
       const intensity = this.#targetIntensity(targetId, t);
       const recoil = this.#targetRecoil(targetId, t);
       meshes.group.position.set(meshes.home.x, meshes.home.y, meshes.home.z + recoil);

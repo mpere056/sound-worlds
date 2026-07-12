@@ -21,12 +21,15 @@ function interpolateAngle(from: number, to: number, progress: number): number {
 function targetAt(from: MarbleTarget, to: MarbleTarget, raw: number, offset: MarbleTransitionOffset, timing: MarbleTransitionTiming = [0, 1]): MarbleTarget {
   const progress = clamp((raw - timing[0]) / Math.max(1e-6, timing[1] - timing[0]));
   const envelope = Math.sin(Math.PI * progress);
+  const fromVisualOffset = from.visualOffset ?? [0, 0];
+  const toVisualOffset = to.visualOffset ?? [0, 0];
   return {
     ...to,
     pos: from.pos.map((value, index) => value + (to.pos[index]! - value) * progress + offset[index]! * envelope) as MarbleTransitionOffset,
     contactPos: from.contactPos.map((value, index) => value + (to.contactPos[index]! - value) * progress + offset[index]! * envelope) as MarbleTransitionOffset,
     rotation: from.rotation.map((value, index) => interpolateAngle(value, to.rotation[index]!, progress)) as MarbleTransitionOffset,
     size: from.size.map((value, index) => value + (to.size[index]! - value) * progress) as MarbleTransitionOffset,
+    visualOffset: fromVisualOffset.map((value, index) => value + (toVisualOffset[index]! - value) * progress) as [number, number],
   };
 }
 
@@ -43,8 +46,12 @@ function footprint(target: MarbleTarget): Footprint {
   const collisionHalfThickness = compact ? target.size[1] * 0.9 : target.size[1] / 2;
   const carrierThickness = Math.max(0.065, visualSize[1] * 0.5);
   const centerOffset = -(collisionHalfThickness + carrierThickness / 2 + 0.018);
+  const visualOffset = target.visualOffset ?? [0, 0];
   return {
-    center: target.pos.map((value, index) => value + normal[index]! * centerOffset) as MarbleTransitionOffset,
+    center: target.pos.map((value, index) => value
+      + normal[index]! * centerOffset
+      + tangent[index]! * visualOffset[0]
+      + binormal[index]! * visualOffset[1]) as MarbleTransitionOffset,
     axes: [tangent, normal, binormal],
     halfExtents: [visualSize[0] * 1.06 / 2, carrierThickness / 2, visualSize[2] * 1.1 / 2],
   };
@@ -93,7 +100,6 @@ export function marbleTransitionOverlapCount(
     const footprints = pairs.map((pair) => footprint(targetAt(pair.from, pair.to, progress, offsets.get(pair.id) ?? [0, 0, 0], timings.get(pair.id))));
     for (let left = 0; left < footprints.length; left += 1) {
       for (let right = left + 1; right < footprints.length; right += 1) {
-        if (pairs[left]!.to.visualGroupId && pairs[left]!.to.visualGroupId === pairs[right]!.to.visualGroupId) continue;
         if (overlaps(footprints[left]!, footprints[right]!)) count += 1;
       }
     }
@@ -118,7 +124,6 @@ function overlappingTargetIds(
     const footprints = pairs.map((pair) => footprint(targetAt(pair.from, pair.to, progress, offsets.get(pair.id) ?? [0, 0, 0])));
     for (let left = 0; left < footprints.length; left += 1) {
       for (let right = left + 1; right < footprints.length; right += 1) {
-        if (pairs[left]!.to.visualGroupId && pairs[left]!.to.visualGroupId === pairs[right]!.to.visualGroupId) continue;
         if (overlaps(footprints[left]!, footprints[right]!)) {
           result.add(pairs[left]!.id);
           result.add(pairs[right]!.id);
@@ -148,7 +153,6 @@ function targetOverlapCount(
     for (const [otherId, otherFrom] of fromById) {
       if (otherId === targetId) continue;
       const otherTo = toById.get(otherId);
-      if (to.visualGroupId && to.visualGroupId === otherTo?.visualGroupId) continue;
       if (otherTo && overlaps(active, footprint(targetAt(otherFrom, otherTo, progress, offsets.get(otherId) ?? [0, 0, 0])))) count += 1;
     }
   }
@@ -268,14 +272,15 @@ export function planMarbleTransitionRoute(fromTargets: readonly MarbleTarget[], 
   }
   const timingOrders = [ids, [...ids].reverse()];
   for (const order of timingOrders) {
-    for (const window of [0.28, 0.4, 0.55]) {
+    const serializedWindow = Math.max(0.025, 0.92 / Math.max(1, order.length));
+    for (const window of [serializedWindow, 0.28, 0.4, 0.55]) {
       const timings = new Map<string, MarbleTransitionTiming>();
-      const available = 1 - window;
+      const available = window === serializedWindow ? Math.max(0, 1 - serializedWindow) : 1 - window;
       order.forEach((id, index) => {
         const start = order.length > 1 ? available * index / (order.length - 1) : 0;
         timings.set(id, [start, start + window]);
       });
-      for (const candidateOffsets of [directRepair, best]) {
+      for (const candidateOffsets of [direct, directRepair, best]) {
         const count = marbleTransitionOverlapCount(fromTargets, toTargets, candidateOffsets, samples, timings);
         if (count === 0) return { offsets: [...candidateOffsets], timings: [...timings], overlapCount: 0, samples };
         if (count < bestCount) bestCount = count;

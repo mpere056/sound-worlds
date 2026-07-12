@@ -486,7 +486,11 @@ export const MARBLE_TARGET_VISUAL_BOUNDS = {
 export function marbleTargetVisualSize(target: MarbleTarget): Vec3 {
   const compact = target.kind === "peg" || target.kind === "chime";
   const bounds = compact ? MARBLE_TARGET_VISUAL_BOUNDS.compact : MARBLE_TARGET_VISUAL_BOUNDS.full;
-  return target.size.map((value, index) => clamp(value, bounds.min[index]!, bounds.max[index]!)) as Vec3;
+  const visualOffset = target.visualOffset ?? [0, 0];
+  const size = target.size.map((value, index) => clamp(value, bounds.min[index]!, bounds.max[index]!)) as Vec3;
+  size[0] = clamp(Math.max(size[0], 2 * (Math.abs(visualOffset[0]) + 0.08)), bounds.min[0], bounds.max[0]);
+  size[2] = clamp(Math.max(size[2], 2 * (Math.abs(visualOffset[1]) + 0.08)), bounds.min[2], bounds.max[2]);
+  return size;
 }
 
 function targetHalfThickness(kind: MarbleTarget["kind"], size: Vec3): number {
@@ -507,8 +511,9 @@ export function marbleTargetVisualFootprint(target: MarbleTarget): TargetFootpri
   const visualSize = marbleTargetVisualSize(target);
   const carrierThickness = Math.max(0.065, visualSize[1] * 0.5);
   const centerOffset = -(targetHalfThickness(target.kind, target.size) + carrierThickness / 2 + 0.018);
+  const visualOffset = target.visualOffset ?? [0, 0];
   return {
-    center: vecAdd(target.pos, vecScale(basis.normal, centerOffset)),
+    center: vecAdd(vecAdd(vecAdd(target.pos, vecScale(basis.normal, centerOffset)), vecScale(basis.tangent, visualOffset[0])), vecScale(basis.binormal, visualOffset[1])),
     axes: [basis.tangent, basis.normal, basis.binormal],
     halfExtents: [visualSize[0] * 1.06 / 2, carrierThickness / 2, visualSize[2] * 1.1 / 2],
   };
@@ -1023,39 +1028,123 @@ function validateTargetLayout(targets: readonly MarbleTarget[], profile?: Mutabl
   }
 }
 
-function assignVisualGroups(targets: MarbleTarget[], clusters: readonly MarbleCluster[]): void {
-  const parents = targets.map((_, index) => index);
-  const find = (index: number): number => {
-    let root = index;
-    while (parents[root] !== root) root = parents[root]!;
-    while (parents[index] !== index) {
-      const next = parents[index]!;
-      parents[index] = root;
-      index = next;
+function solveStaticVisualLayout(targets: MarbleTarget[]): void {
+  const candidatesFor = (target: MarbleTarget): [number, number][] => {
+    const compact = target.kind === "peg" || target.kind === "chime";
+    const bounds = compact ? MARBLE_TARGET_VISUAL_BOUNDS.compact : MARBLE_TARGET_VISUAL_BOUNDS.full;
+    const maxX = Math.max(0, bounds.max[0] / 2 - 0.08);
+    const maxZ = Math.max(0, bounds.max[2] / 2 - 0.08);
+    const candidates: [number, number][] = [];
+    for (const x of [0, -0.25, 0.25, -0.5, 0.5, -0.75, 0.75, -1, 1]) {
+      for (const z of [0, -0.5, 0.5, -1, 1]) candidates.push([x * maxX, z * maxZ]);
     }
-    return root;
+    return candidates;
   };
-  const join = (left: number, right: number): void => {
-    const leftRoot = find(left);
-    const rightRoot = find(right);
-    if (leftRoot === rightRoot) return;
-    parents[Math.max(leftRoot, rightRoot)] = Math.min(leftRoot, rightRoot);
+  const overlapCount = (index: number): number => targets.reduce((count, other, otherIndex) => (
+    otherIndex !== index && marbleTargetVisualsOverlap(targets[index]!, other, 0.012) ? count + 1 : count
+  ), 0);
+  const totalOverlapCount = (): number => {
+    let count = 0;
+    for (let left = 0; left < targets.length; left += 1) for (let right = left + 1; right < targets.length; right += 1) {
+      if (marbleTargetVisualsOverlap(targets[left]!, targets[right]!, 0.012)) count += 1;
+    }
+    return count;
   };
-  for (const cluster of clusters) {
-    if (cluster.kind === "single") continue;
-    const indices = cluster.targetIds.map((targetId) => targets.findIndex((target) => target.id === targetId)).filter((index) => index >= 0);
-    for (const index of indices.slice(1)) join(indices[0]!, index);
+  for (let pass = 0; pass < 8; pass += 1) {
+    let changed = false;
+    for (let index = 0; index < targets.length; index += 1) {
+      const target = targets[index]!;
+      const candidates = candidatesFor(target);
+      const previous = target.visualOffset ?? [0, 0];
+      let best = previous;
+      let bestScore = overlapCount(index) * 1000 + Math.hypot(...previous);
+      for (const candidate of candidates) {
+        target.visualOffset = candidate;
+        const score = overlapCount(index) * 1000 + Math.hypot(...candidate);
+        if (score < bestScore - 1e-9) {
+          best = candidate;
+          bestScore = score;
+        }
+      }
+      target.visualOffset = best;
+      if (best[0] !== previous[0] || best[1] !== previous[1]) changed = true;
+    }
+    if (!changed) break;
   }
-  for (let left = 0; left < targets.length; left += 1) {
-    for (let right = left + 1; right < targets.length; right += 1) {
-      if (marbleTargetVisualsOverlap(targets[left]!, targets[right]!, 0)) join(left, right);
+  for (let pass = 0; pass < 8 && totalOverlapCount() > 0; pass += 1) {
+    let conflict: [number, number] | undefined;
+    for (let left = 0; left < targets.length && !conflict; left += 1) for (let right = left + 1; right < targets.length; right += 1) {
+      if (marbleTargetVisualsOverlap(targets[left]!, targets[right]!, 0.012)) { conflict = [left, right]; break; }
+    }
+    if (!conflict) break;
+    const [left, right] = conflict;
+    const leftTarget = targets[left]!;
+    const rightTarget = targets[right]!;
+    const originalLeft = leftTarget.visualOffset ?? [0, 0];
+    const originalRight = rightTarget.visualOffset ?? [0, 0];
+    let bestLeft = originalLeft;
+    let bestRight = originalRight;
+    let bestScore = totalOverlapCount() * 1000 + Math.hypot(...originalLeft) + Math.hypot(...originalRight);
+    for (const leftCandidate of candidatesFor(leftTarget)) for (const rightCandidate of candidatesFor(rightTarget)) {
+      leftTarget.visualOffset = leftCandidate;
+      rightTarget.visualOffset = rightCandidate;
+      const score = totalOverlapCount() * 1000 + Math.hypot(...leftCandidate) + Math.hypot(...rightCandidate);
+      if (score < bestScore - 1e-9) { bestLeft = leftCandidate; bestRight = rightCandidate; bestScore = score; }
+    }
+    leftTarget.visualOffset = bestLeft;
+    rightTarget.visualOffset = bestRight;
+    const offsetsUnchanged = bestLeft[0] === originalLeft[0] && bestLeft[1] === originalLeft[1]
+      && bestRight[0] === originalRight[0] && bestRight[1] === originalRight[1];
+    if (offsetsUnchanged) {
+      const moving = rightTarget;
+      const originalPos = [...moving.pos] as Vec3;
+      const originalContact = [...moving.contactPos] as Vec3;
+      const basis = targetBasis(moving.rotation[2], moving.rotation[0]);
+      let bestPos = originalPos;
+      let bestContact = originalContact;
+      let bestSpatialScore = totalOverlapCount() * 1000;
+      for (const magnitude of [0.12, 0.2, 0.32, 0.48, 0.68, 0.9, 1.25, 1.7, 2.2]) for (const [x, z] of [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]] as const) {
+        const delta = vecAdd(vecScale(basis.tangent, x * magnitude), vecScale(basis.binormal, z * magnitude));
+        moving.pos = vecAdd(originalPos, delta);
+        moving.contactPos = vecAdd(originalContact, delta);
+        const physicalOverlaps = targets.reduce((count, other, otherIndex) => otherIndex !== right && marbleTargetsOverlap(moving, other, 0) ? count + 1 : count, 0);
+        const score = physicalOverlaps * 10000 + totalOverlapCount() * 1000 + magnitude;
+        if (score < bestSpatialScore) {
+          bestPos = [...moving.pos];
+          bestContact = [...moving.contactPos];
+          bestSpatialScore = score;
+        }
+      }
+      moving.pos = bestPos.map((value) => round(value, 6)) as Vec3;
+      moving.contactPos = bestContact.map((value) => round(value, 6)) as Vec3;
+      if (bestPos[0] === originalPos[0] && bestPos[1] === originalPos[1] && bestPos[2] === originalPos[2]) break;
     }
   }
-  const sizes = new Map<number, number>();
-  for (let index = 0; index < targets.length; index += 1) sizes.set(find(index), (sizes.get(find(index)) ?? 0) + 1);
-  for (let index = 0; index < targets.length; index += 1) {
-    const root = find(index);
-    if ((sizes.get(root) ?? 0) > 1) targets[index]!.visualGroupId = `visual-group:${root}`;
+  for (let pass = 0; pass < 12 && totalOverlapCount() > 0; pass += 1) {
+    let conflict: [number, number] | undefined;
+    for (let left = 0; left < targets.length && !conflict; left += 1) for (let right = left + 1; right < targets.length; right += 1) {
+      if (marbleTargetVisualsOverlap(targets[left]!, targets[right]!, 0.012)) { conflict = [left, right]; break; }
+    }
+    if (!conflict) break;
+    const movingIndex = conflict[1];
+    const moving = targets[movingIndex]!;
+    const originalPos = [...moving.pos] as Vec3;
+    const originalContact = [...moving.contactPos] as Vec3;
+    const basis = targetBasis(moving.rotation[2], moving.rotation[0]);
+    let bestPos = originalPos;
+    let bestContact = originalContact;
+    const physicalCount = (): number => targets.reduce((count, other, index) => index !== movingIndex && marbleTargetsOverlap(moving, other, 0) ? count + 1 : count, 0);
+    let bestScore = physicalCount() * 10000 + totalOverlapCount() * 1000;
+    for (const magnitude of [0.12, 0.2, 0.32, 0.48, 0.68, 0.9, 1.25, 1.7, 2.2]) for (const [x, z] of [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]] as const) {
+      const delta = vecAdd(vecScale(basis.tangent, x * magnitude), vecScale(basis.binormal, z * magnitude));
+      moving.pos = vecAdd(originalPos, delta);
+      moving.contactPos = vecAdd(originalContact, delta);
+      const score = physicalCount() * 10000 + totalOverlapCount() * 1000 + magnitude;
+      if (score < bestScore) { bestPos = [...moving.pos]; bestContact = [...moving.contactPos]; bestScore = score; }
+    }
+    moving.pos = bestPos.map((value) => round(value, 6)) as Vec3;
+    moving.contactPos = bestContact.map((value) => round(value, 6)) as Vec3;
+    if (bestPos === originalPos) break;
   }
 }
 
@@ -1345,12 +1434,12 @@ export function compileMarble(song: Song, options: CompileMarbleOptions = {}): M
   const metrics = measureCompilePhase(profile, "metrics", () => compileMetrics(selected.notes));
   const motion = measureCompilePhase(profile, "motionSolve", () => solveMotionProfile(selected.notes, compileMotionProfile(options.motionMix), profile));
   const targets = measureCompilePhase(profile, "targets", () => compileTargets(selected.notes, metrics, motion, profile));
+  solveStaticVisualLayout(targets);
   measureCompilePhase(profile, "targetValidation", () => validateTargetLayout(targets, profile));
   const { clusters, impacts } = measureCompilePhase(profile, "clustersAndImpacts", () => {
     const compiledClusters = compileClusters(selected.notes, targets);
     return { clusters: compiledClusters, impacts: compileImpacts(selected.notes, targets, compiledClusters) };
   });
-  assignVisualGroups(targets, clusters);
   const diagnostics: MarbleDiagnostics = {
     droppedNotes: 0,
     timingMismatches: 0,

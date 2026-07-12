@@ -648,8 +648,8 @@ async function loadConcept(concept: string): Promise<void> {
   scrub.disabled = false;
   marblePlanner.invalidate();
   marbleTransitionRouter.invalidate();
-  handControls.hidden = concept !== "marble";
-  if (concept !== "marble") stopMarbleHandTracking();
+  handControls.hidden = true;
+  stopMarbleHandTracking();
   pendingMarbleActivationResult = undefined;
   const wasThree = scene?.backendKind === "three";
   destroyActiveScene();

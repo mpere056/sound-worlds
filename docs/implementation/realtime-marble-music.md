@@ -1,4 +1,4 @@
-# Realtime Marble Music future plan
+# Live Marble Music implementation plan
 
 This is a future Sound Worlds mode. It is recorded now so the live idea is not
 lost, but it must not interrupt completion of deterministic one-track Marble
@@ -26,12 +26,41 @@ while performing rather than triggering a pre-authored animation.
 
 ## Architecture boundary
 
-Realtime Marble Music is a separate runtime from compiled Marble Music.
+Live Marble Music is a separate product mode and runtime from prerecorded
+Marble Music. Webcam and hand-gesture input belong only to live mode.
+Prerecorded mode never requests camera permission and may spend longer solving
+the complete immutable platform layout after a slider change.
 
 ```text
 offline mode: REAPER export -> song.json -> compiler -> absolute-time path
 live mode:    REAPER MIDI telemetry -> event clock -> fixed-step physics world
 ```
+
+## Rolling certainty window
+
+Live mode does not solve a complete song because future notes may not exist yet.
+It maintains two visual populations:
+
+- **certain platforms:** the next 5-8 collision platforms are fully solved,
+  collision-enabled, and locked once they enter the active window;
+- **uncertain platforms:** lightweight, non-collidable instances remain in a
+  distant vortex until enough timing and trajectory information exists to place
+  them safely.
+
+For a known backing track, live mode may know the total future platform count,
+but count does not imply placement. An uncertain instance starts settling well
+before it becomes one of the next 5-8 impacts. Its movement follows a continuous
+bounded path into the solved pose; it must never pop, crossfade, or become a
+collider while intersecting the marble or another platform. If solving misses
+its deadline, pause the marble simulation rather than activate invalid geometry.
+
+The rolling solver runs incrementally after each impact and whenever gesture
+input materially changes the motion mix. It reuses stable platform IDs and
+never repositions a platform after that platform becomes certain.
+
+Prerecorded mode explicitly does not use this window. It compiles every target,
+validates every carrier pair and route clearance, and installs one immutable
+layout for seekable playback and export.
 
 The offline renderer remains deterministic and seekable. The live mode is
 allowed to use a real runtime rigid-body simulation because future note times
@@ -85,12 +114,15 @@ The marble remains the focal point and must not leave the viewport.
 
 1. REAPER telemetry spike with timestamped note-on logging and latency report.
 2. Standalone fixed-step falling-marble sandbox with no music mapping.
-3. Spawn one collision-safe platform from each live note.
-4. Map pitch to angle and velocity to restitution with visible clamps.
-5. Add platform occupancy rejection, lifetime management, and endless-world
+3. Add the uncertain vortex renderer using instanced, non-collidable geometry.
+4. Implement the rolling 5-8-platform solver and certainty state machine.
+5. Spawn one collision-safe platform from each live note.
+6. Map pitch to angle and velocity to restitution with visible clamps.
+7. Add platform occupancy rejection, lifetime management, and endless-world
    camera/background recycling.
-6. Run a live piano playability test and tune end-to-end latency.
-7. Optionally record telemetry plus simulation seed/state for deterministic
+8. Connect webcam gestures to live motion/camera controls only.
+9. Run a live piano playability test and tune end-to-end latency.
+10. Optionally record telemetry plus simulation seed/state for deterministic
    replay and later video export.
 
 ## First acceptance gate

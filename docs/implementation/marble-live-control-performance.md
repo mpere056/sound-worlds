@@ -823,18 +823,19 @@ References:
 - Peg, chime, plate, and resonator collision semantics now share one visible
   rectangular carrier treatment. Compact collision cylinders remain hidden and
   can no longer protrude through the colored platform.
-- Dense contacts and any remaining intersecting visible-carrier component receive
-  one deterministic time-aware representative platform. The representative is
-  selected from absolute song time, so every internal target becomes visible at
-  its own impact while the renderer never displays two platforms in the same 3D
-  volume. Scrubbing and linear playback select the same target.
+- Prerecorded compilation keeps every carrier visible and static during playback.
+  A deterministic bounded layout pass separates carrier footprints; if visual
+  offsets alone cannot resolve a conflict, it moves the authored contact and
+  recompiles the marble trajectory before accepting the plan. No platform is
+  selected, hidden, or swapped according to song time.
 - Each visible platform is one carrier-and-fastener assembly. Screws and slots
   are anchored to the carrier top during static rendering and live transitions;
   detached target brackets, rods, duplicate SVG target plates, rail ties, and
   free-standing support collars are no longer rendered.
-- Transition routing uses the visible carrier footprint and understands shared
-  visual groups. The scene derives the same groups for older saved performances
-  that predate compiler-authored visual-group metadata.
+- Transition routing uses every visible carrier footprint. Prerecorded mode
+  pauses transport and refuses an uncertified intermediate route. Webcam control
+  moves to the separate live rolling-window runtime described in
+  `realtime-marble-music.md`.
 
 ### Commit point
 

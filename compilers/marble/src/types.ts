@@ -80,7 +80,7 @@ export interface MarbleTarget {
   color: string;
   material: MarbleMaterial;
   familyId: string;
-  visualGroupId?: string;
+  visualOffset?: [number, number];
 }
 
 export interface MarbleImpact {
