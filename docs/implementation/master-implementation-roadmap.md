@@ -60,6 +60,13 @@ each grouped note destroys one brick and the final brick breaks exactly on the
 final note. Headless B0-B5 compiler work may proceed alongside Marble Music;
 scene polish begins only after its deterministic solver gates pass.
 
+Five additional one-track concepts are specified in the
+[Physics-first shader worlds roadmap](shader-worlds-roadmap.md). Each has a
+separate implementation plan for its inverse physics, exact note ownership,
+global certification, shader architecture, and performance gates. Start with
+the Aurora Cyclotron closed-form Lorentz feasibility spike; keep all five in
+planning until one passes the shared headless reference-song gate.
+
 Metro-specific consequence: that export can validate MIDI station timing,
 train arrivals, line identity, and fallback honesty, but it cannot validate
 M4 chorus rings/laps. M4 must be judged on a region-bearing reference song with
