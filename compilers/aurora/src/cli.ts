@@ -1,0 +1,22 @@
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseSong } from "@reaper-viz/core";
+import { compileAuroraPlan } from "./index.js";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const root = resolve(here, "../../..");
+const args = process.argv.slice(2).filter((value) => value !== "--");
+const projectArg = args[0];
+if (!projectArg) throw new Error("Usage: pnpm compile:aurora -- projects/<project> [--track <track-id>]");
+const trackIndex = args.indexOf("--track");
+const sourceTrackId = trackIndex >= 0 ? args[trackIndex + 1] : undefined;
+if (trackIndex >= 0 && !sourceTrackId) throw new Error("Aurora Cyclotron --track requires a track ID");
+const project = isAbsolute(projectArg) ? projectArg : resolve(root, projectArg);
+const output = resolve(project, "aurora.plan.json");
+const temporary = `${output}.tmp`;
+await mkdir(project, { recursive: true });
+const song = parseSong(JSON.parse(await readFile(resolve(project, "song.json"), "utf8")));
+await writeFile(temporary, `${JSON.stringify(compileAuroraPlan(song, sourceTrackId ? { sourceTrackId } : {}), null, 2)}\n`, "utf8");
+await rename(temporary, output);
+console.log(`WROTE: ${output}`);

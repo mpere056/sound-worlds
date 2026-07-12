@@ -52,12 +52,27 @@ the Q0 physics gate.
 
 ### A0 - Contracts and direct feasibility
 
+**Status: implemented.** `@reaper-viz/compiler-aurora` now selects one
+note-bearing track deterministically, groups chord deadlines, validates charge,
+mass, field, spacing, and epsilon options, emits stable IDs and gap diagnostics,
+and writes `aurora.plan.json`. The 12.5-second reference song produces 19
+deadlines from 19 notes, no compound deadlines, a `0.174479` second minimum gap,
+and the exact `9.916146` second final deadline.
+
 - Add compiler/schema/CLI, grouped coil deadlines, charge/mass defaults, field
   bounds, and exact final-coil ownership.
 - Report gaps that exceed field, acceleration, or coil-spacing limits.
 - Gate: deterministic grouping and byte-identical plan output.
 
 ### A1 - Closed-form Lorentz kernel
+
+**Status: ideal-field core implemented; finite-field promotion work remains.**
+Pure TypeScript propagation handles arbitrary constant electric and magnetic
+fields, circular and helical motion, `E x B` drift, zero-field and neutral
+degeneracies, kinetic/electric work accounting, and absolute duration. Eleven
+focused compiler/physics tests pass, including comparison against a 50,000-step
+Boris integration. Divergence-free finite-coil primitives, fringe propagation,
+and shooting correction remain required before promotion beyond Q0.
 
 - Implement constant `E/B` propagation, helical basis construction, degenerate
   parallel-field handling, and absolute-time sampling.
