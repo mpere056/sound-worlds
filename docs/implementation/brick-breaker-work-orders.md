@@ -93,8 +93,13 @@ interface BrickBreakerCompileReport {
 
 ## B1 - Direct-contact trajectory kernel
 
-**Status: next.** Use the measured B0 gap distribution to select provisional
-speed bands; do not tune only around evenly spaced synthetic notes.
+**Status: in progress.** The shared deterministic physics kernel now includes
+2D vector/reflection operations, ordered segment-circle intersections, and
+swept-circle versus rotated-box contact with world-space normals. Thin-collider
+tunneling and tangent-contact cases are covered. Next, add absolute-time ball
+segments and direct deadline-to-deadline placement using these primitives. Use
+the measured B0 gap distribution to select provisional speed bands; do not tune
+only around evenly spaced synthetic notes.
 
 ### Goal
 

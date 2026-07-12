@@ -2,6 +2,7 @@ import type { Song, SongEvent, SongTrack } from "@reaper-viz/core";
 import type { BrickBreakerCompileOptions, BrickBreakerPlan, BrickBreakerResolvedOptions, BrickHitGroup, BrickHitNote } from "./types.js";
 
 export * from "./types.js";
+export * from "./physics.js";
 
 const DEFAULT_CHORD_EPSILON_SEC = 0.025;
 const DEFAULT_BOARD = { width: 12, height: 18 } as const;
