@@ -233,6 +233,40 @@ function desiredOutgoingCandidates(index: number, incoming: BrickVec2, speed: nu
     .map((candidate) => brickScale(brickNormalize(candidate), speed));
 }
 
+function beatAlignedSupportCandidates(from: BrickVec2, t0: number, t1: number, board: { width: number; height: number }, speed: number): BrickVec2[] {
+  const dt = t1 - t0;
+  if (dt <= 1e-6) return [];
+  const inset = 0.36;
+  const bounds = [
+    { axis: 0 as const, value: -board.width / 2 + inset },
+    { axis: 0 as const, value: board.width / 2 - inset },
+    { axis: 1 as const, value: -board.height / 2 + inset + 0.72 },
+    { axis: 1 as const, value: board.height / 2 - inset },
+  ];
+  const candidates: BrickVec2[] = [];
+  for (const bound of bounds) {
+    const fixed = (bound.value - from[bound.axis]) / dt;
+    if (Math.abs(fixed) >= speed - 1e-6) continue;
+    const free = Math.sqrt(speed * speed - fixed * fixed);
+    for (const sign of [-1, 1]) {
+      const velocity: BrickVec2 = bound.axis === 0 ? [fixed, free * sign] : [free * sign, fixed];
+      const traced = traceBoardPath(from, velocity, t0, t1, board, "travel");
+      const finalSegment = traced.segments.at(-1);
+      if (finalSegment && (finalSegment.kind === "wall" || finalSegment.kind === "paddle") && Math.abs(finalSegment.t1 - t1) <= 1e-7) {
+        candidates.push(velocity);
+      }
+    }
+  }
+  return candidates;
+}
+
+function endsWithBeatContact(traced: TracedPath, deadline: number): boolean {
+  const finalSegment = traced.segments.at(-1);
+  return Boolean(finalSegment
+    && (finalSegment.kind === "wall" || finalSegment.kind === "paddle")
+    && Math.abs(finalSegment.t1 - deadline) <= 1e-7);
+}
+
 function brickCollider(brick: BrickBreakerBrick): BrickOrientedBox {
   return { center: brick.position, halfExtents: [brick.size[0] / 2, brick.size[1] / 2], rotation: brick.rotation };
 }
@@ -282,11 +316,30 @@ export function compileBrickBreaker(song: Song, options: BrickBreakerCompileOpti
   }];
   for (let index = 0; index < plan.hitGroups.length; index += 1) {
     const group = plan.hitGroups[index]!;
-    const incomingStates = states;
     const expanded: RouteSearchState[] = [];
     for (const state of states) {
       const traced = traceBoardPath(state.position, state.velocity, state.t, group.t, plan.options.board, index === 0 ? "launch" : "travel");
-      for (const [candidateIndex, outgoing] of desiredOutgoingCandidates(index, traced.velocity, PREVIEW_BALL_SPEED).entries()) {
+      if (endsWithBeatContact(traced, group.t)) {
+        if (index < plan.hitGroups.length - 1) {
+          expanded.push({
+            position: [...traced.position],
+            velocity: [...traced.velocity],
+            t: group.t,
+            segments: [...state.segments, ...traced.segments],
+            paddleContacts: [...state.paddleContacts, ...traced.paddleContacts],
+            bricks: state.bricks,
+            score: state.score + 1.25,
+            tie: `${state.tie}yy`,
+          });
+        }
+        continue;
+      }
+      const nextGroup = plan.hitGroups[index + 1];
+      const outgoingCandidates = [
+        ...desiredOutgoingCandidates(index, traced.velocity, PREVIEW_BALL_SPEED),
+        ...(nextGroup ? beatAlignedSupportCandidates(traced.position, group.t, nextGroup.t, plan.options.board, PREVIEW_BALL_SPEED) : []),
+      ];
+      for (const [candidateIndex, outgoing] of outgoingCandidates.entries()) {
         const normal = brickNormalize(brickSub(outgoing, traced.velocity), [0, 1]);
         const brickSize: BrickVec2 = [1.08, 0.44];
         const contactClearance = 0.24 + brickSize[1] / 2;
@@ -313,6 +366,10 @@ export function compileBrickBreaker(song: Song, options: BrickBreakerCompileOpti
         const steeringCost = Math.abs(outgoingUnit[0] - incomingUnit[0]);
         const supportCost = traced.segments.filter((segment) => segment.kind === "wall" || segment.kind === "paddle").length * 0.08;
         const lowerFieldCost = Math.max(0, -brick.position[1] / plan.options.board.height) * 0.08;
+        const futureSupportBonus = nextGroup && endsWithBeatContact(
+          traceBoardPath(traced.position, outgoing, group.t, nextGroup.t, plan.options.board, "travel"),
+          nextGroup.t,
+        ) ? -0.35 : 0;
         expanded.push({
           position: [...traced.position],
           velocity: brickReflect(traced.velocity, normal),
@@ -320,29 +377,14 @@ export function compileBrickBreaker(song: Song, options: BrickBreakerCompileOpti
           segments: route,
           paddleContacts: [...state.paddleContacts, ...traced.paddleContacts],
           bricks: [...state.bricks, brick],
-          score: state.score + steeringCost + supportCost + lowerFieldCost,
+          score: state.score + steeringCost + supportCost + lowerFieldCost + futureSupportBonus,
           tie: `${state.tie}${candidateIndex.toString(36).padStart(2, "0")}`,
         });
       }
     }
     expanded.sort((left, right) => left.score - right.score || left.tie.localeCompare(right.tie));
     states = expanded.slice(0, 384);
-    if (!states.length && index < plan.hitGroups.length - 1) {
-      states = incomingStates.map((state) => {
-        const traced = traceBoardPath(state.position, state.velocity, state.t, group.t, plan.options.board, index === 0 ? "launch" : "travel");
-        return {
-          ...state,
-          position: traced.position,
-          velocity: traced.velocity,
-          t: group.t,
-          segments: [...state.segments, ...traced.segments],
-          paddleContacts: [...state.paddleContacts, ...traced.paddleContacts],
-          score: state.score + 2,
-          tie: `${state.tie}zz`,
-        };
-      });
-    }
-    if (!states.length) throw new Error(`Brick Breaker could not place collision-safe final brick at ${group.t.toFixed(6)}s`);
+    if (!states.length) throw new Error(`Brick Breaker could not assign a collision contact to musical deadline ${index + 1}/${plan.hitGroups.length} at ${group.t.toFixed(6)}s`);
   }
   const solved = states[0]!;
   const bricks = solved.bricks;
@@ -353,7 +395,7 @@ export function compileBrickBreaker(song: Song, options: BrickBreakerCompileOpti
   const report = {
     ...plan.report,
     generatedBrickCount: bricks.length,
-    warnings: skippedBeatCount ? [`${skippedBeatCount} musical deadlines use support/free travel instead of a brick to preserve collision safety`] : [],
+    warnings: skippedBeatCount ? [`${skippedBeatCount} musical deadlines use a beat-aligned wall or paddle contact instead of a brick`] : [],
   };
   return {
     schemaVersion: 1,

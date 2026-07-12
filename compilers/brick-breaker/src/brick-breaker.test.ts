@@ -140,7 +140,9 @@ describe("Brick Breaker B0 compiler", () => {
   });
 
   it("certifies that every live brick is collision-free until its assigned beat", () => {
-    const performance = compileBrickBreaker(buildFixtureSong({ bars: 3, patterns: [{ role: "keys", beats: [0, 0.5, 1, 2, 3], pitch: 60, kind: "note" }] }));
+    const song = buildFixtureSong({ bars: 3, patterns: [{ role: "keys", beats: [0, 0.5, 1, 2, 3], pitch: 60, kind: "note" }] });
+    const plan = compileBrickBreakerPlan(song);
+    const performance = compileBrickBreaker(song);
     const colliders = performance.statics.bricks.map((brick) => ({
       brick,
       box: { center: brick.position, halfExtents: [brick.size[0] / 2, brick.size[1] / 2] as [number, number], rotation: brick.rotation },
@@ -160,6 +162,12 @@ describe("Brick Breaker B0 compiler", () => {
           expect(hit).toBeUndefined();
         }
       }
+    }
+    for (const group of plan.hitGroups) {
+      const brickOwners = performance.statics.bricks.filter((brick) => Math.abs(brick.destructionT - group.t) <= 1e-7).length;
+      const supportOwners = performance.statics.ballSegments.filter((segment) =>
+        (segment.kind === "wall" || segment.kind === "paddle") && Math.abs(segment.t1 - group.t) <= 1e-7).length;
+      expect(brickOwners + supportOwners).toBe(1);
     }
     expect(performance.statics.bricks.at(-1)!.destructionT).toBe(performance.statics.report.finalHitSec);
   });

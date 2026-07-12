@@ -187,9 +187,12 @@ brick reflection candidates. Every candidate brick is rejected if its oriented
 footprint overlaps another brick or if swept-circle validation finds the ball
 touching it on any segment before its assigned beat. The assigned segment must
 reach the expanded collider at its endpoint. If no safe intermediate brick can
-be placed, that musical deadline remains support/free travel; the final deadline
-must always produce the final brick. The reference song certifies 18 bricks for
-19 deadlines and preserves the exact final-note destruction time.
+be placed, the preceding collision selects a velocity that reaches a wall or
+paddle exactly on that musical deadline. Free-travel deadlines are forbidden,
+and each deadline has exactly one collision owner. The final deadline must
+always produce the final brick. The reference song certifies 18 bricks plus one
+beat-aligned wall hit for 19 deadlines and preserves the exact final-note
+destruction time.
 
 ### Goal
 
