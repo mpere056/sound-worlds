@@ -65,7 +65,11 @@ Five additional one-track concepts are specified in the
 separate implementation plan for its inverse physics, exact note ownership,
 global certification, shader architecture, and performance gates. Start with
 the Aurora Cyclotron closed-form Lorentz feasibility spike; keep all five in
-planning until one passes the shared headless reference-song gate.
+planning until one passes the shared headless reference-song gate. A rough
+physics draft is only Q0; the shared
+[shader-world visual-quality standard](shader-worlds-visual-quality-standard.md)
+then governs art direction, composition, materials, shader craft, motion, and
+full-song visual acceptance through Q5.
 
 A future [Music-synchronized ecosystem worlds roadmap](ecosystem-worlds-roadmap.md)
 defines active city, reef, rainforest, fantasy-dungeon, and orbital-habitat

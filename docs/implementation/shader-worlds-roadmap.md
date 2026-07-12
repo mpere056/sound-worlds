@@ -48,6 +48,16 @@ The recommended first spike is Aurora Cyclotron because constant-field helical
 motion has a closed form, making exact note timing easier to certify than the
 iterative Marble Music and Brick Breaker searches.
 
+## Physics-first, polish-later promotion policy
+
+Each concept begins as a deliberately plain physics graybox. Shader polish must
+not begin until exact note ownership, trajectory continuity, occupancy, seeking,
+and camera containment pass. After that gate, promotion follows the shared
+[shader worlds visual-quality standard](shader-worlds-visual-quality-standard.md):
+art-direction lock, composition/camera, material and shader craft, musical
+effects, then full-song visual acceptance. This preserves physics priority
+without lowering the final expectation of a refined, professional result.
+
 ## Plans
 
 - [Phaseglass](shader-world-phaseglass.md)
@@ -55,6 +65,7 @@ iterative Marble Music and Brick Breaker searches.
 - [Vortex Loom](shader-world-vortex-loom.md)
 - [Pendulum Cathedral](shader-world-pendulum-cathedral.md)
 - [Aurora Cyclotron](shader-world-aurora-cyclotron.md)
+- [Shared visual-quality standard](shader-worlds-visual-quality-standard.md)
 
 ## Cross-concept acceptance gate
 
@@ -69,3 +80,5 @@ Before visual polish, every prototype must pass the same reference-song audit:
 7. The shader holds 60 FPS at 1080 x 1920 on the reference machine, with an
    adaptive-quality fallback that does not change physics or event timing.
 
+Passing this gate promotes a concept only from Q0 physics graybox to Q1 art
+direction. It does not constitute visual completion.

@@ -4,7 +4,8 @@
 
 A luminous signal comet crosses one refractive phase membrane at every grouped
 note. The crossing is intentional and exact; no membrane is crossed early.
-Refraction redirects the comet without a discontinuity in position or speed.
+The membrane redirects the comet without a discontinuity in position or speed;
+the direction change is the membrane's authored impulse.
 
 ## Mathematical model
 
@@ -17,15 +18,48 @@ t = eta*i - (eta*dot(n,i) + sqrt(k))*n
 ```
 
 Reject `k < 0` unless the authored interaction is explicitly a total-internal-
-reflection variant. Preserve speed with `v_out = speed * normalize(t)`.
+reflection variant. Ordinary passive refraction changes propagation speed with
+medium index and therefore requires medium state on both sides. Do not call a
+constant-speed turn ordinary Snell refraction.
+
+The recommended first prototype is an active phase-gradient membrane, analogous
+to a metasurface, that changes tangential momentum while preserving magnitude:
+
+```text
+p_out_parallel = p_in_parallel + phaseGradient
+|p_out| = |p_in|
+```
+
+Here `p` is momentum, not position. Reject a requested phase gradient when the
+outgoing tangential momentum exceeds total momentum and no real normal component
+exists.
+
+The schema records `passive-refraction` or `active-phase` explicitly. The
+inverse solver uses Snell only for passive spans and the phase-gradient model
+for constant-speed spans.
 
 Given bounded incoming and desired outgoing directions, solve membrane normal
-and `eta` using a deterministic bracketed root solve. The next contact satisfies
-`p(t_i) = contact_i`; straight spans use `p1 = p0 + v*dt`, while long spans may
-use a low-curvature cubic flow segment with analytical arc-length lookup.
+and either `eta` or phase gradient using a deterministic bracketed root solve.
+The next contact satisfies
+`p(t_i) = contact_i`; unforced spans use `p1 = p0 + v*dt`. A curved long span
+must name and compile a bounded force field; an unexplained cubic trajectory is
+not accepted as physics.
 
 Pitch maps to `eta`, hue, and turn axis. Velocity maps to ripple amplitude and
 chromatic spread. Duration maps only to visual decay.
+
+## Final aesthetic direction
+
+Phaseglass should feel like precision optics inside a vast black-opal space:
+smoky depth, pearl-white highlights, restrained cyan and amber spectral edges,
+and membranes whose thickness and transmission remain legible in still frames.
+The comet is the brightest stable form; caustics briefly outrank it only at major
+contacts. Camera motion glides along the optical axis with modest banking.
+
+Avoid unrestricted rainbow dispersion, milky full-screen bloom, translucent
+objects with no edge definition, and noise that makes every membrane look like
+the same portal. Follow the [shared visual-quality standard](shader-worlds-visual-quality-standard.md)
+after the Q0 physics gate.
 
 ## Work orders
 
@@ -39,13 +73,15 @@ chromatic spread. Duration maps only to visual decay.
 ### P1 - Refraction kernel
 
 - Implement normalized refraction, inverse-normal solve, total-internal-
-  reflection detection, and constant-speed segment sampling.
+  reflection detection, active phase-gradient impulses, passive medium state,
+  and constant-speed active segment sampling.
 - Add randomized forward/inverse round-trip tests and grazing-incidence cases.
 - Gate: direction error below `1e-7`; speed error below `1e-9`.
 
 ### P2 - Global route and certification
 
-- Run bounded beam search over outgoing headings, `eta`, and membrane roll.
+- Run bounded beam search over outgoing headings, interaction mode, `eta` or
+  phase gradient, and membrane roll.
 - Model membranes as finite oriented discs with active crossing apertures.
 - Sweep every earlier segment against each future aperture; reject early
   crossings, edge clipping, membrane overlap, and camera-invisible contacts.
@@ -72,9 +108,10 @@ chromatic spread. Duration maps only to visual decay.
 - Compiler budget: 250 ms p95 for 100 notes after warmup.
 - GPU budget: 16.7 ms at 1080 x 1920; adaptive raymarch resolution down to 0.5.
 - Run full-song viewport, early-crossing, dense-note, and human motion audits.
+- Complete Q1-Q5 art direction, composition, material, effect, and full-song
+  acceptance before calling the world visually finished.
 
 ## Principal risk
 
 Finite membranes can intersect earlier spans even when their center contacts are
 valid. Reuse Brick Breaker's time-varying occupancy discipline from the start.
-
