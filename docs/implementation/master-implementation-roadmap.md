@@ -70,9 +70,12 @@ planning until one passes the shared headless reference-song gate.
 A future [Music-synchronized ecosystem worlds roadmap](ecosystem-worlds-roadmap.md)
 defines active city, reef, rainforest, fantasy-dungeon, and orbital-habitat
 worlds. These begin as deterministic causal simulations with resources,
-lifecycles, affordances, and space-time reservations; music may choreograph only
-valid actions. When this work begins, build the small Pulse District headless
-loop first and extract shared architecture only after a second world proves it.
+lifecycles, affordances, and space-time reservations. One musical channel
+choreographs only valid actions; a separate spectacle channel may deliberately
+bend or break world logic through typed render overrides, reversible geometry,
+or authored state transitions. When this work begins, build the small Pulse
+District headless loop first and extract shared architecture only after a second
+world proves it.
 
 Metro-specific consequence: that export can validate MIDI station timing,
 train arrivals, line identity, and fallback honesty, but it cannot validate

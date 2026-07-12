@@ -3,8 +3,9 @@
 This document records a future family of active worlds: cities, habitats,
 natural ecosystems, and fantasy ecologies whose inhabitants have coherent
 roles, needs, resources, movement, and consequences before music is applied.
-Music choreographs valid world behavior; it does not replace simulation with
-random beat-triggered motion.
+Music then operates through two deliberately different channels: it can
+choreograph valid ecological behavior, and it can introduce authored spectacle
+that bends or breaks the world's normal rules for musical impact.
 
 This is a planning document only. Do not add ecosystem runtime code until a
 small headless vertical slice and its invariants are approved.
@@ -19,10 +20,13 @@ resource -> producer -> transporter/consumer -> waste -> recovery -> resource
 ```
 
 An agent may be decorative only when it communicates a real process such as
-weather, current, heat, traffic density, pollination, or power flow. Music may
-retime an action inside its feasible window, select among valid actions, or
-amplify its visual consequence. Music may not teleport agents, erase needs,
-create impossible collisions, or make unrelated objects twitch on every beat.
+weather, current, heat, traffic density, pollination, or power flow. The
+ecological choreography channel may retime an action inside its feasible window,
+select among valid actions, or amplify its consequence. That channel may not
+teleport agents, erase needs, create impossible collisions, or make unrelated
+objects twitch on every beat. The spectacle channel is intentionally allowed to
+violate ordinary appearance, geometry, scale, time-of-day, lighting, or physics
+when the violation is authored as the musical event.
 
 ## Shared architecture
 
@@ -93,11 +97,41 @@ cost = deadlineError
 ```
 
 Deadline error is a hard constraint for explicitly synchronized actions. If no
-valid affordance exists, use a world-scale effect that is causally compatible,
-such as a light pulse, pressure wave, wind gust, or facade wave, rather than
-forcing an agent into an impossible action.
+valid affordance exists, do not force an ecological agent into an impossible
+action. Route the musical intent to the separately authored spectacle layer,
+which may be compatible with the world or intentionally reality-breaking.
 
-### 4. Physics retiming layer
+### 4. Expressive spectacle layer
+
+Spectacle is not constrained to behavior the ecosystem would perform on its
+own. It has three explicit modes:
+
+```ts
+interface SpectacleIntent {
+  mode: "render-override" | "reversible-world" | "authored-transition";
+  start: number;
+  end: number;
+  affectedIds: string[];
+  simulationCoupling: "none" | "bounded" | "commit";
+  restoration?: "exact" | "new-certified-state";
+}
+```
+
+- `render-override` may rapidly change sun position, day/night, color, building
+  lights, apparent gravity, scale, or sky without feeding those impossible
+  values into the ecological simulation.
+- `reversible-world` may disassemble buildings, fold streets, suspend agents,
+  liquefy architecture, or send geometry waves through the scene. It owns
+  collision-safe transforms and restores exact authoritative state afterward.
+- `authored-transition` may permanently damage, rebuild, transform, or relocate
+  part of the world. It commits a new certified simulation state at a declared
+  boundary and defines how displaced agents and resources are reconciled.
+
+Spectacle may be surreal and physically impossible. It still needs deterministic
+timing, bounded geometry, camera safety, and explicit state ownership so a visual
+effect does not accidentally corrupt unrelated simulation data.
+
+### 5. Physics retiming layer
 
 Back-solve bounded motion so the selected action arrives exactly on its note:
 
@@ -113,18 +147,18 @@ or numerically certified trajectories. Every planned motion reserves a
 space-time corridor, and conflicts among the four hero voices use prioritized
 planning followed by deterministic conflict repair.
 
-### 5. Multi-scale synchronization
+### 6. Multi-scale synchronization
 
 - note: footsteps, arrivals, bites, turns, door actions, flashes, impacts;
 - beat: local traffic/light phases, flock compression, machinery cycles;
 - bar: crowd flow, tide pulses, weather cells, district activity waves;
-- section: day/night, migration, shift changes, storms, power states;
+- section: ecological shifts such as migration or work schedules, plus spectacle
+  such as rapid day/night cycling, impossible weather, or global scale changes;
 - final note: a causally prepared world-resolution event, never an arbitrary cut.
 
-World-scale shader or geometry waves may disassemble and reassemble structures,
-but pieces retain indexed home transforms, bounded displacement, collision-safe
-paths, and exact restoration. These effects visualize a force moving through
-the world without permanently corrupting the ecosystem state.
+World-scale shader or geometry waves may disassemble and reassemble structures.
+Reversible spectacles retain indexed home transforms and exact restoration;
+authored transitions instead produce an explicit new world state.
 
 ## Five example worlds
 
@@ -149,6 +183,8 @@ Music bindings:
 - section energy moves sunrise, office occupancy, evening lights, and nightlife;
 - a building can disassemble/reassemble as a certified spatial wave while its
   entrances, occupants, and structural rest state remain coherent.
+- spectacle may rapidly cycle day/night, flicker entire facades, fold roads, or
+  send impossible masonry waves through the skyline independently of schedules.
 
 Multi-voice suitability: excellent. Road, pedestrian, transit, and utility
 voices can remain distinct while sharing reservations at intersections.
@@ -176,6 +212,8 @@ Music bindings:
 - bass and low-frequency energy shape currents and large-animal motion;
 - higher notes drive plankton sparkle and small-school articulation;
 - sections control tide, sunlight depth, nocturnal emergence, and spawning glow.
+- spectacle may part the water, turn the reef into luminous ribbons, reverse the
+  apparent current, or temporarily suspend the ocean as layered geometry.
 
 Multi-voice suitability: good. Four hero swimmers can share a passive current,
 but current edits must be globally validated because they affect every swimmer.
@@ -201,6 +239,8 @@ Music bindings:
 - rhythm launches canopy wind waves and rain patterns with physical propagation;
 - sustained notes illuminate nutrient movement through the mycelial network;
 - sections move dawn, heat, storms, flowering, and nocturnal activity.
+- spectacle may make the canopy breathe as one structure, expose glowing roots,
+  reverse rainfall, or fold the forest into impossible repeating layers.
 
 Multi-voice suitability: good. Separate canopy layers reduce collisions, while
 the nutrient and water systems provide meaningful shared modulation.
@@ -227,6 +267,8 @@ Music bindings:
 - beats propagate rune light, torch ignition, and masonry waves;
 - sections alter alertness, magical pressure, explorer presence, and dungeon
   power without spawning arbitrary encounters.
+- spectacle may rotate rooms, dissolve walls into runes, reverse gravity, or
+  rebuild masonry in a beat wave without pretending those are ordinary ecology.
 
 Multi-voice suitability: medium. Strong interactions are expressive, but
 combat, soft bodies, projectiles, and narrow corridors create costly conflicts.
@@ -254,6 +296,8 @@ Music bindings:
   reserve states;
 - the final note may complete a docking, restore a subsystem, or reveal the
   fully illuminated habitat after causally scheduled preparation.
+- spectacle may open the habitat ring, multiply the artificial sun, reverse
+  apparent rotation, or disassemble whole decks into synchronized light grids.
 
 Multi-voice suitability: excellent. Transit, docking, maintenance, and life
 support provide naturally separate voices joined by shared power and schedules.
@@ -291,11 +335,14 @@ support provide naturally separate voices joined by shared power and schedules.
 - Use prioritized planning, then conflict-based repair for the four hero voices.
 - Gate: exact deadlines, no collisions, bounded acceleration, and no teleporting.
 
-### E5 - Environmental music layers
+### E5 - Environmental music and spectacle layers
 
 - Map non-hero tracks to bounded, filtered curves for weather, light, activity,
   shader fields, and systemic rates.
-- Gate: modulation cannot violate resource, safety, or lifecycle invariants.
+- Add separately typed render overrides, reversible-world effects, and authored
+  transitions with explicit coupling and restoration policies.
+- Gate: ecological modulation preserves invariants; spectacle may violate normal
+  world logic but cannot ambiguously mutate authoritative simulation state.
 
 ### E6 - Rendering, shaders, and scalable populations
 
@@ -322,4 +369,3 @@ support provide naturally separate voices joined by shared power and schedules.
 Do not build a universal ecosystem framework first. Complete one small Pulse
 District vertical slice, then extract only the abstractions proven common by a
 second world.
-
