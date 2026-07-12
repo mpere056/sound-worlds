@@ -99,13 +99,19 @@ intersections, and swept-circle versus rotated-box contact with world-space
 normals. The compiler now emits an absolute-time, constant-speed itinerary with
 deterministic brick reflections, side/top wall bounces, and bottom paddle
 returns. Brick positions and rotations are trajectory outputs rather than grid
-waypoints, and tests cover speed continuity plus support-surface reflection.
+waypoints. Brick centers are offset from the ball-center contact by the ball
+radius plus the oriented face half-height, so the ball touches rather than
+passes through the rendered brick. Outgoing headings use restrained arcade
+steering that preserves horizontal momentum and reverses vertical travel.
+Tests cover speed continuity, exact swept face contact, and support reflection.
 
 An engineering-preview scene is now integrated into the app as
 `Brick Breaker · B1 Preview` when `performance.brick-breaker.json` exists. It
 samples the compiled itinerary, hides each brick at its assigned note, renders
 trajectory-oriented cells and deterministic fragments, animates the paddle to
 compiled return contacts, and preserves the final-brick/final-note contract.
+Wall and paddle contacts emit rhythmic `board.hit` events and a short support
+pulse, allowing boundary collisions to participate visibly in the performance.
 This selectable preview does not yet claim B2 occupancy certification: future
 live bricks can still crowd or overlap until continuous occupancy search is in
 place.

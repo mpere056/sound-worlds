@@ -56,6 +56,8 @@ export interface BrickBreakerBrick {
   hitGroupId: string;
   destructionT: number;
   position: BrickVec2;
+  contactPosition: BrickVec2;
+  contactNormal: BrickVec2;
   size: BrickVec2;
   rotation: number;
   color: string;

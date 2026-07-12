@@ -1,7 +1,7 @@
 import type { Song, SongEvent, SongTrack } from "@reaper-viz/core";
 import type { BrickBreakerCompileOptions, BrickBreakerPlan, BrickBreakerResolvedOptions, BrickHitGroup, BrickHitNote } from "./types.js";
 import type { BrickBreakerBallSegment, BrickBreakerBrick, BrickBreakerPerformance } from "./types.js";
-import { brickAdd, brickDot, brickLength, brickNormalize, brickReflect, brickScale, brickSub, type BrickVec2 } from "./physics.js";
+import { brickAdd, brickLength, brickNormalize, brickReflect, brickScale, brickSub, type BrickVec2 } from "./physics.js";
 
 export * from "./types.js";
 export * from "./physics.js";
@@ -138,7 +138,7 @@ export function compileBrickBreakerPlan(song: Song, options: BrickBreakerCompile
 }
 
 const BRICK_COLORS = ["#55d6ff", "#ffd166", "#9da8ff", "#ff7d9b", "#76e6a5", "#f5a65b"];
-const PREVIEW_BALL_SPEED = 7.2;
+const PREVIEW_BALL_SPEED = 11.5;
 
 export function sampleBrickBreakerBall(segments: readonly BrickBreakerBallSegment[], t: number): BrickVec2 {
   const segment = segments.find((candidate) => t <= candidate.t1 + 1e-9) ?? segments.at(-1);
@@ -203,10 +203,11 @@ function traceBoardPath(
 }
 
 function desiredOutgoing(index: number, incoming: BrickVec2, speed: number): BrickVec2 {
-  const headings: BrickVec2[] = [[0.82, 0.57], [-0.72, 0.69], [0.58, -0.82], [-0.8, -0.6], [0.42, 0.91], [-0.9, 0.44]];
-  let candidate = brickScale(brickNormalize(headings[index % headings.length]!), speed);
-  if (brickDot(brickNormalize(candidate), brickNormalize(incoming)) > 0.82) candidate = [-candidate[0], candidate[1]];
-  return candidate;
+  const unitIncoming = brickNormalize(incoming, [0.46, 0.89]);
+  const steering = ((index % 5) - 2) * 0.025;
+  const horizontal = Math.max(-0.78, Math.min(0.78, unitIncoming[0] + steering));
+  const vertical = Math.sqrt(Math.max(0.16, 1 - horizontal * horizontal));
+  return brickScale([horizontal, unitIncoming[1] >= 0 ? -vertical : vertical], speed);
 }
 
 export function compileBrickBreaker(song: Song, options: BrickBreakerCompileOptions = {}): BrickBreakerPerformance {
@@ -227,12 +228,17 @@ export function compileBrickBreaker(song: Song, options: BrickBreakerCompileOpti
     incoming = traced.velocity;
     const outgoing = desiredOutgoing(index, incoming, PREVIEW_BALL_SPEED);
     const normal = brickNormalize(brickSub(outgoing, incoming), [0, 1]);
+    const brickSize: BrickVec2 = [1.28, 0.5];
+    const contactClearance = 0.24 + brickSize[1] / 2;
+    const brickCenter = brickSub(from, brickScale(normal, contactClearance));
     const brick: BrickBreakerBrick = {
       id: `brick:${index}`,
       hitGroupId: group.id,
       destructionT: group.t,
-      position: [...from],
-      size: [1.55, 0.62],
+      position: brickCenter,
+      contactPosition: [...from],
+      contactNormal: normal,
+      size: brickSize,
       rotation: Math.atan2(normal[1], normal[0]) - Math.PI / 2,
       color: BRICK_COLORS[((Math.round(group.representativePitch) % BRICK_COLORS.length) + BRICK_COLORS.length) % BRICK_COLORS.length]!,
       cells: group.notes.length,
@@ -256,7 +262,11 @@ export function compileBrickBreaker(song: Song, options: BrickBreakerCompileOpti
     palette: { bg: "#07111d", roles: { ball: "#f7fdff", wall: "#36516a", paddle: "#79e6ff" } },
     camera: [{ t: 0, pos: [0, 0, 12], zoom: 1 }],
     curves: { energy: song.master.energy },
-    events: bricks.map((brick) => ({ t: brick.destructionT, type: "brick.break", layer: "bricks", params: { brickId: brick.id } })),
+    events: [
+      ...bricks.map((brick) => ({ t: brick.destructionT, type: "brick.break", layer: "bricks", params: { brickId: brick.id } })),
+      ...segments.filter((segment) => segment.kind === "wall" || segment.kind === "paddle")
+        .map((segment) => ({ t: segment.t1, type: "board.hit", layer: "supports", params: { support: segment.kind, segmentId: segment.id } })),
+    ].sort((left, right) => left.t - right.t || left.type.localeCompare(right.type)),
     statics: {
       sourceTrackId: plan.report.sourceTrackId,
       report: plan.report,

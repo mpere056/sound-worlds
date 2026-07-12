@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildFixtureSong, type SongEvent } from "@reaper-viz/core";
-import { brickLength, brickReflect, compileBrickBreaker, compileBrickBreakerPlan, sampleBrickBreakerBall } from "./index.js";
+import { brickDot, brickLength, brickNormalize, brickReflect, brickSub, brickSweepCircleAgainstBox, compileBrickBreaker, compileBrickBreakerPlan, sampleBrickBreakerBall } from "./index.js";
 
 describe("Brick Breaker B0 compiler", () => {
   it("creates exactly one future brick per distinct note deadline", () => {
@@ -78,8 +78,8 @@ describe("Brick Breaker B0 compiler", () => {
     const performance = compileBrickBreaker(song);
     for (const brick of performance.statics.bricks) {
       const pose = sampleBrickBreakerBall(performance.statics.ballSegments, brick.destructionT);
-      expect(pose[0]).toBeCloseTo(brick.position[0], 9);
-      expect(pose[1]).toBeCloseTo(brick.position[1], 9);
+      expect(pose[0]).toBeCloseTo(brick.contactPosition[0], 9);
+      expect(pose[1]).toBeCloseTo(brick.contactPosition[1], 9);
     }
     const finalBrick = performance.statics.bricks.at(-1)!;
     expect(performance.statics.finalBrickId).toBe(finalBrick.id);
@@ -107,5 +107,35 @@ describe("Brick Breaker B0 compiler", () => {
     expect(performance.statics.ballSegments.some((segment) => segment.kind === "wall")).toBe(true);
     expect(performance.statics.ballSegments.some((segment) => segment.kind === "paddle")).toBe(true);
     expect(performance.statics.paddleContacts.length).toBeGreaterThan(0);
+    const supportSegments = performance.statics.ballSegments.filter((segment) => segment.kind === "wall" || segment.kind === "paddle");
+    expect(performance.events.filter((event) => event.type === "board.hit").map((event) => event.t))
+      .toEqual(supportSegments.map((segment) => segment.t1));
+  });
+
+  it("places the brick face at the ball edge and uses restrained arcade reflections", () => {
+    const song = buildFixtureSong({ bars: 4, patterns: [{ role: "keys", beats: [0], pitch: 60, kind: "note" }] });
+    song.tracks[0]!.events = [0.5, 1.5, 2.5, 3.5, 4.5].map((t, index) => ({ t, dur: 0.2, pitch: 60 + index, vel: 0.7, kind: "note" as const }));
+    const performance = compileBrickBreaker(song);
+    for (const brick of performance.statics.bricks) {
+      const centerToContact = brickSub(brick.contactPosition, brick.position);
+      expect(brickLength(centerToContact)).toBeCloseTo(performance.statics.ballRadius + brick.size[1] / 2, 9);
+      expect(brickDot(brickNormalize(centerToContact), brick.contactNormal)).toBeCloseTo(1, 9);
+      const incomingSegment = performance.statics.ballSegments.find((segment) => segment.contactBrickId === brick.id)!;
+      const collision = brickSweepCircleAgainstBox(incomingSegment.from, incomingSegment.to, performance.statics.ballRadius, {
+        center: brick.position,
+        halfExtents: [brick.size[0] / 2, brick.size[1] / 2],
+        rotation: brick.rotation,
+      });
+      expect(collision?.t).toBeCloseTo(1, 9);
+      expect(brickDot(collision!.normal, brick.contactNormal)).toBeCloseTo(1, 9);
+      const incomingIndex = performance.statics.ballSegments.indexOf(incomingSegment);
+      const outgoingSegment = performance.statics.ballSegments[incomingIndex + 1];
+      if (outgoingSegment) {
+        const reflected = brickReflect(incomingSegment.velocity, brick.contactNormal);
+        expect(reflected[0]).toBeCloseTo(outgoingSegment.velocity[0], 9);
+        expect(reflected[1]).toBeCloseTo(outgoingSegment.velocity[1], 9);
+        expect(Math.sign(outgoingSegment.velocity[1])).toBe(-Math.sign(incomingSegment.velocity[1]));
+      }
+    }
   });
 });

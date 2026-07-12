@@ -55,6 +55,12 @@ export class BrickBreakerScene {
     this.#board.closePath().fill({ color, alpha }).stroke({ color: 0xffffff, width: 2, alpha: 0.26 });
   }
 
+  #rotatePoint(x: number, y: number, localX: number, localY: number, rotation: number): BrickVec2 {
+    const cosine = Math.cos(rotation);
+    const sine = Math.sin(rotation);
+    return [x + localX * cosine - localY * sine, y + localX * sine + localY * cosine];
+  }
+
   #paddleX(t: number): number {
     const contacts = this.#performance.statics.paddleContacts;
     if (!contacts.length) return 0;
@@ -83,13 +89,14 @@ export class BrickBreakerScene {
       const brickWidth = brick.size[0] * scaleX;
       const brickHeight = brick.size[1] * scaleY;
       if (t < brick.destructionT) {
-        this.#effects.roundRect(x - brickWidth / 2 - 6, y - brickHeight / 2 - 6, brickWidth + 12, brickHeight + 12, 9)
-          .fill({ color: colorNumber(brick.color), alpha: this.tuning.glow * 0.12 });
+        this.#drawBrick(x, y, brickWidth + 12, brickHeight + 12, brick.rotation, colorNumber(brick.color), this.tuning.glow * 0.12);
         this.#drawBrick(x, y, brickWidth, brickHeight, brick.rotation, colorNumber(brick.color), 0.94);
         if (brick.cells > 1) {
           for (let cell = 1; cell < brick.cells; cell += 1) {
-            const cellX = x - brickWidth / 2 + brickWidth * cell / brick.cells;
-            this.#board.moveTo(cellX, y - brickHeight / 2 + 4).lineTo(cellX, y + brickHeight / 2 - 4)
+            const cellX = -brickWidth / 2 + brickWidth * cell / brick.cells;
+            const top = this.#rotatePoint(x, y, cellX, -brickHeight / 2 + 4, brick.rotation);
+            const bottom = this.#rotatePoint(x, y, cellX, brickHeight / 2 - 4, brick.rotation);
+            this.#board.moveTo(...top).lineTo(...bottom)
               .stroke({ color: 0x07111d, width: 2, alpha: 0.45 });
           }
         }
@@ -109,6 +116,14 @@ export class BrickBreakerScene {
     const paddleWorldX = this.#paddleX(t);
     const paddleX = this.#screen([paddleWorldX, 0])[0];
     this.#board.roundRect(paddleX - 120, paddleY, 240, 34, 14).fill({ color: 0x79e6ff, alpha: 0.9 });
+    for (const segment of this.#performance.statics.ballSegments) {
+      if (segment.kind !== "wall" && segment.kind !== "paddle") continue;
+      const age = t - segment.t1;
+      if (age < 0 || age > 0.16) continue;
+      const [hitX, hitY] = this.#screen(segment.to);
+      const alpha = (1 - age / 0.16) * 0.34;
+      this.#effects.circle(hitX, hitY, 18 + age * 180).stroke({ color: 0x8deeff, width: 4, alpha });
+    }
     this.#ball.clear();
     for (let sample = 6; sample >= 1; sample -= 1) {
       const trail = this.#screen(sampleBrickBreakerBall(this.#performance.statics.ballSegments, Math.max(0, t - sample * 0.035)));
