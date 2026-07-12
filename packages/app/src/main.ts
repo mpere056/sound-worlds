@@ -686,6 +686,8 @@ async function loadConcept(concept: string): Promise<void> {
     const aurora = new AuroraScene(canvas, performance);
     scene = aurora;
     addTuningBinding(bindingPane, aurora.tuning, "aurora", { min: 0, max: 1.5, step: 0.01, label: "Aurora" });
+    addTuningBinding(bindingPane, aurora.tuning, "fieldMotion", { min: 0.2, max: 2, step: 0.01, label: "Field motion" });
+    addTuningBinding(bindingPane, aurora.tuning, "particlePlasma", { min: 0.2, max: 1.8, step: 0.01, label: "Particle" });
     addTuningBinding(bindingPane, aurora.tuning, "coilGlow", { min: 0, max: 1.5, step: 0.01, label: "Coils" });
     addTuningBinding(bindingPane, aurora.tuning, "trail", { min: 0, max: 1.2, step: 0.01, label: "Trail" });
     addTuningBinding(bindingPane, aurora.tuning, "cameraDistance", { min: 0.65, max: 1.6, step: 0.01, label: "Camera" });
