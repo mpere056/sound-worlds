@@ -77,6 +77,19 @@ This state machine contains no renderer or physics assumptions. The next live
 slice should add typed rolling-solver messages that carry collision poses into
 this contract, followed by an instanced uncertainty-vortex renderer.
 
+The typed rolling-solver boundary is now also implemented in
+`marble-live-solver-protocol.ts` and `marble-live-rolling-coordinator.ts`. A
+request carries the current marble pose/velocity, bounded motion mix, ordered
+note intents, and all reserved colliders. Results must match the exact requested
+stable-ID batch and provide non-negative clearance before the coordinator can
+certify them. Invalidation drops pending request IDs and resets only solving
+slots; already-certain platforms remain locked.
+
+The next implementation slice is the worker-side placement solver itself. It
+must predict each target impact from the fixed-step body state, map pitch and
+velocity into bounded platform properties, and return certified poses without
+intersecting reserved geometry.
+
 The offline renderer remains deterministic and seekable. The live mode is
 allowed to use a real runtime rigid-body simulation because future note times
 are unknowable and there is no scrub/export determinism requirement during the
