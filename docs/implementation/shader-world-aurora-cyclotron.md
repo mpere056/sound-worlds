@@ -109,6 +109,19 @@ finite-fringe shooting correction remain.
 
 ### A3 - Global certification
 
+**Status: in progress; solid occupancy implemented.** Coils are certified as
+oriented torus bodies rather than bounding spheres, preserving valid
+perpendicular arrangements. Conservative sampled lower bounds account for coil
+surface thickness, particle radius, and travel between route samples. Candidate
+scoring now rejects new-coil entry clipping, old-coil rim impacts, earlier-route
+intersections, final-tail exit clipping, and coil-body overlap. Candidate
+feasibility also requires both axial aperture travel and a nontrivial
+perpendicular velocity component, preventing legal-but-straight field spans.
+The reference route reports `0.3924` minimum coil surface clearance, `0.0401`
+minimum particle clearance, a `19.665` maximum route radius, zero solid
+occupancy violations, and zero crossing error. Explicit early-aperture ownership
+and finite-fringe recertification remain.
+
 - Model coils as finite oriented tori with an interaction aperture. Sweep the
   charged particle against every future aperture and solid rim.
 - Reject early crossings, rim impacts, coil overlap, ambiguous ownership, and

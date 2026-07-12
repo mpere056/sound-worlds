@@ -145,12 +145,12 @@ export class AuroraScene {
 
     const zAxis = new Vector3(0, 0, 1);
     for (const coil of performance.statics.coils) {
-      const geometry = new TorusGeometry(coil.radius, 0.09, 12, 48);
+      const geometry = new TorusGeometry(coil.radius, coil.tubeRadius, 12, 48);
       const material = new MeshStandardMaterial({ color: 0x91a4ad, emissive: hex(coil.color), emissiveIntensity: 0.08, metalness: 0.82, roughness: 0.24, transparent: true });
       const ring = new Mesh(geometry, material);
       ring.position.set(...coil.center);
       ring.quaternion.copy(new Quaternion().setFromUnitVectors(zAxis, new Vector3(...coil.axis).normalize()));
-      const halo = new Mesh(new TorusGeometry(coil.radius, 0.16, 10, 48), new MeshBasicMaterial({ color: hex(coil.color), transparent: true, opacity: 0.04, blending: AdditiveBlending, depthWrite: false }));
+      const halo = new Mesh(new TorusGeometry(coil.radius, coil.tubeRadius * 1.8, 10, 48), new MeshBasicMaterial({ color: hex(coil.color), transparent: true, opacity: 0.04, blending: AdditiveBlending, depthWrite: false }));
       halo.position.copy(ring.position);
       halo.quaternion.copy(ring.quaternion);
       this.#scene.add(halo, ring);

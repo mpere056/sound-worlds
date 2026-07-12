@@ -151,6 +151,7 @@ export interface AuroraCoil {
   pitch: number;
   energy: number;
   radius: number;
+  tubeRadius: number;
   color: string;
 }
 
@@ -158,9 +159,13 @@ export interface AuroraRouteReport {
   deadlineCount: number;
   segmentCount: number;
   maximumField: number;
+  maximumRouteRadius: number;
   minimumCoilSpacing: number | null;
+  minimumCoilSurfaceClearance: number | null;
+  minimumParticleClearance: number | null;
   exactCrossingError: number;
   familyCounts: Record<"planar" | "depth" | "inward", number>;
+  occupancyViolations: string[];
   warnings: string[];
 }
 

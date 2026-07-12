@@ -1,11 +1,13 @@
 import type { Song, SongEvent, SongTrack } from "@reaper-viz/core";
 import { auroraCross, auroraDot, auroraLength, auroraNormalize, auroraPropagateConstantField, auroraSub } from "./physics.js";
 import { auroraSolveIdealMagneticArc } from "./solver.js";
+import { auroraCoilSurfaceClearance, auroraSegmentCoilClearance, certifyAuroraOccupancy } from "./certification.js";
 import type { AuroraCoil, AuroraCompileOptions, AuroraCompileReport, AuroraDeadline, AuroraIdealArcSolution, AuroraNote, AuroraParticleState, AuroraPerformance, AuroraPlan, AuroraResolvedOptions, AuroraRouteSegment, AuroraVec3 } from "./types.js";
 
 export * from "./types.js";
 export * from "./physics.js";
 export * from "./solver.js";
+export * from "./certification.js";
 
 const DEFAULT_CHORD_EPSILON_SEC = 0.025;
 
@@ -156,7 +158,26 @@ function candidateAxes(state: AuroraParticleState, deadline: AuroraDeadline, ind
   const depthAxis = auroraNormalize([0.22 * Math.sin(pitchPhase), 0.78, index % 2 ? -1 : 1]);
   const inward = auroraNormalize(auroraSub([0, 0, 0], state.position), [0, 1, 0]);
   const inwardAxis = auroraNormalize(auroraCross(inward, state.velocity), pitchAxis);
+  const velocityAxis = auroraNormalize(state.velocity);
+  const guidedInward = auroraNormalize([
+    inwardAxis[0] + velocityAxis[0] * 0.42,
+    inwardAxis[1] + velocityAxis[1] * 0.42,
+    inwardAxis[2] + velocityAxis[2] * 0.42,
+  ]);
+  const guidedDepth = auroraNormalize([
+    depthAxis[0] + velocityAxis[0] * 0.34,
+    depthAxis[1] + velocityAxis[1] * 0.34,
+    depthAxis[2] + velocityAxis[2] * 0.34,
+  ]);
+  const guidedPitch = auroraNormalize([
+    pitchAxis[0] + velocityAxis[0] * 0.3,
+    pitchAxis[1] + velocityAxis[1] * 0.3,
+    pitchAxis[2] + velocityAxis[2] * 0.3,
+  ]);
   return [
+    { axis: guidedInward, family: "inward" },
+    { axis: guidedDepth, family: "depth" },
+    { axis: guidedPitch, family: "depth" },
     { axis: inwardAxis, family: "inward" },
     { axis: pitchAxis, family: "depth" },
     { axis: depthAxis, family: "depth" },
@@ -173,6 +194,7 @@ function solveDeadlineSegment(
   index: number,
   plan: AuroraPlan,
   priorCoils: readonly AuroraCoil[],
+  priorRoute: readonly AuroraRouteSegment[],
   previousAxis?: AuroraVec3,
 ): AuroraRouteCandidate {
   const duration = deadline.t - t0;
@@ -193,12 +215,74 @@ function solveDeadlineSegment(
         maxMagneticField: plan.options.maxMagneticField,
       });
       const radius = auroraLength(solution.end.position);
+      const coil: AuroraCoil = {
+        id: `aurora-candidate:${index}`,
+        deadlineId: deadline.id,
+        t: deadline.t,
+        center: solution.coilCenter,
+        axis: solution.coilAxis,
+        arrivalDirection: solution.arrivalDirection,
+        pitch: deadline.representativePitch,
+        energy: deadline.energy,
+        radius: 0.6 + deadline.energy * 0.12,
+        tubeRadius: 0.085,
+        color: AURORA_COLORS[0],
+      };
+      const segment: AuroraRouteSegment = {
+        id: `aurora-candidate-segment:${index}`,
+        kind: "deadline",
+        deadlineId: deadline.id,
+        t0,
+        t1: deadline.t,
+        start: state,
+        end: solution.end,
+        field: solution.field,
+        charge: plan.options.charge,
+        mass: plan.options.mass,
+        turnAngle: solution.turnAngle,
+        fieldMagnitude: solution.fieldMagnitude,
+        family: axis.family,
+      };
       const nearest = priorCoils.length ? Math.min(...priorCoils.map((coil) => distance(coil.center, solution.coilCenter))) : Number.POSITIVE_INFINITY;
       const spacingDeficit = Math.max(0, plan.options.minimumCoilSpacing - nearest);
+      const coilClearance = priorCoils.length ? Math.min(...priorCoils.map((prior) => auroraCoilSurfaceClearance(coil, prior, 32))) : Number.POSITIVE_INFINITY;
+      const ownedRouteClearance = auroraSegmentCoilClearance(segment, coil, 0.18, 28);
+      const routeToPriorClearance = priorCoils.length ? Math.min(...priorCoils.map((prior) => auroraSegmentCoilClearance(segment, prior, 0.18, 20))) : Number.POSITIVE_INFINITY;
+      const priorRouteToCoilClearance = priorRoute.length ? Math.min(...priorRoute.map((prior) => auroraSegmentCoilClearance(prior, coil, 0.18, 20))) : Number.POSITIVE_INFINITY;
+      const tailDuration = index === plan.deadlines.length - 1 ? plan.durationSec - deadline.t : 0;
+      const tailField = { electric: [0, 0, 0] as AuroraVec3, magnetic: [0, 0, 0] as AuroraVec3 };
+      const tailSegment: AuroraRouteSegment | undefined = tailDuration > 0
+        ? {
+            id: "aurora-candidate-tail",
+            kind: "tail",
+            t0: deadline.t,
+            t1: plan.durationSec,
+            start: solution.end,
+            end: auroraPropagateConstantField(solution.end, tailField, tailDuration, { charge: plan.options.charge, mass: plan.options.mass }),
+            field: tailField,
+            charge: plan.options.charge,
+            mass: plan.options.mass,
+            turnAngle: 0,
+            fieldMagnitude: 0,
+            family: "tail",
+          }
+        : undefined;
+      const tailClearance = tailSegment
+        ? Math.min(auroraSegmentCoilClearance(tailSegment, coil, 0.18, 24), ...priorCoils.map((prior) => auroraSegmentCoilClearance(tailSegment, prior, 0.18, 18)))
+        : Number.POSITIVE_INFINITY;
+      const occupancyDeficit = Math.max(0, 0.04 - coilClearance)
+        + Math.max(0, 0.04 - ownedRouteClearance)
+        + Math.max(0, 0.04 - routeToPriorClearance)
+        + Math.max(0, 0.04 - priorRouteToCoilClearance)
+        + Math.max(0, 0.04 - tailClearance);
       const depthTravel = Math.abs(solution.end.position[2] - state.position[2]);
       const continuity = previousAxis ? 1 - Math.abs(auroraDot(previousAxis, solution.coilAxis)) : 0;
+      const axialArrival = Math.abs(auroraDot(solution.arrivalDirection, solution.coilAxis));
       const score = spacingDeficit * spacingDeficit * 2500
-        + radius * radius * 0.055
+        + occupancyDeficit * occupancyDeficit * 12000
+        + Math.max(0, 0.28 - axialArrival) ** 2 * 1800
+        + Math.max(0, axialArrival - 0.82) ** 2 * 2400
+        + radius * radius * 0.5
         + continuity * 0.18
         + solution.fieldMagnitude / plan.options.maxMagneticField * 0.08
         - Math.min(1.5, depthTravel) * (axis.family === "depth" ? 0.32 : 0.08)
@@ -227,7 +311,7 @@ export function compileAurora(song: Song, options: AuroraCompileOptions = {}): A
   let previousAxis: AuroraVec3 | undefined;
   const familyCounts = { planar: 0, depth: 0, inward: 0 };
   for (const [index, deadline] of plan.deadlines.entries()) {
-    const selected = solveDeadlineSegment(state, t0, deadline, index, plan, coils, previousAxis);
+    const selected = solveDeadlineSegment(state, t0, deadline, index, plan, coils, route, previousAxis);
     const segment: AuroraRouteSegment = {
       id: `aurora-segment:${index}`,
       kind: "deadline",
@@ -252,7 +336,8 @@ export function compileAurora(song: Song, options: AuroraCompileOptions = {}): A
       arrivalDirection: [...selected.solution.arrivalDirection],
       pitch: deadline.representativePitch,
       energy: deadline.energy,
-      radius: 0.62 + deadline.energy * 0.2,
+      radius: 0.6 + deadline.energy * 0.12,
+      tubeRadius: 0.085,
       color: AURORA_COLORS[((Math.round(deadline.representativePitch) % 12) + 12) % 12 % AURORA_COLORS.length]!,
     };
     route.push(segment);
@@ -270,16 +355,22 @@ export function compileAurora(song: Song, options: AuroraCompileOptions = {}): A
   const spacing = coils.length > 1
     ? Math.min(...coils.slice(1).map((coil, index) => distance(coil.center, coils[index]!.center)))
     : null;
+  const occupancy = certifyAuroraOccupancy(route, coils, 0.18);
   const routeReport = {
     deadlineCount: plan.deadlines.length,
     segmentCount: route.length,
     maximumField: Math.max(0, ...route.map((segment) => segment.fieldMagnitude)),
+    maximumRouteRadius: Math.max(0, ...route.flatMap((segment) => [auroraLength(segment.start.position), auroraLength(segment.end.position)])),
     minimumCoilSpacing: spacing,
+    minimumCoilSurfaceClearance: occupancy.minimumCoilSurfaceClearance,
+    minimumParticleClearance: occupancy.minimumParticleClearance,
     exactCrossingError: Math.max(0, ...coils.map((coil, index) => distance(coil.center, route[index]!.end.position))),
     familyCounts,
-    warnings: spacing !== null && spacing < plan.options.minimumCoilSpacing
-      ? [`Minimum coil spacing ${spacing.toFixed(4)} is below requested ${plan.options.minimumCoilSpacing.toFixed(4)}; A3 global certification must resolve it`]
-      : [],
+    occupancyViolations: occupancy.violations,
+    warnings: [
+      ...(spacing !== null && spacing < plan.options.minimumCoilSpacing ? [`Minimum coil spacing ${spacing.toFixed(4)} is below requested ${plan.options.minimumCoilSpacing.toFixed(4)}`] : []),
+      ...(occupancy.violations.length ? [`${occupancy.violations.length} global occupancy violations remain`] : []),
+    ],
   };
   return {
     schemaVersion: 1,

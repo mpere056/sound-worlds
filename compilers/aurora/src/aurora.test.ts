@@ -79,6 +79,9 @@ describe("Aurora Cyclotron A2 route compiler", () => {
     expect(performance.statics.coils).toHaveLength(4);
     expect(performance.statics.routeReport.deadlineCount).toBe(4);
     expect(performance.statics.routeReport.exactCrossingError).toBe(0);
+    expect(performance.statics.routeReport.occupancyViolations).toEqual([]);
+    expect(performance.statics.routeReport.minimumParticleClearance).toBeGreaterThan(0.025);
+    expect(performance.statics.routeReport.minimumCoilSurfaceClearance).toBeGreaterThan(0.025);
     for (const [index, coil] of performance.statics.coils.entries()) {
       const sampled = sampleAuroraParticle(performance.statics.route, coil.t);
       expect(auroraLength(auroraSub(sampled.position, coil.center))).toBeLessThan(1e-10);

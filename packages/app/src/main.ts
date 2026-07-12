@@ -692,7 +692,9 @@ async function loadConcept(concept: string): Promise<void> {
     sceneLabel.textContent = "Aurora Cyclotron · A2 Physics Graybox";
     statusTitle.textContent = "Aurora Cyclotron · exact coil crossings";
     const report = performance.statics.routeReport;
-    statusDetail.textContent = `${report.deadlineCount} coils · max field ${report.maximumField.toFixed(2)} · ${report.familyCounts.depth + report.familyCounts.inward} spatial arcs · crossing error ${report.exactCrossingError.toExponential(1)}`;
+    const particleClearance = report.minimumParticleClearance === null ? "n/a" : report.minimumParticleClearance.toFixed(3);
+    const coilClearance = report.minimumCoilSurfaceClearance === null ? "n/a" : report.minimumCoilSurfaceClearance.toFixed(3);
+    statusDetail.textContent = `${report.deadlineCount} coils · radius ${report.maximumRouteRadius.toFixed(1)} · particle clearance ${particleClearance} · coil clearance ${coilClearance} · ${report.occupancyViolations.length} violations`;
   } else if (concept === "metro") {
     const backend = await ensurePixiBackend();
     const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.metro.json`);
