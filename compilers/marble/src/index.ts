@@ -1028,7 +1028,7 @@ function validateTargetLayout(targets: readonly MarbleTarget[], profile?: Mutabl
   }
 }
 
-function solveStaticVisualLayout(targets: MarbleTarget[]): void {
+function solveStaticVisualLayout(targets: MarbleTarget[], allowContactMoves = true): void {
   const candidatesFor = (target: MarbleTarget): [number, number][] => {
     const compact = target.kind === "peg" || target.kind === "chime";
     const bounds = compact ? MARBLE_TARGET_VISUAL_BOUNDS.compact : MARBLE_TARGET_VISUAL_BOUNDS.full;
@@ -1095,7 +1095,7 @@ function solveStaticVisualLayout(targets: MarbleTarget[]): void {
     rightTarget.visualOffset = bestRight;
     const offsetsUnchanged = bestLeft[0] === originalLeft[0] && bestLeft[1] === originalLeft[1]
       && bestRight[0] === originalRight[0] && bestRight[1] === originalRight[1];
-    if (offsetsUnchanged) {
+    if (offsetsUnchanged && allowContactMoves) {
       const moving = rightTarget;
       const originalPos = [...moving.pos] as Vec3;
       const originalContact = [...moving.contactPos] as Vec3;
@@ -1120,7 +1120,7 @@ function solveStaticVisualLayout(targets: MarbleTarget[]): void {
       if (bestPos[0] === originalPos[0] && bestPos[1] === originalPos[1] && bestPos[2] === originalPos[2]) break;
     }
   }
-  for (let pass = 0; pass < 12 && totalOverlapCount() > 0; pass += 1) {
+  for (let pass = 0; allowContactMoves && pass < 12 && totalOverlapCount() > 0; pass += 1) {
     let conflict: [number, number] | undefined;
     for (let left = 0; left < targets.length && !conflict; left += 1) for (let right = left + 1; right < targets.length; right += 1) {
       if (marbleTargetVisualsOverlap(targets[left]!, targets[right]!, 0.012)) { conflict = [left, right]; break; }
@@ -1167,6 +1167,59 @@ function compileImpacts(notes: readonly SongEvent[], targets: readonly MarbleTar
     if (clusterId) impact.clusterId = clusterId;
     return impact;
   });
+}
+
+function alignTargetsToTrajectory(notes: readonly SongEvent[], targets: MarbleTarget[], motion: MarbleMotionProfile): void {
+  const route = buildRouteSpatialIndex(samplePlannedRoute(notes, targets.map((target) => target.contactPos), motion));
+  for (let index = 0; index < targets.length; index += 1) {
+    const target = targets[index]!;
+    const incoming: Vec3 = index === 0
+      ? [0, -(motion.initialDropSpeed + motion.gravity * Math.max(0, notes[0]!.t)), 0]
+      : (() => {
+          const previous = targets[index - 1]!;
+          const gap = Math.max(EPS, notes[index]!.t - notes[index - 1]!.t);
+          const startY = (target.contactPos[1] - previous.contactPos[1] + 0.5 * motion.gravity * gap * gap) / gap;
+          return [
+            (target.contactPos[0] - previous.contactPos[0]) / gap,
+            startY - motion.gravity * gap,
+            (target.contactPos[2] - previous.contactPos[2]) / gap,
+          ];
+        })();
+    const outgoing: Vec3 = index < targets.length - 1
+      ? (() => {
+          const next = targets[index + 1]!;
+          const gap = Math.max(EPS, notes[index + 1]!.t - notes[index]!.t);
+          return [
+            (next.contactPos[0] - target.contactPos[0]) / gap,
+            (next.contactPos[1] - target.contactPos[1] + 0.5 * motion.gravity * gap * gap) / gap,
+            (next.contactPos[2] - target.contactPos[2]) / gap,
+          ];
+        })()
+      : [incoming[0] * 0.35, Math.max(0.35, -incoming[1] * 0.35), incoming[2] * 0.35];
+    const normal = vecNormalize(vecSub(outgoing, incoming), [0, 1, 0]);
+    const desiredRotation = Math.atan2(-normal[0], normal[1]);
+    const desiredDepthTilt = Math.asin(clamp(normal[2], -1, 1));
+    const candidates: Array<{ target: MarbleTarget; alignment: number }> = [];
+    for (const rotationOffset of [0, 0.08, -0.08, 0.16, -0.16, 0.24, -0.24, 0.34, -0.34, 0.48, -0.48]) {
+      for (const tiltOffset of [0, 0.08, -0.08, 0.16, -0.16, 0.24, -0.24]) {
+        const rotation = desiredRotation + rotationOffset;
+        const depthTilt = clamp(desiredDepthTilt + tiltOffset, -0.82, 0.82);
+        const candidateNormal = targetSurfaceNormal(rotation, depthTilt);
+        if (vecDot(incoming, candidateNormal) >= -0.005 || vecDot(outgoing, candidateNormal) <= 0.005) continue;
+        const candidate = placeTarget(target.id, target.kind, target.pitch, target.pitchClass, target.contactPos, rotation, depthTilt, target.size, target.material);
+        if (target.visualOffset) candidate.visualOffset = [...target.visualOffset];
+        const overlaps = targets.some((other, otherIndex) => otherIndex !== index && marbleTargetsOverlap(candidate, other, 0));
+        if (overlaps || minimumTargetRouteClearance(candidate, route, undefined, ROUTE_CLEARANCE) < ROUTE_CLEARANCE) continue;
+        candidates.push({ target: candidate, alignment: vecDot(candidateNormal, normal) });
+      }
+    }
+    candidates.sort((left, right) => right.alignment - left.alignment);
+    const selected = candidates[0]?.target;
+    if (selected) {
+      target.pos = selected.pos;
+      target.rotation = selected.rotation;
+    }
+  }
 }
 
 function compilePath(song: Song, notes: readonly SongEvent[], targets: readonly MarbleTarget[], clusters: readonly MarbleCluster[], diagnostics: MarbleDiagnostics, motion: MarbleMotionProfile): MarblePathSegment[] {
@@ -1435,6 +1488,8 @@ export function compileMarble(song: Song, options: CompileMarbleOptions = {}): M
   const motion = measureCompilePhase(profile, "motionSolve", () => solveMotionProfile(selected.notes, compileMotionProfile(options.motionMix), profile));
   const targets = measureCompilePhase(profile, "targets", () => compileTargets(selected.notes, metrics, motion, profile));
   solveStaticVisualLayout(targets);
+  alignTargetsToTrajectory(selected.notes, targets, motion);
+  solveStaticVisualLayout(targets, false);
   measureCompilePhase(profile, "targetValidation", () => validateTargetLayout(targets, profile));
   const { clusters, impacts } = measureCompilePhase(profile, "clustersAndImpacts", () => {
     const compiledClusters = compileClusters(selected.notes, targets);

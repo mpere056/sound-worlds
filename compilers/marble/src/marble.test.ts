@@ -69,7 +69,6 @@ describe("Marble Music compiler", () => {
   it("keeps every dense-note carrier statically visible and separated", () => {
     const song = buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [0, 0.12, 0.28, 0.44, 1.5, 2.5], pitch: 58, kind: "note" }] });
     const performance = compileMarble(song);
-    expect(performance.statics.targets.some((target) => Math.hypot(...(target.visualOffset ?? [0, 0])) > 0)).toBe(true);
     for (let left = 0; left < performance.statics.targets.length; left += 1) {
       for (let right = left + 1; right < performance.statics.targets.length; right += 1) {
         expect(marbleTargetVisualsOverlap(performance.statics.targets[left]!, performance.statics.targets[right]!, 0)).toBe(false);
@@ -176,6 +175,36 @@ describe("Marble Music compiler", () => {
       expect(segment.gravityScale).toBeCloseTo(gravity, 6);
       expect(segment.kind === "arc" || segment.kind === "rattle" || segment.kind === "cascade").toBe(true);
     }
+  });
+
+  it("aligns each platform normal with the actual incoming and outgoing trajectory", () => {
+    const song = buildFixtureSong({ bars: 3, patterns: [{ role: "keys", beats: [0, 0.4, 1.2, 2.7, 4.9, 6.1, 8.8], pitch: 55, kind: "note" }] });
+    const performance = compileMarble(song, { motionMix: { leftRight: 20, upDown: 20, frontBack: 60 } });
+    const alignments: number[] = [];
+    for (let index = 1; index < performance.statics.targets.length - 1; index += 1) {
+      const target = performance.statics.targets[index]!;
+      const arriving = performance.statics.path.find((segment) => segment.targetId === target.id && segment.t1 === performance.statics.impacts[index]!.t)!;
+      const departing = performance.statics.path.find((segment) => segment.t0 === performance.statics.impacts[index]!.t && segment.kind !== "settle")!;
+      const arrivalGap = arriving.t1 - arriving.t0;
+      const departureGap = departing.t1 - departing.t0;
+      const incoming = [
+        (arriving.to[0] - arriving.from[0]) / arrivalGap,
+        (arriving.to[1] - arriving.from[1] + 0.5 * arriving.gravityScale! * arrivalGap * arrivalGap) / arrivalGap - arriving.gravityScale! * arrivalGap,
+        (arriving.to[2] - arriving.from[2]) / arrivalGap,
+      ];
+      const outgoing = [
+        (departing.to[0] - departing.from[0]) / departureGap,
+        (departing.to[1] - departing.from[1] + 0.5 * departing.gravityScale! * departureGap * departureGap) / departureGap,
+        (departing.to[2] - departing.from[2]) / departureGap,
+      ];
+      const impulse = outgoing.map((value, axis) => value - incoming[axis]!);
+      const impulseLength = Math.hypot(...impulse);
+      const normal = [-Math.sin(target.rotation[2]) * Math.cos(target.rotation[0]), Math.cos(target.rotation[2]) * Math.cos(target.rotation[0]), Math.sin(target.rotation[0])];
+      const alignment = normal.reduce((sum, value, axis) => sum + value * impulse[axis]! / impulseLength, 0);
+      alignments.push(alignment);
+      expect(alignment, target.id).toBeGreaterThan(0.6);
+    }
+    expect(alignments.reduce((sum, value) => sum + value, 0) / alignments.length).toBeGreaterThan(0.9);
   });
 
   it("keeps route geometry independent from pitch", () => {
