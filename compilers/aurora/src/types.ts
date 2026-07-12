@@ -97,3 +97,28 @@ export interface AuroraNumericalPropagationResult extends AuroraParticleState {
   kineticEnergyDelta: number;
   energyResidual: number;
 }
+
+export interface AuroraIdealArcRequest {
+  state: AuroraParticleState;
+  duration: number;
+  turnAngle: number;
+  fieldAxis: AuroraVec3;
+  charge: number;
+  mass: number;
+  maxMagneticField: number;
+}
+
+export interface AuroraIdealArcSolution {
+  start: AuroraParticleState;
+  end: AuroraParticleState;
+  duration: number;
+  turnAngle: number;
+  signedAngularVelocity: number;
+  field: AuroraConstantField;
+  fieldMagnitude: number;
+  curvatureRadius: number | null;
+  pathLength: number;
+  coilCenter: AuroraVec3;
+  coilAxis: AuroraVec3;
+  arrivalDirection: AuroraVec3;
+}

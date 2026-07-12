@@ -3,6 +3,7 @@ import type { AuroraCompileOptions, AuroraCompileReport, AuroraDeadline, AuroraN
 
 export * from "./types.js";
 export * from "./physics.js";
+export * from "./solver.js";
 
 const DEFAULT_CHORD_EPSILON_SEC = 0.025;
 

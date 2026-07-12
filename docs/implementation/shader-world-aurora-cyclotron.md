@@ -87,6 +87,14 @@ divergence, and energy checks. The bounded shooting correction belongs to A2.
 
 ### A2 - Inverse field and coil solver
 
+**Status: in progress.** The first exact inverse primitive solves the signed
+constant magnetic field for a requested axis, duration, and turn angle, then
+propagates the resulting circular or helical segment and emits its exact
+coil-center contact, physical coil axis, and separate arrival direction. It
+enforces charge, speed, axis, duration, and maximum-field feasibility. The
+global candidate search, electric acceleration spans, and finite-fringe
+shooting correction remain.
+
 - Solve field axis, magnitude, parallel acceleration, and coil transform for
   every deadline-to-deadline segment.
 - Use candidate families: planar arc, 3D helix, polarity reversal, acceleration
