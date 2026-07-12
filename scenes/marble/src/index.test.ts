@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildFixtureSong } from "@reaper-viz/core";
 import { compileMarble, marbleTargetClearance, sampleMarblePose } from "@reaper-viz/compiler-marble";
 import { PerspectiveCamera, Vector3 } from "three";
-import { applyMarbleCameraOrbit, blendMarbleCamera, interpolateMarblePathSegment, interpolateMarblePlatformCarrier, interpolateMarbleTarget, interpolateMarbleTargetRoute, marblePlatformCarrierTransform, marblePlatformTransitionDuration, marblePlatformTransitionProgress, marblePlatformVisualSize, prepareMarbleActivation, prepareMarblePerformanceTransition, sampleMarbleCamera, type MarbleCameraPose } from "./index.js";
+import { applyMarbleCameraOrbit, blendMarbleCamera, interpolateMarblePathSegment, interpolateMarblePlatformCarrier, interpolateMarbleTarget, interpolateMarbleTargetRoute, marblePlatformCarrierTransform, marblePlatformFastenerPositions, marblePlatformTransitionDuration, marblePlatformTransitionProgress, marblePlatformVisualSize, prepareMarbleActivation, prepareMarblePerformanceTransition, sampleMarbleCamera, sampleMarbleTrail, type MarbleCameraPose } from "./index.js";
 
 function distance(a: [number, number, number], b: [number, number, number]): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
@@ -19,6 +19,17 @@ function project(point: [number, number, number], state: ReturnType<typeof sampl
 }
 
 describe("Marble camera", () => {
+  it("samples a subtle deterministic 3D trail behind the marble", () => {
+    const song = buildFixtureSong({ bars: 2, patterns: [{ role: "keys", beats: [0, 1.5, 3.5, 5.5], pitch: 52, kind: "note" }] });
+    const performance = compileMarble(song, { motionMix: { leftRight: 20, upDown: 20, frontBack: 60 } });
+    const trail = sampleMarbleTrail(performance.statics.path, 3, 0.72);
+    expect(trail).toHaveLength(9);
+    expect(trail.every((sample) => sample.opacity >= 0 && sample.opacity <= 0.16)).toBe(true);
+    expect(trail[0]!.opacity).toBeGreaterThan(trail.at(-1)!.opacity);
+    expect(new Set(trail.map((sample) => sample.position[2].toFixed(3))).size).toBeGreaterThan(2);
+    expect(sampleMarbleTrail(performance.statics.path, 3, 0).every((sample) => sample.opacity === 0)).toBe(true);
+  });
+
   it("stays continuous through impact tangent changes", () => {
     const song = buildFixtureSong({ bars: 2, patterns: [{ role: "keys", beats: [0, 1, 2.5, 4, 6], pitch: 55, kind: "note" }] });
     const performance = compileMarble(song);
@@ -104,6 +115,18 @@ describe("Marble live-plan activation", () => {
     const toCarrier = marblePlatformCarrierTransform(hugePlate);
     middleCarrier.scale.forEach((value, index) => expect(value).toBeCloseTo((fromCarrier.scale[index]! + toCarrier.scale[index]!) / 2, 10));
     expect(tinyCompact.size).toEqual([0.005, 0.002, 0.004]);
+  });
+
+  it("keeps every fastener attached to an offset carrier", () => {
+    const song = buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [0, 1], pitch: 55, kind: "note" }] });
+    const source = compileMarble(song).statics.targets[0]!;
+    const target = { ...source, visualOffset: [0.31, -0.18] as [number, number] };
+    const carrier = marblePlatformCarrierTransform(target);
+    const positions = marblePlatformFastenerPositions(target, carrier);
+    const centerX = positions.reduce((sum, position) => sum + position[0], 0) / positions.length;
+    const centerZ = positions.reduce((sum, position) => sum + position[2], 0) / positions.length;
+    expect(centerX).toBeCloseTo(carrier.position[0], 10);
+    expect(centerZ).toBeCloseTo(carrier.position[2], 10);
   });
 
   it("starts camera blending at the old pose and finishes at the new pose", () => {

@@ -38,6 +38,28 @@ export interface MarbleTuning {
   cameraOrbitDistance: number;
   targetScale: number;
   tail: number;
+  motionTrail: number;
+}
+
+export interface MarbleTrailSample {
+  position: [number, number, number];
+  opacity: number;
+  scale: number;
+}
+
+export function sampleMarbleTrail(path: readonly MarblePathSegment[], t: number, strength = 0.72, count = 9, spacingSec = 0.065): MarbleTrailSample[] {
+  const current = sampleMarblePose(path, Math.max(0, t)).pos;
+  return Array.from({ length: count }, (_, index) => {
+    const age = index + 1;
+    const position = sampleMarblePose(path, Math.max(0, t - age * spacingSec)).pos;
+    const distance = Math.hypot(...position.map((value, axis) => value - current[axis]!));
+    const fade = 1 - age / (count + 1);
+    return {
+      position,
+      opacity: clamp(strength * fade * Math.min(1, distance / 0.1) * 0.19, 0, 0.16),
+      scale: 0.1 + fade * 0.14,
+    };
+  });
 }
 
 export function marblePlatformVisualSize(target: MarbleTarget): [number, number, number] {
@@ -521,14 +543,22 @@ interface TargetMaterialPool {
 }
 
 function positionTargetFasteners(target: MarbleTarget, carrierTransform: MarblePlatformCarrierTransform, fasteners: readonly TargetFastener[]): void {
-  const visualSize = marblePlatformVisualSize(target);
-  const screwY = carrierTransform.position[1] + carrierTransform.scale[1] / 2 + 0.012;
-  for (const fastener of fasteners) {
-    const x = fastener.xSign * visualSize[0] * 0.38;
-    const z = fastener.zSign * visualSize[2] * 0.32;
+  const positions = marblePlatformFastenerPositions(target, carrierTransform);
+  fasteners.forEach((fastener, index) => {
+    const [x, screwY, z] = positions[index]!;
     fastener.screw.position.set(x, screwY, z);
     fastener.slot.position.set(x, screwY + 0.009, z);
-  }
+  });
+}
+
+export function marblePlatformFastenerPositions(target: MarbleTarget, carrierTransform = marblePlatformCarrierTransform(target)): [number, number, number][] {
+  const visualSize = marblePlatformVisualSize(target);
+  const screwY = carrierTransform.position[1] + carrierTransform.scale[1] / 2 + 0.012;
+  return ([[-1, -1], [1, -1], [-1, 1], [1, 1]] as const).map(([xSign, zSign]) => [
+    carrierTransform.position[0] + xSign * visualSize[0] * 0.38,
+    screwY,
+    carrierTransform.position[2] + zSign * visualSize[2] * 0.32,
+  ]);
 }
 
 function addTargetHardware(target: MarbleTarget, group: Group, geometry: TargetPrimitivePool, materials: TargetMaterialPool): { group: Group; carrier: Mesh<BoxGeometry, MeshStandardMaterial>; fasteners: TargetFastener[] } {
@@ -593,6 +623,7 @@ export class MarbleScene {
   readonly #marble: Mesh<SphereGeometry, MeshPhysicalMaterial>;
   readonly #marbleGlow: PointLight;
   readonly #marbleShadow: Mesh<CircleGeometry, MeshBasicMaterial>;
+  readonly #marbleTrail: Array<Mesh<SphereGeometry, MeshBasicMaterial>>;
   readonly #svg: SVGSVGElement;
   readonly #svgTargetLayer: SVGGElement;
   readonly #svgTargets = new Map<string, SvgTarget>();
@@ -633,7 +664,7 @@ export class MarbleScene {
   }
 
   constructor(canvas: HTMLCanvasElement, performance: MarblePerformance, tuning?: MarbleTuning, now: () => number = () => 0) {
-    this.tuning = tuning ?? { glow: 0.78, camera: 0.88, cameraOrbitYaw: 0, cameraOrbitPitch: 0, cameraOrbitDistance: 0, targetScale: 1, tail: 0.8 };
+    this.tuning = tuning ?? { glow: 0.78, camera: 0.88, cameraOrbitYaw: 0, cameraOrbitPitch: 0, cameraOrbitDistance: 0, targetScale: 1, tail: 0.8, motionTrail: 0.72 };
     this.#performance = performance;
     this.#now = now;
     this.#renderer = new WebGLRenderer({ canvas, context: createCompatibleWebGlContext(canvas), antialias: true, alpha: false });
@@ -670,7 +701,11 @@ export class MarbleScene {
       new MeshBasicMaterial({ color: 0x02080f, transparent: true, opacity: 0.22, depthWrite: false }),
     );
     this.#marbleGlow = new PointLight(0x8df5ff, 1.1, 3.2);
-    this.#machine.add(this.#marbleShadow, this.#marble, this.#marbleGlow);
+    this.#marbleTrail = Array.from({ length: 9 }, () => new Mesh(
+      new SphereGeometry(1, 12, 8),
+      new MeshBasicMaterial({ color: 0x8deeff, transparent: true, opacity: 0, depthWrite: false }),
+    ));
+    this.#machine.add(this.#marbleShadow, ...this.#marbleTrail, this.#marble, this.#marbleGlow);
   }
 
   #createSvgOverlay(canvas: HTMLCanvasElement): { svg: SVGSVGElement; targetLayer: SVGGElement; marble: SVGGElement; marbleGlow: SVGCircleElement; marbleCore: SVGCircleElement } {
@@ -974,6 +1009,14 @@ export class MarbleScene {
     this.#marble.scale.setScalar(1 + pulse * 0.16);
     this.#marbleGlow.position.copy(this.#marble.position);
     this.#marbleGlow.intensity = 0.42 + pulse * 1.8;
+    const trail = sampleMarbleTrail(this.#performance.statics.path, t, this.tuning.motionTrail, this.#marbleTrail.length);
+    this.#marbleTrail.forEach((mesh, index) => {
+      const sample = trail[index]!;
+      mesh.position.set(...sample.position);
+      mesh.scale.setScalar(sample.scale);
+      mesh.material.opacity = sample.opacity;
+      mesh.visible = sample.opacity > 0.002;
+    });
     for (const [targetId, meshes] of this.#targetMeshes) {
       const intensity = this.#targetIntensity(targetId, t);
       const recoil = this.#targetRecoil(targetId, t);

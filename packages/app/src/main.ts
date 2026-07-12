@@ -123,7 +123,7 @@ const marbleLiveMixState: MarbleLiveMixState = {
   desired: copyMarbleMotionMix(marbleMotionMix),
   active: copyMarbleMotionMix(marbleMotionMix),
 };
-const marbleTuning: MarbleTuning = { glow: 0.78, camera: 0.88, cameraOrbitYaw: 0, cameraOrbitPitch: 0, cameraOrbitDistance: 0, targetScale: 1, tail: 0.8 };
+const marbleTuning: MarbleTuning = { glow: 0.78, camera: 0.88, cameraOrbitYaw: 0, cameraOrbitPitch: 0, cameraOrbitDistance: 0, targetScale: 1, tail: 0.8, motionTrail: 0.72 };
 const marbleHandCamera: MarbleHandCameraControl = { yaw: 0, pitch: 0, distance: 0 };
 const marbleProfilingEnabled = new URLSearchParams(window.location.search).has("profileMarble");
 const marbleBrowserProfile: MarbleBrowserProfile = { frameIntervalsMs: [], renderMs: [], longTasks: [], swaps: [] };
@@ -717,7 +717,7 @@ async function loadConcept(concept: string): Promise<void> {
     delete marbleLiveMixState.requested;
     delete marbleLiveMixState.planned;
     marbleLiveMixState.active = copyMarbleMotionMix(marbleMotionMix);
-    Object.assign(marbleTuning, { glow: 0.78, camera: 0.88, cameraOrbitYaw: 0, cameraOrbitPitch: 0, cameraOrbitDistance: 0, targetScale: 1, tail: 0.8 });
+    Object.assign(marbleTuning, { glow: 0.78, camera: 0.88, cameraOrbitYaw: 0, cameraOrbitPitch: 0, cameraOrbitDistance: 0, targetScale: 1, tail: 0.8, motionTrail: 0.72 });
     Object.assign(marbleHandCamera, { yaw: 0, pitch: 0, distance: 0 });
     const marble = new MarbleScene(canvas, performance, marbleTuning, () => globalThis.performance.now());
     scene = marble;
@@ -727,7 +727,8 @@ async function loadConcept(concept: string): Promise<void> {
     addTuningBinding(bindingPane, marbleTuning, "glow", { min: 0, max: 1.6, step: 0.01, label: "Glow" });
     addTuningBinding(bindingPane, marbleTuning, "camera", { min: 0.4, max: 1.8, step: 0.02, label: "Camera" });
     addTuningBinding(bindingPane, marbleTuning, "targetScale", { min: 0.7, max: 1.4, step: 0.01, label: "Targets" });
-    addTuningBinding(bindingPane, marbleTuning, "tail", { min: 0, max: 1.5, step: 0.01, label: "Tail" });
+    addTuningBinding(bindingPane, marbleTuning, "motionTrail", { min: 0, max: 1.2, step: 0.01, label: "Trail" });
+    addTuningBinding(bindingPane, marbleTuning, "tail", { min: 0, max: 1.5, step: 0.01, label: "Resonance" });
     sceneLabel.textContent = "Marble Music · M0/M1";
     statusTitle.textContent = "Marble Music · one-track machine";
     statusDetail.textContent = marbleStatus(performance);

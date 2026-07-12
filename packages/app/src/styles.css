@@ -25,6 +25,7 @@ input[type='range'] { width: 100%; accent-color: #86d5ff; }
 .check input { accent-color: #80cfff; }
 .tuning { padding-top: 22px; border-top: 1px solid #1c2533; }
 .hand-controls { padding-top: 22px; border-top: 1px solid #1c2533; display: grid; gap: 10px; }
+.hand-controls[hidden] { display: none; }
 .hand-actions { display: flex; align-items: center; gap: 10px; }
 .hand-actions button { min-height: 36px; padding: 8px 12px; font-size: 12px; }
 .hand-actions span { color: #7f8da2; font: 10px 'DM Mono', ui-monospace, monospace; }
