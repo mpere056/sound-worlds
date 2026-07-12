@@ -67,6 +67,13 @@ global certification, shader architecture, and performance gates. Start with
 the Aurora Cyclotron closed-form Lorentz feasibility spike; keep all five in
 planning until one passes the shared headless reference-song gate.
 
+A future [Music-synchronized ecosystem worlds roadmap](ecosystem-worlds-roadmap.md)
+defines active city, reef, rainforest, fantasy-dungeon, and orbital-habitat
+worlds. These begin as deterministic causal simulations with resources,
+lifecycles, affordances, and space-time reservations; music may choreograph only
+valid actions. When this work begins, build the small Pulse District headless
+loop first and extract shared architecture only after a second world proves it.
+
 Metro-specific consequence: that export can validate MIDI station timing,
 train arrivals, line identity, and fallback honesty, but it cannot validate
 M4 chorus rings/laps. M4 must be judged on a region-bearing reference song with
