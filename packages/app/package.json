@@ -11,9 +11,11 @@
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.35",
     "@reaper-viz/compiler-marble": "workspace:*",
+    "@reaper-viz/compiler-brick-breaker": "workspace:*",
     "@reaper-viz/core": "workspace:*",
     "@reaper-viz/render": "workspace:*",
     "@reaper-viz/scene-marble": "workspace:*",
+    "@reaper-viz/scene-brick-breaker": "workspace:*",
     "@reaper-viz/scene-metro": "workspace:*",
     "@reaper-viz/scene-painting": "workspace:*",
     "@reaper-viz/scene-runner": "workspace:*",

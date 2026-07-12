@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildFixtureSong, type SongEvent } from "@reaper-viz/core";
-import { compileBrickBreakerPlan } from "./index.js";
+import { compileBrickBreaker, compileBrickBreakerPlan, sampleBrickBreakerBall } from "./index.js";
 
 describe("Brick Breaker B0 compiler", () => {
   it("creates exactly one future brick per distinct note deadline", () => {
@@ -71,5 +71,19 @@ describe("Brick Breaker B0 compiler", () => {
     const song = buildFixtureSong({ bars: 1, patterns: [{ role: "keys", beats: [0], pitch: 60, kind: "note" }] });
     expect(() => compileBrickBreakerPlan(song, { chordEpsilonSec: 0.2 })).toThrow("epsilon");
     expect(() => compileBrickBreakerPlan(song, { board: { width: 0, height: 10 } })).toThrow("dimensions");
+  });
+
+  it("samples exact brick contacts and breaks the final brick on the final note", () => {
+    const song = buildFixtureSong({ bars: 2, patterns: [{ role: "keys", beats: [0, 1, 2, 3], pitch: 60, kind: "note" }] });
+    const performance = compileBrickBreaker(song);
+    for (const brick of performance.statics.bricks) {
+      const pose = sampleBrickBreakerBall(performance.statics.ballSegments, brick.destructionT);
+      expect(pose[0]).toBeCloseTo(brick.position[0], 9);
+      expect(pose[1]).toBeCloseTo(brick.position[1], 9);
+    }
+    const finalBrick = performance.statics.bricks.at(-1)!;
+    expect(performance.statics.finalBrickId).toBe(finalBrick.id);
+    expect(finalBrick.destructionT).toBe(performance.statics.report.finalHitSec);
+    expect(performance.statics.bricks.filter((brick) => brick.destructionT > performance.statics.bricks.at(-2)!.destructionT)).toHaveLength(1);
   });
 });

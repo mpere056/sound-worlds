@@ -2,6 +2,7 @@ import { parsePerformance, parseSong, type Song } from "@reaper-viz/core";
 import type { MarbleCompileProfile, MarbleMotionMix } from "@reaper-viz/compiler-marble";
 import { captureCanvasPng, exportCanvasMp4, PixiBackend, supportsCanvasMp4 } from "@reaper-viz/render";
 import { MarbleScene, type MarblePerformance, type MarblePreparedTransition, type MarbleSceneActivation, type MarbleSceneProfileSnapshot, type MarbleTuning } from "@reaper-viz/scene-marble";
+import { BrickBreakerScene, type BrickBreakerPerformance } from "@reaper-viz/scene-brick-breaker";
 import { MetroScene, type MetroPerformance } from "@reaper-viz/scene-metro";
 import { PaintingScene, type PaintingPerformance } from "@reaper-viz/scene-painting";
 import { RunnerScene, type RunnerPerformance } from "@reaper-viz/scene-runner";
@@ -660,7 +661,20 @@ async function loadConcept(concept: string): Promise<void> {
   statusDetail.textContent = concept;
   pane = new Pane({ container: tweakpaneContainer });
   const bindingPane = pane as unknown as BindingPane;
-  if (concept === "metro") {
+  if (concept === "brick-breaker") {
+    const backend = await ensurePixiBackend();
+    const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.brick-breaker.json`);
+    if (!response.ok) throw new Error(`Brick Breaker performance request failed: ${response.status}`);
+    const performance = parsePerformance(await response.json()) as BrickBreakerPerformance;
+    const brickBreaker = new BrickBreakerScene(backend, performance);
+    scene = brickBreaker;
+    addTuningBinding(bindingPane, brickBreaker.tuning, "glow", { min: 0, max: 1.2, step: 0.01, label: "Glow" });
+    addTuningBinding(bindingPane, brickBreaker.tuning, "fragments", { min: 0, max: 1.2, step: 0.01, label: "Fragments" });
+    addTuningBinding(bindingPane, brickBreaker.tuning, "trail", { min: 0, max: 1, step: 0.01, label: "Trail" });
+    sceneLabel.textContent = "Brick Breaker · B1 Preview";
+    statusTitle.textContent = "Brick Breaker · direct-contact preview";
+    statusDetail.textContent = `${performance.statics.bricks.length} bricks · final hit ${performance.statics.report.finalHitSec.toFixed(3)}s · wall/paddle search pending`;
+  } else if (concept === "metro") {
     const backend = await ensurePixiBackend();
     const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.metro.json`);
     if (!response.ok) throw new Error(`Metro performance request failed: ${response.status}`);
@@ -792,6 +806,12 @@ async function loadProject(id: string): Promise<void> {
     marble.value = "marble";
     marble.textContent = "Marble Music · M0/M1";
     options.push(marble);
+  }
+  if (project?.concepts.includes("brick-breaker")) {
+    const brickBreaker = document.createElement("option");
+    brickBreaker.value = "brick-breaker";
+    brickBreaker.textContent = "Brick Breaker · B1 Preview";
+    options.push(brickBreaker);
   }
   const testPattern = document.createElement("option");
   testPattern.value = "testpattern";

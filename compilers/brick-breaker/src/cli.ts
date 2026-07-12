@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseSong } from "@reaper-viz/core";
-import { compileBrickBreakerPlan } from "./index.js";
+import { compileBrickBreaker, compileBrickBreakerPlan } from "./index.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "../../..");
@@ -15,8 +15,13 @@ if (trackIndex >= 0 && !sourceTrackId) throw new Error("Brick Breaker --track re
 const project = isAbsolute(projectArg) ? projectArg : resolve(ROOT, projectArg);
 const output = resolve(project, "brick-breaker.plan.json");
 const temporary = `${output}.tmp`;
+const performanceOutput = resolve(project, "performance.brick-breaker.json");
+const performanceTemporary = `${performanceOutput}.tmp`;
 await mkdir(project, { recursive: true });
 const song = parseSong(JSON.parse(await readFile(resolve(project, "song.json"), "utf8")));
 await writeFile(temporary, `${JSON.stringify(compileBrickBreakerPlan(song, sourceTrackId ? { sourceTrackId } : {}), null, 2)}\n`, "utf8");
 await rename(temporary, output);
+await writeFile(performanceTemporary, `${JSON.stringify(compileBrickBreaker(song, sourceTrackId ? { sourceTrackId } : {}), null, 2)}\n`, "utf8");
+await rename(performanceTemporary, performanceOutput);
 console.log(`WROTE: ${output}`);
+console.log(`WROTE: ${performanceOutput}`);

@@ -50,3 +50,40 @@ export interface BrickBreakerPlan {
   hitGroups: BrickHitGroup[];
   report: BrickBreakerCompileReport;
 }
+
+export interface BrickBreakerBrick {
+  id: string;
+  hitGroupId: string;
+  destructionT: number;
+  position: BrickVec2;
+  size: BrickVec2;
+  rotation: number;
+  color: string;
+  cells: number;
+  energy: number;
+}
+
+export interface BrickBreakerBallSegment {
+  id: string;
+  t0: number;
+  t1: number;
+  from: BrickVec2;
+  to: BrickVec2;
+  contactBrickId: string;
+  normal: BrickVec2;
+}
+
+export interface BrickBreakerPerformance extends Performance {
+  concept: "brick-breaker";
+  statics: {
+    sourceTrackId: string;
+    report: BrickBreakerCompileReport;
+    board: { width: number; height: number };
+    ballRadius: number;
+    bricks: BrickBreakerBrick[];
+    ballSegments: BrickBreakerBallSegment[];
+    finalBrickId: string;
+  };
+}
+import type { Performance } from "@reaper-viz/core";
+import type { BrickVec2 } from "./physics.js";

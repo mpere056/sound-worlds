@@ -53,6 +53,9 @@ importers:
       '@mediapipe/tasks-vision':
         specifier: ^0.10.35
         version: 0.10.35
+      '@reaper-viz/compiler-brick-breaker':
+        specifier: workspace:*
+        version: link:../../compilers/brick-breaker
       '@reaper-viz/compiler-marble':
         specifier: workspace:*
         version: link:../../compilers/marble
@@ -62,6 +65,9 @@ importers:
       '@reaper-viz/render':
         specifier: workspace:*
         version: link:../render
+      '@reaper-viz/scene-brick-breaker':
+        specifier: workspace:*
+        version: link:../../scenes/brick-breaker
       '@reaper-viz/scene-marble':
         specifier: workspace:*
         version: link:../../scenes/marble
@@ -111,6 +117,18 @@ importers:
       '@reaper-viz/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@reaper-viz/render':
+        specifier: workspace:*
+        version: link:../../packages/render
+      pixi.js:
+        specifier: 8.19.0
+        version: 8.19.0
+
+  scenes/brick-breaker:
+    dependencies:
+      '@reaper-viz/compiler-brick-breaker':
+        specifier: workspace:*
+        version: link:../../compilers/brick-breaker
       '@reaper-viz/render':
         specifier: workspace:*
         version: link:../../packages/render

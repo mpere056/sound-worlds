@@ -101,6 +101,14 @@ segments and direct deadline-to-deadline placement using these primitives. Use
 the measured B0 gap distribution to select provisional speed bands; do not tune
 only around evenly spaced synthetic notes.
 
+An engineering-preview scene is now integrated into the app as
+`Brick Breaker · B1 Preview` when `performance.brick-breaker.json` exists. It
+samples one deterministic ball segment per musical deadline, hides each brick
+at its assigned note, renders compound cells and deterministic fragments, and
+preserves the final-brick/final-note contract. This selectable preview does not
+claim B2 occupancy or B3/B4 wall/paddle certification; the in-app status names
+those pending phases explicitly.
+
 ### Goal
 
 Construct a continuous one-ball route that reaches one brick contact at every

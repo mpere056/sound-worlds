@@ -1,5 +1,7 @@
 import type { Song, SongEvent, SongTrack } from "@reaper-viz/core";
 import type { BrickBreakerCompileOptions, BrickBreakerPlan, BrickBreakerResolvedOptions, BrickHitGroup, BrickHitNote } from "./types.js";
+import type { BrickBreakerBallSegment, BrickBreakerBrick, BrickBreakerPerformance } from "./types.js";
+import { brickNormalize, brickSub, type BrickVec2 } from "./physics.js";
 
 export * from "./types.js";
 export * from "./physics.js";
@@ -131,6 +133,90 @@ export function compileBrickBreakerPlan(song: Song, options: BrickBreakerCompile
       minimumGapSec: gaps.length ? Math.min(...gaps) : null,
       gapHistogram: gapHistogram(groups),
       warnings: [],
+    },
+  };
+}
+
+const BRICK_COLORS = ["#55d6ff", "#ffd166", "#9da8ff", "#ff7d9b", "#76e6a5", "#f5a65b"];
+
+function previewContact(index: number, total: number, board: { width: number; height: number }): BrickVec2 {
+  const columns = 5;
+  const column = index % columns;
+  const row = Math.floor(index / columns);
+  const direction = row % 2 === 0 ? column : columns - 1 - column;
+  const x = -board.width * 0.36 + direction * board.width * 0.18;
+  const rows = Math.max(1, Math.ceil(total / columns));
+  const y = board.height * 0.32 - row * Math.min(2.2, board.height * 0.56 / Math.max(1, rows - 1));
+  return [Number(x.toFixed(6)), Number(y.toFixed(6))];
+}
+
+export function sampleBrickBreakerBall(segments: readonly BrickBreakerBallSegment[], t: number): BrickVec2 {
+  const segment = segments.find((candidate) => t <= candidate.t1 + 1e-9) ?? segments.at(-1);
+  if (!segment) return [0, 0];
+  if (segment.t1 - segment.t0 <= 1e-9) return [...segment.to];
+  const raw = (t - segment.t0) / Math.max(1e-9, segment.t1 - segment.t0);
+  const progress = Math.max(0, Math.min(1, raw));
+  return [
+    segment.from[0] + (segment.to[0] - segment.from[0]) * progress,
+    segment.from[1] + (segment.to[1] - segment.from[1]) * progress,
+  ];
+}
+
+export function compileBrickBreaker(song: Song, options: BrickBreakerCompileOptions = {}): BrickBreakerPerformance {
+  const plan = compileBrickBreakerPlan(song, options);
+  const contacts = plan.hitGroups.map((_, index) => previewContact(index, plan.hitGroups.length, plan.options.board));
+  const bricks: BrickBreakerBrick[] = plan.hitGroups.map((group, index) => ({
+    id: `brick:${index}`,
+    hitGroupId: group.id,
+    destructionT: group.t,
+    position: contacts[index]!,
+    size: [1.55, 0.62],
+    rotation: 0,
+    color: BRICK_COLORS[((Math.round(group.representativePitch) % BRICK_COLORS.length) + BRICK_COLORS.length) % BRICK_COLORS.length]!,
+    cells: group.notes.length,
+    energy: group.energy,
+  }));
+  const segments: BrickBreakerBallSegment[] = [];
+  let from: BrickVec2 = [0, -plan.options.board.height * 0.38];
+  let t0 = 0;
+  for (let index = 0; index < bricks.length; index += 1) {
+    const brick = bricks[index]!;
+    const to = brick.position;
+    const incoming = brickNormalize(brickSub(to, from), [0, 1]);
+    const next = contacts[index + 1] ?? [0, -plan.options.board.height * 0.38] as BrickVec2;
+    const outgoing = brickNormalize(brickSub(next, to), [0, -1]);
+    segments.push({
+      id: `ball:${index}`,
+      t0,
+      t1: brick.destructionT,
+      from,
+      to,
+      contactBrickId: brick.id,
+      normal: brickNormalize(brickSub(outgoing, incoming), [0, 1]),
+    });
+    from = to;
+    t0 = brick.destructionT;
+  }
+  const finalBrickId = bricks.at(-1)!.id;
+  return {
+    schemaVersion: 1,
+    concept: "brick-breaker",
+    seed: plan.options.seed,
+    durationSec: song.meta.durationSec,
+    fps: 60,
+    resolution: { w: 1080, h: 1920 },
+    palette: { bg: "#07111d", roles: { ball: "#f7fdff", wall: "#36516a", paddle: "#79e6ff" } },
+    camera: [{ t: 0, pos: [0, 0, 12], zoom: 1 }],
+    curves: { energy: song.master.energy },
+    events: bricks.map((brick) => ({ t: brick.destructionT, type: "brick.break", layer: "bricks", params: { brickId: brick.id } })),
+    statics: {
+      sourceTrackId: plan.report.sourceTrackId,
+      report: plan.report,
+      board: plan.options.board,
+      ballRadius: 0.24,
+      bricks,
+      ballSegments: segments,
+      finalBrickId,
     },
   };
 }
