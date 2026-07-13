@@ -148,6 +148,15 @@ from full-song note count. Certified geometry continues to govern timing and
 influence placement, but is intentionally not shown literally. This remains a
 Q0/Q1 visual treatment, not final art direction.
 
+All visible structures must derive from one accumulated field potential. Folded
+cells are its density basins, mist is transported density, fine filaments are
+illuminated contours of that density, and beat light is a wave travelling through
+those contours. Screen-space detail may refine the volume, but must be centered on
+the projected physics singularity, gated by integrated field density, and warped
+by the same phase. It must never read as an independent shader laid over the
+volume. Future multitrack work should assign voices to field modes or spatial
+regions within this shared medium rather than stacking unrelated visual systems.
+
 - Render field-aligned aurora curtains, plasma filaments, broken coil caustics,
   and a depth-readable charged wake. Drive shader coordinates from the same
   compiled field basis used by physics.

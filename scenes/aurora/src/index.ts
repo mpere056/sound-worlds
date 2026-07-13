@@ -98,11 +98,11 @@ vec3 backgroundField(vec3 rayDirection, float time) {
   float radial = length(rayDirection.xy);
   vec3 tunnel = vec3(azimuth * 1.45 - time * 0.055, log(max(0.03, radial)) * 1.75 + time * 0.07, rayDirection.z * 2.1);
   float folded = foldedField(tunnel, time * 0.35);
-  float veins = pow(0.5 + 0.5 * sin(tunnel.x * 7.0 + tunnel.y * 4.0 + folded * 3.0 - time * 0.3), 12.0);
+  float basin = exp(-abs(folded - 0.52) * 5.5);
   vec3 teal = vec3(0.015, 0.27, 0.24);
   vec3 blue = vec3(0.025, 0.12, 0.35);
   vec3 color = mix(teal, blue, 0.5 + 0.5 * sin(azimuth * 2.0 + time * 0.08));
-  return color * (folded * 0.035 + veins * 0.32) * uAurora + vec3(0.001, 0.003, 0.008);
+  return color * basin * folded * 0.16 * uAurora + vec3(0.001, 0.003, 0.008);
 }
 
 void applyFieldOperators(vec3 worldPoint, float time, inout vec3 warpedPoint, out float fieldFlux, out vec3 fieldColor) {
@@ -156,6 +156,8 @@ void main() {
 
   vec3 color = vec3(0.0);
   float transmittance = 1.0;
+  float projectedField = 0.0;
+  float projectedContour = 0.0;
   float depth = 0.15;
   for (int stepIndex = 0; stepIndex < VOLUME_STEPS; stepIndex++) {
     vec3 worldPoint = uCameraPosition + rayDirection * depth;
@@ -181,43 +183,56 @@ void main() {
     singularVein = pow(clamp(singularVein, 0.0, 1.0), 11.0) * exp(-length(localToSingularity) * 0.42);
     float localInfluence = clamp(singularEnvelope * 0.72 + fieldFlux * 1.35 + wakeDensity * 0.8, 0.0, 1.0);
     float localElectric = electric * localInfluence;
-    float density = filament * fold * 0.016 + fracture * fold * 0.006 + localElectric * 0.11 + microRidge * fold * 0.01 + wakeDensity * 0.32 + knot * singularEnvelope * 0.22 + singularVein * 0.2 + fieldFlux * 0.09 * uCoilGlow;
+    float fieldPotential = clamp(
+      fold * 0.29 + localElectric * 0.68 + wakeDensity * 0.84 +
+      knot * singularEnvelope * 0.62 + singularVein * 0.46 + fieldFlux * 0.94 * uCoilGlow,
+      0.0,
+      1.6
+    );
+    float contour = exp(-abs(sin(fieldPotential * 9.0 + radialPhase * 0.32 + fracture * 1.8)) * 27.0);
+    float density = fieldPotential * 0.31 + contour * fieldPotential * 0.41 + microRidge * fieldPotential * 0.074;
     density *= 0.55 + uEnergy * 0.62;
     density = clamp(density, 0.0, 0.82);
 
     vec3 baseColor = mix(vec3(0.02, 0.48, 0.4), vec3(0.09, 0.26, 0.72), 0.5 + 0.5 * sin(foldedField(warpedPoint.yzx, time * 0.2) * 2.0 + time * 0.07));
     float warmPhase = pow(0.5 + 0.5 * sin(warpedPoint.x * 0.7 + fold + time * 0.12), 9.0) * 0.42;
     vec3 spectralColor = mix(vec3(0.18, 0.78, 1.0), vec3(1.0, 0.5, 0.07), warmPhase);
-    vec3 emission = baseColor * (filament * fold * 0.58 + fracture * 0.1 + microRidge * fold * 0.22);
-    emission += spectralColor * localElectric * (1.25 + uEnergy * 0.8);
-    emission += knotColor * (knot * singularEnvelope * (2.4 + uEnergy * 1.4) + singularVein * 1.8);
-    emission += fieldTint * uCoilGlow * 1.35;
-    emission += vec3(0.08, 0.72, 0.58) * wakeDensity * 0.3;
+    vec3 operatorTint = fieldFlux > 0.001 ? fieldTint / fieldFlux : spectralColor;
+    vec3 sharedColor = mix(baseColor, spectralColor, clamp(localElectric + contour * 0.38, 0.0, 1.0));
+    sharedColor = mix(sharedColor, operatorTint, clamp(fieldFlux * 0.72, 0.0, 0.62));
+    sharedColor = mix(sharedColor, knotColor, clamp(knot * singularEnvelope * 0.48, 0.0, 0.58));
+    vec3 emission = sharedColor * fieldPotential * (2.05 + contour * 4.8 + uEnergy * 1.36);
+    emission += sharedColor * microRidge * fieldPotential * 1.2;
     float stepLength = 0.2 + depth * 0.006;
     color += transmittance * emission * density * stepLength * 0.8;
+    projectedField += transmittance * fieldPotential * density * stepLength;
+    projectedContour += transmittance * contour * fieldPotential * density * stepLength;
     transmittance *= exp(-density * stepLength * 0.34);
     depth += stepLength;
     if (transmittance < 0.025 || depth > 30.0) break;
   }
 
   color += backgroundField(rayDirection, time) * transmittance;
-  float screenRadius = length(uv * vec2(1.0, 1.18)) + 0.018;
-  float screenAngle = atan(uv.y, uv.x);
-  vec2 filamentUv = uv;
-  filamentUv += vec2(
-    sin(uv.y * 8.0 - time * 0.42) + sin(uv.y * 19.0 + time * 0.31),
-    cos(uv.x * 7.0 + time * 0.37) + cos(uv.x * 17.0 - time * 0.28)
-  ) * 0.035;
-  float spiralA = exp(-abs(sin(screenAngle * 7.0 + log(screenRadius) * 8.5 - time * 1.15 + sin(screenAngle * 3.0) * 1.7)) * 52.0);
-  float spiralB = exp(-abs(sin(screenAngle * 5.0 - log(screenRadius) * 11.0 + time * 0.83 + cos(screenAngle * 4.0) * 1.3)) * 61.0);
-  float branchPhase = filamentUv.x * 24.0 + sin(filamentUv.y * 13.0 - time) * 3.8 + sin(filamentUv.y * 31.0 + time * 0.53) * 1.2;
-  float branch = exp(-abs(sin(branchPhase + time * 0.62)) * 58.0);
-  float crossBranch = exp(-abs(sin(filamentUv.y * 21.0 - sin(filamentUv.x * 15.0 + time) * 3.2 - time * 0.47)) * 66.0);
-  float cellular = exp(-abs(sin(branchPhase) * cos(filamentUv.y * 27.0 - time * 0.7)) * 76.0);
-  float knotWindow = exp(-screenRadius * 2.7) * (0.45 + uEnergy * 0.55);
-  float caustic = (spiralA * 0.74 + spiralB * 0.54 + branch * spiralA * 0.92 + crossBranch * spiralB * 0.68 + cellular * branch * 0.46) * knotWindow * uParticlePlasma;
-  vec3 causticColor = mix(vec3(0.34, 0.86, 1.0), vec3(1.0, 0.64, 0.2), pow(0.5 + 0.5 * sin(screenAngle * 2.0 + time * 0.17), 12.0) * 0.3);
-  color += causticColor * caustic * (0.78 + uEnergy * 0.52);
+  vec3 singularityOffset = uSingularityPosition - uCameraPosition;
+  float singularityDepth = max(0.25, dot(singularityOffset, forward));
+  vec2 singularityUv = vec2(dot(singularityOffset, right), dot(singularityOffset, up)) / (singularityDepth * 0.55);
+  vec2 fieldUv = uv - singularityUv;
+  fieldUv += vec2(
+    sin(fieldUv.y * 8.0 - time * 0.42),
+    cos(fieldUv.x * 7.0 + time * 0.37)
+  ) * (0.012 + projectedField * 0.028);
+  float fieldRadius = length(fieldUv * vec2(1.0, 1.12)) + 0.018;
+  float fieldAngle = atan(fieldUv.y, fieldUv.x);
+  float sharedPhase = projectedField * 6.5 + projectedContour * 13.0;
+  float spiralA = exp(-abs(sin(fieldAngle * 7.0 + log(fieldRadius) * 8.5 - time * 1.15 + sharedPhase)) * 54.0);
+  float spiralB = exp(-abs(sin(fieldAngle * 5.0 - log(fieldRadius) * 11.0 + time * 0.83 - sharedPhase * 0.72)) * 63.0);
+  float branchPhase = fieldUv.x * 24.0 + sin(fieldUv.y * 13.0 - time + sharedPhase) * 3.8;
+  float branch = exp(-abs(sin(branchPhase + time * 0.62)) * 60.0);
+  float fieldGate = smoothstep(0.001, 0.06, projectedField) * exp(-fieldRadius * (0.62 + 0.1 / (0.16 + projectedField)));
+  float beatWave = 0.68 + 0.32 * sin(fieldRadius * 24.0 - time * 3.2 + sharedPhase);
+  float caustic = (spiralA * 0.68 + spiralB * 0.46 + branch * spiralA * 0.84) * fieldGate * uParticlePlasma;
+  vec3 fieldColor = mix(vec3(0.28, 0.82, 1.0), vec3(0.12, 0.56, 0.84), clamp(fieldRadius * 0.42, 0.0, 1.0));
+  color += fieldColor * caustic * (0.58 + projectedField * 1.18) * (0.74 + uEnergy * beatWave * 0.58);
   float vignette = 1.0 - 0.14 * dot(uv, uv);
   color *= vignette;
   color *= 1.35;
@@ -242,7 +257,7 @@ void main() {
   vec3 west = texture2D(uVolumeTexture, vUv - vec2(texel.x, 0.0)).rgb;
   vec3 color = max(vec3(0.0), center * 1.34 - (north + south + east + west) * 0.078);
   float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
-  color *= smoothstep(0.018, 0.62, luminance) * 1.18 + 0.24;
+  color *= smoothstep(0.005, 0.32, luminance) * 0.92 + 0.56;
   float grain = hash21(gl_FragCoord.xy + uTime * 19.0) - 0.5;
   color += grain * 0.009;
   gl_FragColor = vec4(max(color, 0.0), 1.0);
