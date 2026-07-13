@@ -172,7 +172,11 @@ Musical data shapes the shared medium rather than decorating it after rendering:
   like a loud note with reduced opacity. Velocity uses the same hybrid mapping so
   performances with a narrow dynamic range still produce legible articulation.
 - A deterministic decaying note-memory signal measures recent event density.
-  Rapid succession accumulates pressure, wake density, and fine structure;
+  Rapid succession accumulates continuous phrase pressure, wake density, and
+  fine structure. Pitch and velocity glide between note states, while exact
+  attacks articulate luminance without resetting or displacing field geometry.
+  Dense melodic runs converge on a weighted phrase register and velocity so
+  they intensify one coherent field instead of retuning it note by note;
   isolated notes remain individually legible. Distance from the nearest note
   creates a separate silence signal that slows and thins the field, suppresses
   contours, and opens negative space without freezing procedural motion.

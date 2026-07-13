@@ -30,7 +30,7 @@ describe("Aurora musical shader state", () => {
   it("maps register, pitch direction, and velocity into stable normalized controls", () => {
     const coils = [coil(0, 40, 0.3), coil(1, 64, 0.9)];
     const low = sampleAuroraMusicalState(coils, 0);
-    const high = sampleAuroraMusicalState(coils, 1);
+    const high = sampleAuroraMusicalState(coils, 1.1);
     expect(high.pitch).toBeGreaterThan(low.pitch);
     expect(high.pitchDirection).toBeGreaterThan(0);
     expect(high.velocity).toBeGreaterThan(low.velocity);
@@ -45,5 +45,19 @@ describe("Aurora musical shader state", () => {
     expect(dense.activity).toBeGreaterThan(silence.activity);
     expect(silence.silence).toBeGreaterThan(dense.silence);
     expect(silence.beatPulse).toBeLessThan(0.001);
+  });
+
+  it("glides through rapid note boundaries without resetting the phrase", () => {
+    const coils = [coil(0, 48, 0.35), coil(0.16, 67, 0.95), coil(0.32, 55, 0.6)];
+    const beforeBoundary = sampleAuroraMusicalState(coils, 0.16 - 1e-6);
+    const atBoundary = sampleAuroraMusicalState(coils, 0.16);
+    const intensified = sampleAuroraMusicalState(coils, 0.4);
+
+    expect(Math.abs(atBoundary.pitch - beforeBoundary.pitch)).toBeLessThan(0.001);
+    expect(Math.abs(atBoundary.velocity - beforeBoundary.velocity)).toBeLessThan(0.001);
+    expect(Math.abs(atBoundary.activity - beforeBoundary.activity)).toBeLessThan(0.001);
+    expect(atBoundary.pitchDirection).toBeCloseTo(0, 5);
+    expect(intensified.activity).toBeGreaterThan(atBoundary.activity);
+    expect(intensified.succession).toBeGreaterThan(0.75);
   });
 });

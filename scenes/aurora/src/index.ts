@@ -75,25 +75,43 @@ export function sampleAuroraMusicalState(coils: readonly AuroraCoil[], time: num
   const next = coils[Math.min(coils.length - 1, currentIndex + 1)]!;
   const nearestDistance = Math.min(...coils.map((coil) => Math.abs(time - coil.t)));
   const gapBefore = currentIndex > 0 ? current.t - previous.t : next.t - current.t;
-  const gapAfter = currentIndex < coils.length - 1 ? next.t - current.t : gapBefore;
-  const localGap = Math.max(0, Math.min(gapBefore || gapAfter, gapAfter || gapBefore));
-  const succession = clamp01((1.05 - localGap) / 0.82);
+  const transitionDuration = Math.max(0.11, Math.min(0.34, Math.max(0.001, gapBefore) * 0.68));
+  const transitionLinear = clamp01((time - current.t) / transitionDuration);
+  const transition = transitionLinear * transitionLinear * (3 - 2 * transitionLinear);
   let memory = 0;
   let beatPulse = 0;
+  let phrasePitchSum = 0;
+  let phraseVelocitySum = 0;
   for (const coil of coils) {
     const age = time - coil.t;
     const velocity = normalizedVelocity(range, coil.energy);
-    if (age >= 0) memory += Math.exp(-age / 0.48) * (0.28 + velocity * 0.72);
+    if (age >= 0) {
+      const attack = 1 - Math.exp(-age / 0.09);
+      const contribution = attack * Math.exp(-age / 0.58) * (0.28 + velocity * 0.72);
+      memory += contribution;
+      phrasePitchSum += normalizedPitch(range, coil.pitch) * contribution;
+      phraseVelocitySum += velocity * contribution;
+    }
     beatPulse = Math.max(beatPulse, Math.exp(-Math.abs(age) * 8.5) * (0.18 + velocity * 0.82));
   }
-  const proximity = Math.exp(-nearestDistance / 0.42);
-  const activity = clamp01(memory * 0.42 + succession * proximity * 0.48);
+  const succession = clamp01((memory - 0.12) / 0.55);
+  const activity = clamp01(memory * 0.52 + succession * 0.38);
   const silence = clamp01((nearestDistance - 0.1) / 0.92) * (1 - activity * 0.35);
-  const pitchDirection = Math.max(-1, Math.min(1, (current.pitch - previous.pitch || next.pitch - current.pitch) / 12));
+  const previousPitch = normalizedPitch(range, previous.pitch);
+  const currentPitch = normalizedPitch(range, current.pitch);
+  const previousVelocity = normalizedVelocity(range, previous.energy);
+  const currentVelocity = normalizedVelocity(range, current.energy);
+  const transitionArc = Math.sin(transitionLinear * Math.PI);
+  const glidingPitch = previousPitch + (currentPitch - previousPitch) * transition;
+  const glidingVelocity = previousVelocity + (currentVelocity - previousVelocity) * transition;
+  const phrasePitch = memory > 1e-6 ? phrasePitchSum / memory : glidingPitch;
+  const phraseVelocity = memory > 1e-6 ? phraseVelocitySum / memory : glidingVelocity;
+  const phraseBlend = succession * 0.72;
+  const pitchDirection = Math.max(-1, Math.min(1, (current.pitch - previous.pitch) / 12)) * transitionArc * (1 - phraseBlend);
   return {
-    pitch: normalizedPitch(range, current.pitch),
+    pitch: glidingPitch + (phrasePitch - glidingPitch) * phraseBlend,
     pitchDirection,
-    velocity: normalizedVelocity(range, current.energy),
+    velocity: glidingVelocity + (phraseVelocity - glidingVelocity) * phraseBlend,
     beatPulse: clamp01(beatPulse),
     activity,
     succession,
@@ -216,13 +234,15 @@ void applyFieldOperators(vec3 worldPoint, float time, inout vec3 warpedPoint, ou
     float envelope = exp(-length(local) * 0.62) * uFieldPresence[index];
     float pitchScale = mix(2.35, 5.8, uFieldPitch[index]);
     float velocityPressure = mix(0.68, 1.48, uFieldVelocity[index]);
+    float articulation = mix(uFieldPulse[index], uFieldPulse[index] * 0.22, uNoteSuccession);
+    float phrasePressure = uNoteActivity * (0.22 + uNoteVelocity * 0.18) + uNoteSuccession * 0.2;
     float helicalWave = sin(shellCoordinate * pitchScale - axial * (1.55 + uFieldPitch[index] * 2.2) - time * 1.35 + uFieldPhase[index]);
     float counterWave = cos(shellCoordinate * (pitchScale + 2.1) + axial * 3.4 + time * 0.83 + uFieldPhase[index]);
-    warpedPoint += tangent * helicalWave * envelope * velocityPressure * (0.13 + uFieldPulse[index] * 0.48);
+    warpedPoint += tangent * helicalWave * envelope * velocityPressure * (0.13 + phrasePressure);
     warpedPoint += axis * counterWave * envelope * (0.055 + uFieldVelocity[index] * 0.085);
     float caustic = exp(-abs(shellCoordinate + sin(axial * 2.7 + time) * 0.18) * 1.15 - abs(axial) * 0.42);
     float broken = pow(0.5 + 0.5 * sin(shellCoordinate * (7.0 + uFieldPitch[index] * 7.0) + axial * 6.0 - time * 2.4 + uFieldPhase[index]), mix(7.0, 16.0, uFieldVelocity[index]));
-    float contribution = caustic * (0.055 + broken * (0.28 + uFieldVelocity[index] * 0.46) + uFieldPulse[index] * (0.65 + uFieldVelocity[index] * 1.45)) * envelope;
+    float contribution = caustic * (0.055 + broken * (0.28 + uFieldVelocity[index] * 0.46) + articulation * (0.42 + uFieldVelocity[index] * 0.78) + phrasePressure * 0.52) * envelope;
     fieldFlux += contribution;
     fieldColor += uFieldColor[index] * contribution;
   }
@@ -337,12 +357,13 @@ void main() {
   float darknessFalloff = exp(-pow(fieldRadius * mix(1.5, 1.05, uNoteActivity) * mix(1.0, 1.45, uNoteSilence), 1.55));
   float erosionA = 0.5 + 0.5 * sin(fieldAngle * 9.0 + log(fieldRadius) * 5.2 - time * 0.46 + sharedPhase * 1.7);
   float erosionB = 0.5 + 0.5 * sin(fieldUv.x * 17.0 - fieldUv.y * 13.0 + time * 0.31 + projectedContour * 8.0);
-  float continuity = smoothstep(0.36, 0.76, erosionA * 0.68 + erosionB * 0.32 + projectedContour * 0.38 + uBeatPulse * 0.12);
+  float sustainedBeat = mix(uBeatPulse, max(uBeatPulse * 0.24, uNoteActivity * 0.78), uNoteSuccession);
+  float continuity = smoothstep(0.36, 0.76, erosionA * 0.68 + erosionB * 0.32 + projectedContour * 0.38 + sustainedBeat * 0.12);
   float fieldGate = densityGate * darknessFalloff * continuity;
   float beatWave = 0.68 + 0.32 * sin(fieldRadius * 24.0 - time * 3.2 + sharedPhase);
   float caustic = (spiralA * 0.68 + spiralB * 0.46 + branch * spiralA * 0.84) * fieldGate * uParticlePlasma;
   vec3 fieldColor = mix(vec3(0.28, 0.82, 1.0), vec3(0.12, 0.56, 0.84), clamp(fieldRadius * 0.42, 0.0, 1.0));
-  float pulseReveal = mix(0.025, 0.11, uNoteActivity) + (0.72 + uNoteVelocity * 0.34) * smoothstep(0.02, 0.72, uBeatPulse);
+  float pulseReveal = mix(0.025, 0.11, uNoteActivity) + (0.72 + uNoteVelocity * 0.34) * smoothstep(0.02, 0.72, sustainedBeat);
   color += fieldColor * caustic * (0.46 + projectedField * 0.96) * pulseReveal * (0.82 + uEnergy * beatWave * 0.42);
   float vignette = 1.0 - 0.14 * dot(uv, uv);
   color *= vignette;
@@ -477,7 +498,7 @@ export class AuroraScene {
     this.#compositeScene.add(new Mesh(new PlaneGeometry(2, 2), this.#compositeMaterial));
   }
 
-  #updateFieldOperators(time: number): void {
+  #updateFieldOperators(time: number, musical: AuroraMusicalState): void {
     const coils = this.#performance.statics.coils;
     const nextIndex = coils.findIndex((coil) => coil.t >= time - 1e-6);
     const anchor = nextIndex < 0 ? coils.length - 1 : nextIndex;
@@ -498,15 +519,16 @@ export class AuroraScene {
         this.#fieldVelocity[slot] = 0;
         continue;
       }
-      const relative = coilIndex - anchor;
-      const presence = relative < -1 ? 0.18 : relative <= 3 ? 1 - Math.max(0, relative) * 0.14 : 0.18;
+      const temporalDistance = Math.abs(time - coil.t);
+      const temporalReach = coil.t < time ? 0.72 : 1.05;
+      const presence = Math.exp(-temporalDistance / temporalReach) * (1 - musical.succession * 0.34);
       const pulse = Math.exp(-Math.abs(time - coil.t) * 8.5);
       const color = new Color(coil.color);
       this.#fieldCenters[slot]!.set(...coil.center);
       this.#fieldAxes[slot]!.set(...coil.axis).normalize();
       this.#fieldColors[slot]!.set(color.r, color.g, color.b);
       this.#fieldRadii[slot] = coil.radius;
-      this.#fieldPresence[slot] = Math.min(1, presence + pulse * 0.45);
+      this.#fieldPresence[slot] = Math.min(1, presence + pulse * (0.34 - musical.succession * 0.25));
       this.#fieldPulse[slot] = pulse;
       this.#fieldPhase[slot] = coilIndex * 1.61803398875 + coil.pitch * 0.071;
       this.#fieldPitch[slot] = normalizedPitch(this.#musicalRange, coil.pitch);
@@ -524,7 +546,7 @@ export class AuroraScene {
     const cameraOffset = new Vector3(5.2, 3.4, 7.6).multiplyScalar(this.tuning.cameraDistance).addScaledVector(direction, -2.5 * this.tuning.cameraDistance);
     const cameraPosition = position.clone().add(cameraOffset);
     const cameraTarget = position.clone().addScaledVector(direction, 0.75);
-    this.#updateFieldOperators(time);
+    this.#updateFieldOperators(time, musical);
     for (let index = 0; index < TRAIL_FIELD_COUNT; index += 1) {
       const sample = sampleAuroraParticle(this.#performance.statics.route, Math.max(0, time - (index + 1) * 0.075));
       this.#wakePositions[index]!.set(...sample.position);
