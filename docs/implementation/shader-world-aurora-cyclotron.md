@@ -180,6 +180,16 @@ Musical data shapes the shared medium rather than decorating it after rendering:
   isolated notes remain individually legible. Distance from the nearest note
   creates a separate silence signal that slows and thins the field, suppresses
   contours, and opens negative space without freezing procedural motion.
+- Future notes reserve visual energy up to three seconds before arrival. Each
+  one gradually carves a pitch-shaped, velocity-weighted turbulent aperture
+  from the same volumetric medium; fragmented boundary lace makes the space
+  legible without drawing a literal marker. During the final approach the
+  aperture closes and its reserved energy becomes the note bloom. The preview,
+  fill, and afterglow envelopes have zero-value or zero-slope handoffs, so seek
+  and playback produce the same continuous result without runtime tween state.
+  A score-keyed window-entry envelope also fades newly budgeted future fields
+  from zero during dense runs and remains attached to the note as shader slots
+  rotate, preventing preview-window replacement from producing a pop.
 - All musical state is sampled from absolute time, making playback, seeking, and
   offline export produce the same frame at the same timestamp.
 

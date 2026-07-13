@@ -31,6 +31,39 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
+function smootherStep(value: number): number {
+  const clamped = clamp01(value);
+  return clamped * clamped * clamped * (clamped * (clamped * 6 - 15) + 10);
+}
+
+export interface AuroraAnticipationState {
+  aperture: number;
+  fill: number;
+  rim: number;
+}
+
+export function sampleAuroraAnticipation(leadSeconds: number): AuroraAnticipationState {
+  if (leadSeconds >= 0) {
+    const preview = smootherStep((3 - leadSeconds) / 3);
+    const arrival = smootherStep((0.72 - leadSeconds) / 0.72);
+    const aperture = preview * (1 - arrival);
+    return {
+      aperture,
+      fill: preview * arrival,
+      rim: preview * (0.28 + aperture * 0.72),
+    };
+  }
+  const age = -leadSeconds;
+  const afterglow = Math.exp(-((age / 0.62) ** 2));
+  return { aperture: 0, fill: afterglow, rim: afterglow * 0.28 };
+}
+
+export function sampleAuroraFieldWindowFade(coils: readonly AuroraCoil[], coilIndex: number, time: number): number {
+  const entryIndex = coilIndex - (AURORA_VISIBLE_FIELD_COUNT - 2);
+  if (entryIndex < 0 || !coils[entryIndex]) return 1;
+  return smootherStep((time - coils[entryIndex]!.t) / 0.32);
+}
+
 interface AuroraMusicalRange {
   minimumPitch: number;
   maximumPitch: number;
@@ -160,6 +193,9 @@ uniform float uFieldPulse[FIELD_COUNT];
 uniform float uFieldPhase[FIELD_COUNT];
 uniform float uFieldPitch[FIELD_COUNT];
 uniform float uFieldVelocity[FIELD_COUNT];
+uniform float uFieldAperture[FIELD_COUNT];
+uniform float uFieldFill[FIELD_COUNT];
+uniform float uFieldRim[FIELD_COUNT];
 uniform vec3 uWakePosition[TRAIL_COUNT];
 uniform float uWakeStrength[TRAIL_COUNT];
 
@@ -218,8 +254,9 @@ vec3 backgroundField(vec3 rayDirection, float time) {
   return color * basin * folded * 0.18 * uAurora * phraseBreath + vec3(0.001, 0.003, 0.008);
 }
 
-void applyFieldOperators(vec3 worldPoint, float time, inout vec3 warpedPoint, out float fieldFlux, out vec3 fieldColor) {
+void applyFieldOperators(vec3 worldPoint, float time, inout vec3 warpedPoint, out float fieldFlux, out float futureVoid, out vec3 fieldColor) {
   fieldFlux = 0.0;
+  futureVoid = 0.0;
   fieldColor = vec3(0.0);
   for (int index = 0; index < FIELD_COUNT; index++) {
     if (index >= uFieldCount) break;
@@ -232,6 +269,9 @@ void applyFieldOperators(vec3 worldPoint, float time, inout vec3 warpedPoint, ou
     vec3 tangent = normalize(cross(axis, radialDirection));
     float shellCoordinate = radial - uFieldRadius[index];
     float envelope = exp(-length(local) * 0.62) * uFieldPresence[index];
+    float previewReach = exp(-length(local) * 0.44) * uFieldRim[index];
+    float apertureEnvelope = exp(-length(local) * 0.38) * uFieldAperture[index];
+    float fillEnvelope = exp(-length(local) * 0.52) * uFieldFill[index];
     float pitchScale = mix(2.35, 5.8, uFieldPitch[index]);
     float velocityPressure = mix(0.68, 1.48, uFieldVelocity[index]);
     float articulation = mix(uFieldPulse[index], uFieldPulse[index] * 0.22, uNoteSuccession);
@@ -240,9 +280,14 @@ void applyFieldOperators(vec3 worldPoint, float time, inout vec3 warpedPoint, ou
     float counterWave = cos(shellCoordinate * (pitchScale + 2.1) + axial * 3.4 + time * 0.83 + uFieldPhase[index]);
     warpedPoint += tangent * helicalWave * envelope * velocityPressure * (0.13 + phrasePressure);
     warpedPoint += axis * counterWave * envelope * (0.055 + uFieldVelocity[index] * 0.085);
+    warpedPoint += tangent * counterWave * apertureEnvelope * (0.035 + uFieldPitch[index] * 0.035);
     float caustic = exp(-abs(shellCoordinate + sin(axial * 2.7 + time) * 0.18) * 1.15 - abs(axial) * 0.42);
     float broken = pow(0.5 + 0.5 * sin(shellCoordinate * (7.0 + uFieldPitch[index] * 7.0) + axial * 6.0 - time * 2.4 + uFieldPhase[index]), mix(7.0, 16.0, uFieldVelocity[index]));
-    float contribution = caustic * (0.055 + broken * (0.28 + uFieldVelocity[index] * 0.46) + articulation * (0.42 + uFieldVelocity[index] * 0.78) + phrasePressure * 0.52) * envelope;
+    float previewLace = pow(0.5 + 0.5 * sin(shellCoordinate * (3.8 + uFieldPitch[index] * 5.6) - axial * (2.4 + uFieldPitch[index] * 3.2) + time * 0.34 + uFieldPhase[index]), 11.0);
+    float previewContribution = previewLace * previewReach * (0.08 + uFieldVelocity[index] * 0.12);
+    float arrivalContribution = broken * fillEnvelope * (0.15 + uFieldVelocity[index] * 0.3);
+    float contribution = caustic * (0.055 + broken * (0.28 + uFieldVelocity[index] * 0.46) + articulation * (0.42 + uFieldVelocity[index] * 0.78) + phrasePressure * 0.52) * envelope + previewContribution + arrivalContribution;
+    futureVoid += apertureEnvelope * (0.32 + previewLace * 0.46) * (0.72 + uFieldVelocity[index] * 0.28);
     fieldFlux += contribution;
     fieldColor += uFieldColor[index] * contribution;
   }
@@ -283,8 +328,9 @@ void main() {
     vec3 worldPoint = uCameraPosition + rayDirection * depth;
     vec3 warpedPoint = worldPoint * 0.34 * pitchScale;
     float fieldFlux;
+    float futureVoid;
     vec3 fieldTint;
-    applyFieldOperators(worldPoint, time, warpedPoint, fieldFlux, fieldTint);
+    applyFieldOperators(worldPoint, time, warpedPoint, fieldFlux, futureVoid, fieldTint);
     float wakeDensity;
     applyWake(worldPoint, time, warpedPoint, wakeDensity);
     warpedPoint += sin(warpedPoint.yzx * (1.7 + uNotePitch * 2.3) + time * vec3(0.74, -0.53, 0.39)) * uNoteActivity * 0.085;
@@ -312,6 +358,7 @@ void main() {
       0.0,
       1.6
     );
+    fieldPotential *= 1.0 - clamp(futureVoid * 0.68, 0.0, 0.82);
     float contour = exp(-abs(sin(fieldPotential * 9.0 + radialPhase * 0.32 + fracture * 1.8)) * 27.0);
     float density = fieldPotential * 0.31 + contour * fieldPotential * 0.41 + microRidge * fieldPotential * 0.074;
     density *= (0.42 + uEnergy * 0.48) * phrasePressure * velocityPressure;
@@ -433,6 +480,9 @@ export class AuroraScene {
   readonly #fieldPhase = numberArray(AURORA_VISIBLE_FIELD_COUNT);
   readonly #fieldPitch = numberArray(AURORA_VISIBLE_FIELD_COUNT);
   readonly #fieldVelocity = numberArray(AURORA_VISIBLE_FIELD_COUNT);
+  readonly #fieldAperture = numberArray(AURORA_VISIBLE_FIELD_COUNT);
+  readonly #fieldFill = numberArray(AURORA_VISIBLE_FIELD_COUNT);
+  readonly #fieldRim = numberArray(AURORA_VISIBLE_FIELD_COUNT);
   readonly #wakePositions = vectorArray(TRAIL_FIELD_COUNT);
   readonly #wakeStrength = numberArray(TRAIL_FIELD_COUNT);
 
@@ -479,6 +529,9 @@ export class AuroraScene {
         uFieldPhase: { value: this.#fieldPhase },
         uFieldPitch: { value: this.#fieldPitch },
         uFieldVelocity: { value: this.#fieldVelocity },
+        uFieldAperture: { value: this.#fieldAperture },
+        uFieldFill: { value: this.#fieldFill },
+        uFieldRim: { value: this.#fieldRim },
         uWakePosition: { value: this.#wakePositions },
         uWakeStrength: { value: this.#wakeStrength },
       },
@@ -517,11 +570,15 @@ export class AuroraScene {
         this.#fieldPhase[slot] = 0;
         this.#fieldPitch[slot] = 0.5;
         this.#fieldVelocity[slot] = 0;
+        this.#fieldAperture[slot] = 0;
+        this.#fieldFill[slot] = 0;
+        this.#fieldRim[slot] = 0;
         continue;
       }
       const temporalDistance = Math.abs(time - coil.t);
       const temporalReach = coil.t < time ? 0.72 : 1.05;
-      const presence = Math.exp(-temporalDistance / temporalReach) * (1 - musical.succession * 0.34);
+      const windowFade = sampleAuroraFieldWindowFade(coils, coilIndex, time);
+      const presence = Math.exp(-temporalDistance / temporalReach) * (1 - musical.succession * 0.34) * windowFade;
       const pulse = Math.exp(-Math.abs(time - coil.t) * 8.5);
       const color = new Color(coil.color);
       this.#fieldCenters[slot]!.set(...coil.center);
@@ -533,6 +590,10 @@ export class AuroraScene {
       this.#fieldPhase[slot] = coilIndex * 1.61803398875 + coil.pitch * 0.071;
       this.#fieldPitch[slot] = normalizedPitch(this.#musicalRange, coil.pitch);
       this.#fieldVelocity[slot] = normalizedVelocity(this.#musicalRange, coil.energy);
+      const anticipation = sampleAuroraAnticipation(coil.t - time);
+      this.#fieldAperture[slot] = anticipation.aperture * windowFade;
+      this.#fieldFill[slot] = anticipation.fill * windowFade;
+      this.#fieldRim[slot] = anticipation.rim * windowFade;
     }
     this.#volumeMaterial.uniforms.uFieldCount!.value = count;
   }

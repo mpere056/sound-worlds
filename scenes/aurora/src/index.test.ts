@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AuroraCoil } from "@reaper-viz/compiler-aurora";
-import { AURORA_RAYMARCH_SCALE, AURORA_VISIBLE_FIELD_COUNT, AURORA_VOLUME_STEPS, sampleAuroraMusicalState } from "./index.js";
+import { AURORA_RAYMARCH_SCALE, AURORA_VISIBLE_FIELD_COUNT, AURORA_VOLUME_STEPS, sampleAuroraAnticipation, sampleAuroraFieldWindowFade, sampleAuroraMusicalState } from "./index.js";
 
 function coil(t: number, pitch: number, energy: number): AuroraCoil {
   return {
@@ -59,5 +59,32 @@ describe("Aurora musical shader state", () => {
     expect(atBoundary.pitchDirection).toBeCloseTo(0, 5);
     expect(intensified.activity).toBeGreaterThan(atBoundary.activity);
     expect(intensified.succession).toBeGreaterThan(0.75);
+  });
+});
+
+describe("Aurora note anticipation", () => {
+  it("opens a three-second aperture and fills it continuously at arrival", () => {
+    const outsideHorizon = sampleAuroraAnticipation(3.01);
+    const approaching = sampleAuroraAnticipation(1.5);
+    const nearArrival = sampleAuroraAnticipation(0.36);
+    const arrival = sampleAuroraAnticipation(0);
+    const justAfter = sampleAuroraAnticipation(-1e-6);
+
+    expect(outsideHorizon.aperture).toBe(0);
+    expect(approaching.aperture).toBeGreaterThan(0.45);
+    expect(nearArrival.fill).toBeGreaterThan(approaching.fill);
+    expect(arrival.aperture).toBe(0);
+    expect(arrival.fill).toBe(1);
+    expect(Math.abs(arrival.fill - justAfter.fill)).toBeLessThan(1e-9);
+  });
+
+  it("admits a newly visible dense-run field without a window pop", () => {
+    const coils = Array.from({ length: 8 }, (_, index) => coil(index * 0.16, 48 + index, 0.7));
+    const enteringIndex = AURORA_VISIBLE_FIELD_COUNT;
+    const entryTime = coils[enteringIndex - (AURORA_VISIBLE_FIELD_COUNT - 2)]!.t;
+
+    expect(sampleAuroraFieldWindowFade(coils, enteringIndex, entryTime)).toBe(0);
+    expect(sampleAuroraFieldWindowFade(coils, enteringIndex, entryTime + 0.16)).toBeCloseTo(0.5, 5);
+    expect(sampleAuroraFieldWindowFade(coils, enteringIndex, entryTime + 0.32)).toBe(1);
   });
 });
