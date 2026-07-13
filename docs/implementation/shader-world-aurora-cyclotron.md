@@ -130,19 +130,21 @@ and finite-fringe recertification remain.
 
 ### A4 - Aurora shader and scene
 
-**Status: shader graybox implemented.** Aurora Cyclotron is selectable in the
-preview app. Its seek-safe Three.js scene samples the compiled Lorentz route and
-follows the charged particle. The environment uses moving polar-night curtains,
-field interference, and twinkling stars. The particle is a procedural plasma
-surface with animated filaments, spectral Fresnel light, and bounded vertex
-turbulence. Every coil uses shader-driven traveling field packets, fine
-filaments, pulse seams, vertex motion, and a procedural discharge halo. The
-route is an animated phase signal rather than a static line, and trail samples
-use time-varying shader shells. Coil transforms remain fixed to certified field
-geometry; only the visual shell moves. Combined particle and coil displacement
-is `0.018`, below the `0.025` certification margin. The next five coils carry
-the visual hierarchy while passed and distant coils recede. This is still a Q0
-shader treatment, not final art direction.
+**Status: raymarch graybox implemented.** Aurora Cyclotron is selectable in the
+preview app. Its seek-safe renderer passes the compiled Lorentz state, camera,
+particle history, nearby certified coils, energy, and note pulses into one
+iterative signed-distance fragment field. There are no hero sphere, torus,
+trail, or route meshes: the particle, toroidal coils, turbulence, trail, glow,
+material response, log-polar tunnel, folded galaxy field, and stars are generated
+inside the shader. A second shader upscales and applies a restrained filmic
+finish. The expensive field pass runs at half linear resolution, then resolves
+to the full `1080 x 1920` canvas. CPU work only samples deterministic physics and
+updates uniforms. Seven nearby coils retain spatial readability without making
+the raymarch loop scale with full-song note count. Coil transforms remain fixed
+to certified field geometry while their distance fields and emission evolve.
+Combined particle and coil displacement is `0.018`, below the `0.025`
+certification margin. This is still a Q0/Q1 shader treatment, not final art
+direction.
 
 - Render field-aligned aurora curtains, plasma filaments, coil discharge rings,
   and a depth-readable charged trail. Drive shader coordinates from the same

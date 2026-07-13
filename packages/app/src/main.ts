@@ -691,8 +691,8 @@ async function loadConcept(concept: string): Promise<void> {
     addTuningBinding(bindingPane, aurora.tuning, "coilGlow", { min: 0, max: 1.5, step: 0.01, label: "Coils" });
     addTuningBinding(bindingPane, aurora.tuning, "trail", { min: 0, max: 1.2, step: 0.01, label: "Trail" });
     addTuningBinding(bindingPane, aurora.tuning, "cameraDistance", { min: 0.65, max: 1.6, step: 0.01, label: "Camera" });
-    sceneLabel.textContent = "Aurora Cyclotron · A2 Physics Graybox";
-    statusTitle.textContent = "Aurora Cyclotron · exact coil crossings";
+    sceneLabel.textContent = "Aurora Cyclotron · A4 Raymarch Field";
+    statusTitle.textContent = "Aurora Cyclotron · raymarched physics field";
     const report = performance.statics.routeReport;
     const particleClearance = report.minimumParticleClearance === null ? "n/a" : report.minimumParticleClearance.toFixed(3);
     const coilClearance = report.minimumCoilSurfaceClearance === null ? "n/a" : report.minimumCoilSurfaceClearance.toFixed(3);
@@ -839,7 +839,7 @@ async function loadProject(id: string): Promise<void> {
   if (project?.concepts.includes("aurora")) {
     const aurora = document.createElement("option");
     aurora.value = "aurora";
-    aurora.textContent = "Aurora Cyclotron · A2 Physics Graybox";
+    aurora.textContent = "Aurora Cyclotron · A4 Raymarch Field";
     options.push(aurora);
   }
   const testPattern = document.createElement("option");
