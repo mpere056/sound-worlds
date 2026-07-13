@@ -130,24 +130,26 @@ and finite-fringe recertification remain.
 
 ### A4 - Aurora shader and scene
 
-**Status: raymarch graybox implemented.** Aurora Cyclotron is selectable in the
-preview app. Its seek-safe renderer passes the compiled Lorentz state, camera,
-particle history, nearby certified coils, energy, and note pulses into one
-iterative signed-distance fragment field. There are no hero sphere, torus,
-trail, or route meshes: the particle, toroidal coils, turbulence, trail, glow,
-material response, log-polar tunnel, folded galaxy field, and stars are generated
-inside the shader. A second shader upscales and applies a restrained filmic
-finish. The expensive field pass runs at half linear resolution, then resolves
-to the full `1080 x 1920` canvas. CPU work only samples deterministic physics and
-updates uniforms. Seven nearby coils retain spatial readability without making
-the raymarch loop scale with full-song note count. Coil transforms remain fixed
-to certified field geometry while their distance fields and emission evolve.
-Combined particle and coil displacement is `0.018`, below the `0.025`
-certification margin. This is still a Q0/Q1 shader treatment, not final art
-direction.
+**Status: abstract volumetric graybox implemented.** Aurora Cyclotron is
+selectable in the preview app. Its seek-safe renderer passes compiled Lorentz
+state, camera, particle history, nearby certified coils, energy, and note pulses
+into one iterative density-field fragment program. It deliberately renders no
+sphere, torus, route line, discrete trail beads, or other recognizable physics
+props. The particle exists visually as a moving folded singularity knot. Coils
+are invisible vector-field operators that curl coordinates and generate broken
+caustic density sheets; they are never drawn as rings. Particle history warps
+the volume into a filament wake. Folded inversion turbulence, log-polar tunnel
+coordinates, interference ridges, note caustics, and front-to-back volumetric
+integration generate the image. A second shader upscales and applies a restrained
+filmic resolve. The expensive volume pass runs at half linear resolution, then
+resolves to the full `1080 x 1920` canvas. CPU work only samples deterministic
+physics and updates uniforms. Six nearby field operators keep cost independent
+from full-song note count. Certified geometry continues to govern timing and
+influence placement, but is intentionally not shown literally. This remains a
+Q0/Q1 visual treatment, not final art direction.
 
-- Render field-aligned aurora curtains, plasma filaments, coil discharge rings,
-  and a depth-readable charged trail. Drive shader coordinates from the same
+- Render field-aligned aurora curtains, plasma filaments, broken coil caustics,
+  and a depth-readable charged wake. Drive shader coordinates from the same
   compiled field basis used by physics.
 - Use a half-resolution volumetric pass plus full-resolution coils and particle.
 - Gate: shader quality changes cannot alter crossing positions or timing.
