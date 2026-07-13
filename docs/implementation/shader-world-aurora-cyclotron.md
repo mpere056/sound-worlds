@@ -154,7 +154,10 @@ illuminated contours of that density, and beat light is a wave travelling throug
 those contours. Screen-space detail may refine the volume, but must be centered on
 the projected physics singularity, gated by integrated field density, and warped
 by the same phase. It must never read as an independent shader laid over the
-volume. Future multitrack work should assign voices to field modes or spatial
+volume. Contours remain fragmented and faint between notes; exact compiled coil
+pulses may briefly reveal them only where local volumetric luminance is already
+present, with nonlinear distance falloff dissolving them into the surrounding
+darkness. Future multitrack work should assign voices to field modes or spatial
 regions within this shared medium rather than stacking unrelated visual systems.
 
 - Render field-aligned aurora curtains, plasma filaments, broken coil caustics,

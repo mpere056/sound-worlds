@@ -34,6 +34,7 @@ varying vec2 vUv;
 uniform vec2 uResolution;
 uniform float uTime;
 uniform float uEnergy;
+uniform float uBeatPulse;
 uniform float uFieldMotion;
 uniform float uAurora;
 uniform float uParticlePlasma;
@@ -228,11 +229,18 @@ void main() {
   float spiralB = exp(-abs(sin(fieldAngle * 5.0 - log(fieldRadius) * 11.0 + time * 0.83 - sharedPhase * 0.72)) * 63.0);
   float branchPhase = fieldUv.x * 24.0 + sin(fieldUv.y * 13.0 - time + sharedPhase) * 3.8;
   float branch = exp(-abs(sin(branchPhase + time * 0.62)) * 60.0);
-  float fieldGate = smoothstep(0.001, 0.06, projectedField) * exp(-fieldRadius * (0.62 + 0.1 / (0.16 + projectedField)));
+  float volumeLuminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
+  float densityGate = smoothstep(0.018, 0.34, volumeLuminance) * smoothstep(0.004, 0.12, projectedField);
+  float darknessFalloff = exp(-pow(fieldRadius * 1.22, 1.55));
+  float erosionA = 0.5 + 0.5 * sin(fieldAngle * 9.0 + log(fieldRadius) * 5.2 - time * 0.46 + sharedPhase * 1.7);
+  float erosionB = 0.5 + 0.5 * sin(fieldUv.x * 17.0 - fieldUv.y * 13.0 + time * 0.31 + projectedContour * 8.0);
+  float continuity = smoothstep(0.36, 0.76, erosionA * 0.68 + erosionB * 0.32 + projectedContour * 0.38 + uBeatPulse * 0.12);
+  float fieldGate = densityGate * darknessFalloff * continuity;
   float beatWave = 0.68 + 0.32 * sin(fieldRadius * 24.0 - time * 3.2 + sharedPhase);
   float caustic = (spiralA * 0.68 + spiralB * 0.46 + branch * spiralA * 0.84) * fieldGate * uParticlePlasma;
   vec3 fieldColor = mix(vec3(0.28, 0.82, 1.0), vec3(0.12, 0.56, 0.84), clamp(fieldRadius * 0.42, 0.0, 1.0));
-  color += fieldColor * caustic * (0.58 + projectedField * 1.18) * (0.74 + uEnergy * beatWave * 0.58);
+  float pulseReveal = 0.08 + 0.92 * smoothstep(0.02, 0.72, uBeatPulse);
+  color += fieldColor * caustic * (0.46 + projectedField * 0.96) * pulseReveal * (0.82 + uEnergy * beatWave * 0.42);
   float vignette = 1.0 - 0.14 * dot(uv, uv);
   color *= vignette;
   color *= 1.35;
@@ -319,6 +327,7 @@ export class AuroraScene {
         uResolution: { value: new Vector2(volumeWidth, volumeHeight) },
         uTime: { value: 0 },
         uEnergy: { value: 0 },
+        uBeatPulse: { value: 0 },
         uFieldMotion: { value: this.tuning.fieldMotion },
         uAurora: { value: this.tuning.aurora },
         uParticlePlasma: { value: this.tuning.particlePlasma },
@@ -359,6 +368,7 @@ export class AuroraScene {
     const anchor = nextIndex < 0 ? coils.length - 1 : nextIndex;
     const start = Math.max(0, Math.min(coils.length - AURORA_VISIBLE_FIELD_COUNT, anchor - 2));
     const count = Math.min(AURORA_VISIBLE_FIELD_COUNT, coils.length - start);
+    let beatPulse = 0;
     for (let slot = 0; slot < AURORA_VISIBLE_FIELD_COUNT; slot += 1) {
       const coilIndex = start + slot;
       const coil = slot < count ? coils[coilIndex] : undefined;
@@ -375,6 +385,7 @@ export class AuroraScene {
       const relative = coilIndex - anchor;
       const presence = relative < -1 ? 0.18 : relative <= 3 ? 1 - Math.max(0, relative) * 0.14 : 0.18;
       const pulse = Math.exp(-Math.abs(time - coil.t) * 8.5);
+      beatPulse = Math.max(beatPulse, pulse);
       const color = new Color(coil.color);
       this.#fieldCenters[slot]!.set(...coil.center);
       this.#fieldAxes[slot]!.set(...coil.axis).normalize();
@@ -385,6 +396,7 @@ export class AuroraScene {
       this.#fieldPhase[slot] = coilIndex * 1.61803398875 + coil.pitch * 0.071;
     }
     this.#volumeMaterial.uniforms.uFieldCount!.value = count;
+    this.#volumeMaterial.uniforms.uBeatPulse!.value = beatPulse;
   }
 
   renderFrame(time: number): void {
