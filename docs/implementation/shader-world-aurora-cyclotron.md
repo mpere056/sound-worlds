@@ -190,6 +190,17 @@ Musical data shapes the shared medium rather than decorating it after rendering:
   A score-keyed window-entry envelope also fades newly budgeted future fields
   from zero during dense runs and remains attached to the note as shader slots
   rotate, preventing preview-window replacement from producing a pop.
+- A permanent world-anchored reference weave provides spatial memory and
+  parallax through both notes and silence. It is generated from the same folded
+  field equations and palette as the hero volume, so it reads as deeper strata
+  of one medium rather than a separate starfield or overlay. Future apertures
+  remove energy from the weave, while current field contours bend and relight
+  it, making anticipation and impact easier to perceive.
+- Notes also produce analytic attack-decay force impulses. Their integrated
+  displacement advects the reference weave forward, velocity controls thrust,
+  and pitch contributes a smaller lateral drift. A quiet baseline continues
+  through silence, so the scene always flows; note force accelerates that
+  existing travel instead of starting or stopping movement abruptly.
 - All musical state is sampled from absolute time, making playback, seeking, and
   offline export produce the same frame at the same timestamp.
 

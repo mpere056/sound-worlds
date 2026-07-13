@@ -42,6 +42,12 @@ export interface AuroraAnticipationState {
   rim: number;
 }
 
+export interface AuroraTravelState {
+  distance: number;
+  force: number;
+  lateral: number;
+}
+
 export function sampleAuroraAnticipation(leadSeconds: number): AuroraAnticipationState {
   if (leadSeconds >= 0) {
     const preview = smootherStep((3 - leadSeconds) / 3);
@@ -93,6 +99,29 @@ function normalizedVelocity(range: AuroraMusicalRange, velocity: number): number
   if (range.maximumVelocity - range.minimumVelocity < 0.05) return clamp01(velocity);
   const relative = (velocity - range.minimumVelocity) / (range.maximumVelocity - range.minimumVelocity);
   return clamp01(relative * 0.76 + velocity * 0.24);
+}
+
+export function sampleAuroraTravelState(coils: readonly AuroraCoil[], time: number): AuroraTravelState {
+  const range = musicalRange(coils);
+  const attack = 0.09;
+  const decay = 0.72;
+  const combined = (attack * decay) / (attack + decay);
+  let distance = Math.max(0, time) * 0.34;
+  let force = 0;
+  let lateral = 0;
+  for (const coil of coils) {
+    const age = time - coil.t;
+    if (age < 0) continue;
+    const velocity = normalizedVelocity(range, coil.energy);
+    const pitch = normalizedPitch(range, coil.pitch);
+    const amplitude = 0.24 + velocity * 0.56;
+    const impulse = Math.exp(-age / decay) - Math.exp(-age / combined);
+    const displacement = decay * (1 - Math.exp(-age / decay)) - combined * (1 - Math.exp(-age / combined));
+    force += amplitude * impulse;
+    distance += amplitude * displacement;
+    lateral += (pitch - 0.5) * amplitude * displacement * 0.62;
+  }
+  return { distance, force: Math.min(2.4, force), lateral };
 }
 
 export function sampleAuroraMusicalState(coils: readonly AuroraCoil[], time: number): AuroraMusicalState {
@@ -176,6 +205,9 @@ uniform float uNoteVelocity;
 uniform float uNoteActivity;
 uniform float uNoteSuccession;
 uniform float uNoteSilence;
+uniform float uTravelDistance;
+uniform float uTravelForce;
+uniform float uTravelLateral;
 uniform float uFieldMotion;
 uniform float uAurora;
 uniform float uParticlePlasma;
@@ -254,6 +286,35 @@ vec3 backgroundField(vec3 rayDirection, float time) {
   return color * basin * folded * 0.18 * uAurora * phraseBreath + vec3(0.001, 0.003, 0.008);
 }
 
+vec3 referenceWeave(vec3 rayDirection, float time) {
+  vec3 forward = normalize(uCameraTarget - uCameraPosition);
+  vec3 referenceUp = abs(forward.y) < 0.92 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+  vec3 right = normalize(cross(forward, referenceUp));
+  vec3 weaveColor = vec3(0.0);
+  vec3 sharedPoint = uCameraPosition * 0.19 + rayDirection * 15.0 + forward * uTravelDistance * 0.5 + right * uTravelLateral;
+  float sharedFold = foldedField(sharedPoint * 0.14, time * 0.028);
+  for (int layer = 0; layer < 4; layer++) {
+    float layerIndex = float(layer);
+    float depth = 8.0 + layerIndex * 5.4;
+    vec3 point = uCameraPosition * 0.19 + rayDirection * depth;
+    point += forward * uTravelDistance * (0.42 + layerIndex * 0.08);
+    point += right * uTravelLateral * (0.9 + layerIndex * 0.13);
+    float slowTime = time * (0.025 + layerIndex * 0.006);
+    point += sin(point.yzx * (0.21 + layerIndex * 0.027) + slowTime) * (0.7 + uTravelForce * 0.18);
+    float fold = sharedFold + sin(dot(point, vec3(0.07, -0.09, 0.11)) + layerIndex * 1.31 + slowTime) * 0.24;
+    float strandA = exp(-abs(sin(dot(point, vec3(0.31, 0.23, 0.17)) + fold * 3.8 + layerIndex * 1.7)) * 14.0);
+    float strandB = exp(-abs(sin(dot(point, vec3(-0.19, 0.27, 0.35)) - fold * 4.6 - layerIndex * 0.9)) * 17.0);
+    float broken = 0.34 + 0.66 * pow(0.5 + 0.5 * sin(fold * 7.0 + dot(point, vec3(0.09, -0.12, 0.07))), 5.0);
+    float stratum = exp(-abs(sin(fold * 4.2 + dot(point, vec3(0.065, -0.052, 0.078)) + layerIndex * 1.13)) * 8.0);
+    float weave = (strandA * 0.68 + strandB * 0.52 + strandA * strandB * 0.85 + stratum * 0.5) * broken;
+    vec3 lowColor = vec3(0.07, 0.31, 0.25);
+    vec3 highColor = vec3(0.065, 0.24, 0.5);
+    vec3 layerColor = mix(lowColor, highColor, clamp(uNotePitch * 0.7 + layerIndex * 0.08, 0.0, 1.0));
+    weaveColor += layerColor * weave * (0.34 - layerIndex * 0.038);
+  }
+  return weaveColor * (0.72 + uTravelForce * 0.42);
+}
+
 void applyFieldOperators(vec3 worldPoint, float time, inout vec3 warpedPoint, out float fieldFlux, out float futureVoid, out vec3 fieldColor) {
   fieldFlux = 0.0;
   futureVoid = 0.0;
@@ -323,6 +384,7 @@ void main() {
   float transmittance = 1.0;
   float projectedField = 0.0;
   float projectedContour = 0.0;
+  float projectedVoid = 0.0;
   float depth = 0.15;
   for (int stepIndex = 0; stepIndex < VOLUME_STEPS; stepIndex++) {
     vec3 worldPoint = uCameraPosition + rayDirection * depth;
@@ -378,12 +440,17 @@ void main() {
     color += transmittance * emission * density * stepLength * 0.8;
     projectedField += transmittance * fieldPotential * density * stepLength;
     projectedContour += transmittance * contour * fieldPotential * density * stepLength;
+    projectedVoid += transmittance * futureVoid * stepLength * 0.18;
     transmittance *= exp(-density * stepLength * 0.34);
     depth += stepLength;
     if (transmittance < 0.025 || depth > 30.0) break;
   }
 
+  vec3 permanentWeave = referenceWeave(rayDirection, time);
+  permanentWeave *= 1.0 - clamp(projectedVoid * 0.52, 0.0, 0.72);
+  permanentWeave *= 0.78 + clamp(projectedField * 0.32 + projectedContour * 0.18, 0.0, 0.52);
   color += backgroundField(rayDirection, time) * transmittance;
+  color += permanentWeave * (0.28 + transmittance * 0.72);
   vec3 singularityOffset = uSingularityPosition - uCameraPosition;
   float singularityDepth = max(0.25, dot(singularityOffset, forward));
   vec2 singularityUv = vec2(dot(singularityOffset, right), dot(singularityOffset, up)) / (singularityDepth * 0.55);
@@ -512,6 +579,9 @@ export class AuroraScene {
         uNoteActivity: { value: 0 },
         uNoteSuccession: { value: 0 },
         uNoteSilence: { value: 1 },
+        uTravelDistance: { value: 0 },
+        uTravelForce: { value: 0 },
+        uTravelLateral: { value: 0 },
         uFieldMotion: { value: this.tuning.fieldMotion },
         uAurora: { value: this.tuning.aurora },
         uParticlePlasma: { value: this.tuning.particlePlasma },
@@ -601,6 +671,7 @@ export class AuroraScene {
   renderFrame(time: number): void {
     const energy = energyAt(this.#performance, time);
     const musical = sampleAuroraMusicalState(this.#performance.statics.coils, time);
+    const travel = sampleAuroraTravelState(this.#performance.statics.coils, time);
     const state = sampleAuroraParticle(this.#performance.statics.route, time);
     const position = new Vector3(...state.position);
     const direction = new Vector3(...state.velocity).normalize();
@@ -623,6 +694,9 @@ export class AuroraScene {
     uniforms.uNoteActivity!.value = musical.activity;
     uniforms.uNoteSuccession!.value = musical.succession;
     uniforms.uNoteSilence!.value = musical.silence;
+    uniforms.uTravelDistance!.value = travel.distance;
+    uniforms.uTravelForce!.value = travel.force;
+    uniforms.uTravelLateral!.value = travel.lateral;
     uniforms.uFieldMotion!.value = this.tuning.fieldMotion;
     uniforms.uAurora!.value = this.tuning.aurora;
     uniforms.uParticlePlasma!.value = this.tuning.particlePlasma;

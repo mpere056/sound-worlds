@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AuroraCoil } from "@reaper-viz/compiler-aurora";
-import { AURORA_RAYMARCH_SCALE, AURORA_VISIBLE_FIELD_COUNT, AURORA_VOLUME_STEPS, sampleAuroraAnticipation, sampleAuroraFieldWindowFade, sampleAuroraMusicalState } from "./index.js";
+import { AURORA_RAYMARCH_SCALE, AURORA_VISIBLE_FIELD_COUNT, AURORA_VOLUME_STEPS, sampleAuroraAnticipation, sampleAuroraFieldWindowFade, sampleAuroraMusicalState, sampleAuroraTravelState } from "./index.js";
 
 function coil(t: number, pitch: number, energy: number): AuroraCoil {
   return {
@@ -86,5 +86,23 @@ describe("Aurora note anticipation", () => {
     expect(sampleAuroraFieldWindowFade(coils, enteringIndex, entryTime)).toBe(0);
     expect(sampleAuroraFieldWindowFade(coils, enteringIndex, entryTime + 0.16)).toBeCloseTo(0.5, 5);
     expect(sampleAuroraFieldWindowFade(coils, enteringIndex, entryTime + 0.32)).toBe(1);
+  });
+});
+
+describe("Aurora note-driven travel", () => {
+  it("turns note energy into a continuous force impulse and lasting travel", () => {
+    const quiet = [coil(0.5, 48, 0.25)];
+    const loud = [coil(0.5, 72, 0.95)];
+    const before = sampleAuroraTravelState(loud, 0.5 - 1e-6);
+    const arrival = sampleAuroraTravelState(loud, 0.5);
+    const accelerating = sampleAuroraTravelState(loud, 0.68);
+    const quietTravel = sampleAuroraTravelState(quiet, 1.4);
+    const loudTravel = sampleAuroraTravelState(loud, 1.4);
+
+    expect(Math.abs(arrival.distance - before.distance)).toBeLessThan(1e-5);
+    expect(arrival.force).toBe(0);
+    expect(accelerating.force).toBeGreaterThan(0);
+    expect(loudTravel.distance).toBeGreaterThan(quietTravel.distance);
+    expect(loudTravel.lateral).toBeGreaterThan(quietTravel.lateral);
   });
 });
