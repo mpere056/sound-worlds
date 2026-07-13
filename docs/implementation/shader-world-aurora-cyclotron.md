@@ -160,10 +160,29 @@ present, with nonlinear distance falloff dissolving them into the surrounding
 darkness. Future multitrack work should assign voices to field modes or spatial
 regions within this shared medium rather than stacking unrelated visual systems.
 
+Musical data shapes the shared medium rather than decorating it after rendering:
+
+- MIDI register controls spatial frequency, contour scale, field color, and the
+  number of visible folds. Pitch movement controls curl handedness and phase
+  rotation, so rising and falling phrases bend the field in opposite directions.
+  Hybrid absolute/per-song normalization preserves register identity while using
+  enough of the visual range for narrow melodic material to remain expressive.
+- Note velocity controls local field pressure, coordinate displacement, contour
+  sharpness, turbulence, brightness, and pulse reach. A soft note must not look
+  like a loud note with reduced opacity. Velocity uses the same hybrid mapping so
+  performances with a narrow dynamic range still produce legible articulation.
+- A deterministic decaying note-memory signal measures recent event density.
+  Rapid succession accumulates pressure, wake density, and fine structure;
+  isolated notes remain individually legible. Distance from the nearest note
+  creates a separate silence signal that slows and thins the field, suppresses
+  contours, and opens negative space without freezing procedural motion.
+- All musical state is sampled from absolute time, making playback, seeking, and
+  offline export produce the same frame at the same timestamp.
+
 - Render field-aligned aurora curtains, plasma filaments, broken coil caustics,
   and a depth-readable charged wake. Drive shader coordinates from the same
   compiled field basis used by physics.
-- Use a half-resolution volumetric pass plus full-resolution coils and particle.
+- Use a half-resolution volumetric pass and full-resolution shader resolve.
 - Gate: shader quality changes cannot alter crossing positions or timing.
 
 ### A5 - Performance and acceptance

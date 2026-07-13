@@ -1,4 +1,4 @@
-import { sampleAuroraParticle, type AuroraPerformance } from "@reaper-viz/compiler-aurora";
+import { sampleAuroraParticle, type AuroraCoil, type AuroraPerformance } from "@reaper-viz/compiler-aurora";
 import { Color, LinearFilter, Mesh, OrthographicCamera, PlaneGeometry, Scene, ShaderMaterial, SRGBColorSpace, Vector2, Vector3, WebGLRenderer, WebGLRenderTarget } from "three";
 
 export type { AuroraPerformance } from "@reaper-viz/compiler-aurora";
@@ -16,6 +16,90 @@ export const AURORA_RAYMARCH_SCALE = 0.5;
 export const AURORA_VISIBLE_FIELD_COUNT = 6;
 export const AURORA_VOLUME_STEPS = 68;
 const TRAIL_FIELD_COUNT = 6;
+
+export interface AuroraMusicalState {
+  pitch: number;
+  pitchDirection: number;
+  velocity: number;
+  beatPulse: number;
+  activity: number;
+  succession: number;
+  silence: number;
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+interface AuroraMusicalRange {
+  minimumPitch: number;
+  maximumPitch: number;
+  minimumVelocity: number;
+  maximumVelocity: number;
+}
+
+function musicalRange(coils: readonly AuroraCoil[]): AuroraMusicalRange {
+  if (!coils.length) return { minimumPitch: 36, maximumPitch: 84, minimumVelocity: 0, maximumVelocity: 1 };
+  const pitches = coils.map((coil) => coil.pitch);
+  const velocities = coils.map((coil) => coil.energy);
+  return {
+    minimumPitch: Math.min(...pitches),
+    maximumPitch: Math.max(...pitches),
+    minimumVelocity: Math.min(...velocities),
+    maximumVelocity: Math.max(...velocities),
+  };
+}
+
+function normalizedPitch(range: AuroraMusicalRange, pitch: number): number {
+  const relative = range.maximumPitch - range.minimumPitch > 1e-6 ? (pitch - range.minimumPitch) / (range.maximumPitch - range.minimumPitch) : 0.5;
+  const absolute = clamp01((pitch - 36) / 48);
+  return clamp01(relative * 0.72 + absolute * 0.28);
+}
+
+function normalizedVelocity(range: AuroraMusicalRange, velocity: number): number {
+  if (range.maximumVelocity - range.minimumVelocity < 0.05) return clamp01(velocity);
+  const relative = (velocity - range.minimumVelocity) / (range.maximumVelocity - range.minimumVelocity);
+  return clamp01(relative * 0.76 + velocity * 0.24);
+}
+
+export function sampleAuroraMusicalState(coils: readonly AuroraCoil[], time: number): AuroraMusicalState {
+  if (!coils.length) return { pitch: 0.5, pitchDirection: 0, velocity: 0, beatPulse: 0, activity: 0, succession: 0, silence: 1 };
+  const range = musicalRange(coils);
+  let currentIndex = 0;
+  for (let index = 0; index < coils.length; index += 1) {
+    if (coils[index]!.t <= time + 1e-9) currentIndex = index;
+    else break;
+  }
+  const current = coils[currentIndex]!;
+  const previous = coils[Math.max(0, currentIndex - 1)]!;
+  const next = coils[Math.min(coils.length - 1, currentIndex + 1)]!;
+  const nearestDistance = Math.min(...coils.map((coil) => Math.abs(time - coil.t)));
+  const gapBefore = currentIndex > 0 ? current.t - previous.t : next.t - current.t;
+  const gapAfter = currentIndex < coils.length - 1 ? next.t - current.t : gapBefore;
+  const localGap = Math.max(0, Math.min(gapBefore || gapAfter, gapAfter || gapBefore));
+  const succession = clamp01((1.05 - localGap) / 0.82);
+  let memory = 0;
+  let beatPulse = 0;
+  for (const coil of coils) {
+    const age = time - coil.t;
+    const velocity = normalizedVelocity(range, coil.energy);
+    if (age >= 0) memory += Math.exp(-age / 0.48) * (0.28 + velocity * 0.72);
+    beatPulse = Math.max(beatPulse, Math.exp(-Math.abs(age) * 8.5) * (0.18 + velocity * 0.82));
+  }
+  const proximity = Math.exp(-nearestDistance / 0.42);
+  const activity = clamp01(memory * 0.42 + succession * proximity * 0.48);
+  const silence = clamp01((nearestDistance - 0.1) / 0.92) * (1 - activity * 0.35);
+  const pitchDirection = Math.max(-1, Math.min(1, (current.pitch - previous.pitch || next.pitch - current.pitch) / 12));
+  return {
+    pitch: normalizedPitch(range, current.pitch),
+    pitchDirection,
+    velocity: normalizedVelocity(range, current.energy),
+    beatPulse: clamp01(beatPulse),
+    activity,
+    succession,
+    silence,
+  };
+}
 
 const FULLSCREEN_VERTEX = `
 varying vec2 vUv;
@@ -35,6 +119,12 @@ uniform vec2 uResolution;
 uniform float uTime;
 uniform float uEnergy;
 uniform float uBeatPulse;
+uniform float uNotePitch;
+uniform float uNotePitchDirection;
+uniform float uNoteVelocity;
+uniform float uNoteActivity;
+uniform float uNoteSuccession;
+uniform float uNoteSilence;
 uniform float uFieldMotion;
 uniform float uAurora;
 uniform float uParticlePlasma;
@@ -50,6 +140,8 @@ uniform float uFieldRadius[FIELD_COUNT];
 uniform float uFieldPresence[FIELD_COUNT];
 uniform float uFieldPulse[FIELD_COUNT];
 uniform float uFieldPhase[FIELD_COUNT];
+uniform float uFieldPitch[FIELD_COUNT];
+uniform float uFieldVelocity[FIELD_COUNT];
 uniform vec3 uWakePosition[TRAIL_COUNT];
 uniform float uWakeStrength[TRAIL_COUNT];
 
@@ -100,10 +192,12 @@ vec3 backgroundField(vec3 rayDirection, float time) {
   vec3 tunnel = vec3(azimuth * 1.45 - time * 0.055, log(max(0.03, radial)) * 1.75 + time * 0.07, rayDirection.z * 2.1);
   float folded = foldedField(tunnel, time * 0.35);
   float basin = exp(-abs(folded - 0.52) * 5.5);
-  vec3 teal = vec3(0.015, 0.27, 0.24);
-  vec3 blue = vec3(0.025, 0.12, 0.35);
-  vec3 color = mix(teal, blue, 0.5 + 0.5 * sin(azimuth * 2.0 + time * 0.08));
-  return color * basin * folded * 0.16 * uAurora + vec3(0.001, 0.003, 0.008);
+  vec3 lowRegister = vec3(0.08, 0.3, 0.22);
+  vec3 highRegister = vec3(0.025, 0.16, 0.46);
+  vec3 color = mix(lowRegister, highRegister, uNotePitch);
+  color *= 0.78 + 0.22 * sin(azimuth * (1.6 + uNotePitch * 2.4) + time * 0.08 + uNotePitchDirection * 1.7);
+  float phraseBreath = mix(0.32, 1.15, uNoteActivity) * mix(1.0, 0.28, uNoteSilence);
+  return color * basin * folded * 0.18 * uAurora * phraseBreath + vec3(0.001, 0.003, 0.008);
 }
 
 void applyFieldOperators(vec3 worldPoint, float time, inout vec3 warpedPoint, out float fieldFlux, out vec3 fieldColor) {
@@ -120,13 +214,15 @@ void applyFieldOperators(vec3 worldPoint, float time, inout vec3 warpedPoint, ou
     vec3 tangent = normalize(cross(axis, radialDirection));
     float shellCoordinate = radial - uFieldRadius[index];
     float envelope = exp(-length(local) * 0.62) * uFieldPresence[index];
-    float helicalWave = sin(shellCoordinate * 3.2 - axial * 2.1 - time * 1.35 + uFieldPhase[index]);
-    float counterWave = cos(shellCoordinate * 5.7 + axial * 3.4 + time * 0.83 + uFieldPhase[index]);
-    warpedPoint += tangent * helicalWave * envelope * (0.18 + uFieldPulse[index] * 0.42);
-    warpedPoint += axis * counterWave * envelope * 0.1;
+    float pitchScale = mix(2.35, 5.8, uFieldPitch[index]);
+    float velocityPressure = mix(0.68, 1.48, uFieldVelocity[index]);
+    float helicalWave = sin(shellCoordinate * pitchScale - axial * (1.55 + uFieldPitch[index] * 2.2) - time * 1.35 + uFieldPhase[index]);
+    float counterWave = cos(shellCoordinate * (pitchScale + 2.1) + axial * 3.4 + time * 0.83 + uFieldPhase[index]);
+    warpedPoint += tangent * helicalWave * envelope * velocityPressure * (0.13 + uFieldPulse[index] * 0.48);
+    warpedPoint += axis * counterWave * envelope * (0.055 + uFieldVelocity[index] * 0.085);
     float caustic = exp(-abs(shellCoordinate + sin(axial * 2.7 + time) * 0.18) * 1.15 - abs(axial) * 0.42);
-    float broken = pow(0.5 + 0.5 * sin(shellCoordinate * 9.0 + axial * 6.0 - time * 2.4 + uFieldPhase[index]), 10.0);
-    float contribution = caustic * (0.08 + broken * 0.5 + uFieldPulse[index] * 1.3) * envelope;
+    float broken = pow(0.5 + 0.5 * sin(shellCoordinate * (7.0 + uFieldPitch[index] * 7.0) + axial * 6.0 - time * 2.4 + uFieldPhase[index]), mix(7.0, 16.0, uFieldVelocity[index]));
+    float contribution = caustic * (0.055 + broken * (0.28 + uFieldVelocity[index] * 0.46) + uFieldPulse[index] * (0.65 + uFieldVelocity[index] * 1.45)) * envelope;
     fieldFlux += contribution;
     fieldColor += uFieldColor[index] * contribution;
   }
@@ -147,6 +243,9 @@ void applyWake(vec3 worldPoint, float time, inout vec3 warpedPoint, out float wa
 
 void main() {
   float time = uTime * uFieldMotion;
+  float pitchScale = mix(0.78, 1.42, uNotePitch);
+  float phrasePressure = mix(0.62, 1.42, uNoteActivity) * (0.88 + uNoteSuccession * 0.28) * mix(1.0, 0.5, uNoteSilence);
+  float velocityPressure = mix(0.58, 1.5, uNoteVelocity);
   vec2 uv = gl_FragCoord.xy / uResolution * 2.0 - 1.0;
   uv.x *= uResolution.x / uResolution.y;
   vec3 forward = normalize(uCameraTarget - uCameraPosition);
@@ -162,22 +261,25 @@ void main() {
   float depth = 0.15;
   for (int stepIndex = 0; stepIndex < VOLUME_STEPS; stepIndex++) {
     vec3 worldPoint = uCameraPosition + rayDirection * depth;
-    vec3 warpedPoint = worldPoint * 0.34;
+    vec3 warpedPoint = worldPoint * 0.34 * pitchScale;
     float fieldFlux;
     vec3 fieldTint;
     applyFieldOperators(worldPoint, time, warpedPoint, fieldFlux, fieldTint);
     float wakeDensity;
     applyWake(worldPoint, time, warpedPoint, wakeDensity);
+    warpedPoint += sin(warpedPoint.yzx * (1.7 + uNotePitch * 2.3) + time * vec3(0.74, -0.53, 0.39)) * uNoteActivity * 0.085;
+    warpedPoint.xy *= rotate2d(uNotePitchDirection * (0.18 + uNoteActivity * 0.24));
 
     vec3 localToSingularity = worldPoint - uSingularityPosition;
     vec3 knotColor;
     float knot = singularityKnot(localToSingularity, time, knotColor) * uParticlePlasma;
     float fold = foldedField(warpedPoint + vec3(time * 0.025, -time * 0.018, time * 0.011), time * 0.3);
-    float radialPhase = length(warpedPoint) * 3.2 + fold * 2.7 - time * 0.55;
+    float radialPhase = length(warpedPoint) * mix(2.45, 5.5, uNotePitch) + fold * (2.2 + uNoteVelocity * 1.4) - time * (0.32 + uNoteActivity * 0.64);
     float filament = pow(0.5 + 0.5 * sin(radialPhase + sin(warpedPoint.y * 4.0 + time) * 1.7), 14.0);
     float fracture = pow(abs(dot(cos(warpedPoint.zxy * 3.7 + time * 0.4), sin(warpedPoint * 3.1 - time * 0.31))), 4.0);
-    float electric = abs(dot(cos(warpedPoint.zxy * 7.3 + time * 0.76), sin(warpedPoint * 6.1 - time * 0.58)));
-    electric = pow(clamp(electric, 0.0, 1.0), 13.0);
+    float electricFrequency = mix(4.8, 9.6, uNotePitch);
+    float electric = abs(dot(cos(warpedPoint.zxy * electricFrequency + time * 0.76), sin(warpedPoint * (electricFrequency * 0.84) - time * 0.58)));
+    electric = pow(clamp(electric, 0.0, 1.0), mix(8.0, 16.0, uNoteVelocity));
     float microRidge = exp(-abs(sin(dot(warpedPoint, vec3(5.7, 7.1, 4.9)) + fold * 4.0 - time * 0.9)) * 22.0);
     float singularEnvelope = exp(-length(localToSingularity) * 0.68);
     float singularVein = abs(dot(cos(localToSingularity.zxy * 4.8 + time), sin(localToSingularity * 6.4 - time * 0.72)));
@@ -185,24 +287,25 @@ void main() {
     float localInfluence = clamp(singularEnvelope * 0.72 + fieldFlux * 1.35 + wakeDensity * 0.8, 0.0, 1.0);
     float localElectric = electric * localInfluence;
     float fieldPotential = clamp(
-      fold * 0.29 + localElectric * 0.68 + wakeDensity * 0.84 +
+      fold * (0.2 + uNoteActivity * 0.16) + localElectric * (0.46 + uNoteVelocity * 0.42) + wakeDensity * (0.48 + uNoteActivity * 0.62) +
       knot * singularEnvelope * 0.62 + singularVein * 0.46 + fieldFlux * 0.94 * uCoilGlow,
       0.0,
       1.6
     );
     float contour = exp(-abs(sin(fieldPotential * 9.0 + radialPhase * 0.32 + fracture * 1.8)) * 27.0);
     float density = fieldPotential * 0.31 + contour * fieldPotential * 0.41 + microRidge * fieldPotential * 0.074;
-    density *= 0.55 + uEnergy * 0.62;
+    density *= (0.42 + uEnergy * 0.48) * phrasePressure * velocityPressure;
     density = clamp(density, 0.0, 0.82);
 
-    vec3 baseColor = mix(vec3(0.02, 0.48, 0.4), vec3(0.09, 0.26, 0.72), 0.5 + 0.5 * sin(foldedField(warpedPoint.yzx, time * 0.2) * 2.0 + time * 0.07));
+    vec3 registerColor = mix(vec3(0.08, 0.58, 0.32), vec3(0.15, 0.42, 0.98), uNotePitch);
+    vec3 baseColor = mix(vec3(0.018, 0.3, 0.26), registerColor, 0.42 + 0.58 * sin(foldedField(warpedPoint.yzx, time * 0.2) * 1.2 + time * 0.07) * 0.5 + 0.29);
     float warmPhase = pow(0.5 + 0.5 * sin(warpedPoint.x * 0.7 + fold + time * 0.12), 9.0) * 0.42;
     vec3 spectralColor = mix(vec3(0.18, 0.78, 1.0), vec3(1.0, 0.5, 0.07), warmPhase);
     vec3 operatorTint = fieldFlux > 0.001 ? fieldTint / fieldFlux : spectralColor;
     vec3 sharedColor = mix(baseColor, spectralColor, clamp(localElectric + contour * 0.38, 0.0, 1.0));
     sharedColor = mix(sharedColor, operatorTint, clamp(fieldFlux * 0.72, 0.0, 0.62));
     sharedColor = mix(sharedColor, knotColor, clamp(knot * singularEnvelope * 0.48, 0.0, 0.58));
-    vec3 emission = sharedColor * fieldPotential * (2.05 + contour * 4.8 + uEnergy * 1.36);
+    vec3 emission = sharedColor * fieldPotential * (1.1 + uNoteVelocity * 1.65 + contour * (2.7 + uNoteVelocity * 3.1) + uEnergy * 0.9);
     emission += sharedColor * microRidge * fieldPotential * 1.2;
     float stepLength = 0.2 + depth * 0.006;
     color += transmittance * emission * density * stepLength * 0.8;
@@ -224,14 +327,14 @@ void main() {
   ) * (0.012 + projectedField * 0.028);
   float fieldRadius = length(fieldUv * vec2(1.0, 1.12)) + 0.018;
   float fieldAngle = atan(fieldUv.y, fieldUv.x);
-  float sharedPhase = projectedField * 6.5 + projectedContour * 13.0;
-  float spiralA = exp(-abs(sin(fieldAngle * 7.0 + log(fieldRadius) * 8.5 - time * 1.15 + sharedPhase)) * 54.0);
-  float spiralB = exp(-abs(sin(fieldAngle * 5.0 - log(fieldRadius) * 11.0 + time * 0.83 - sharedPhase * 0.72)) * 63.0);
+  float sharedPhase = projectedField * 6.5 + projectedContour * 13.0 + uNotePitchDirection * 2.4;
+  float spiralA = exp(-abs(sin(fieldAngle * mix(4.5, 9.5, uNotePitch) + log(fieldRadius) * mix(6.0, 12.5, uNotePitch) - time * 1.15 + sharedPhase)) * mix(42.0, 68.0, uNoteVelocity));
+  float spiralB = exp(-abs(sin(fieldAngle * mix(3.5, 7.0, uNotePitch) - log(fieldRadius) * mix(8.0, 14.0, uNotePitch) + time * 0.83 - sharedPhase * 0.72)) * mix(48.0, 76.0, uNoteVelocity));
   float branchPhase = fieldUv.x * 24.0 + sin(fieldUv.y * 13.0 - time + sharedPhase) * 3.8;
   float branch = exp(-abs(sin(branchPhase + time * 0.62)) * 60.0);
   float volumeLuminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
   float densityGate = smoothstep(0.018, 0.34, volumeLuminance) * smoothstep(0.004, 0.12, projectedField);
-  float darknessFalloff = exp(-pow(fieldRadius * 1.22, 1.55));
+  float darknessFalloff = exp(-pow(fieldRadius * mix(1.5, 1.05, uNoteActivity) * mix(1.0, 1.45, uNoteSilence), 1.55));
   float erosionA = 0.5 + 0.5 * sin(fieldAngle * 9.0 + log(fieldRadius) * 5.2 - time * 0.46 + sharedPhase * 1.7);
   float erosionB = 0.5 + 0.5 * sin(fieldUv.x * 17.0 - fieldUv.y * 13.0 + time * 0.31 + projectedContour * 8.0);
   float continuity = smoothstep(0.36, 0.76, erosionA * 0.68 + erosionB * 0.32 + projectedContour * 0.38 + uBeatPulse * 0.12);
@@ -239,7 +342,7 @@ void main() {
   float beatWave = 0.68 + 0.32 * sin(fieldRadius * 24.0 - time * 3.2 + sharedPhase);
   float caustic = (spiralA * 0.68 + spiralB * 0.46 + branch * spiralA * 0.84) * fieldGate * uParticlePlasma;
   vec3 fieldColor = mix(vec3(0.28, 0.82, 1.0), vec3(0.12, 0.56, 0.84), clamp(fieldRadius * 0.42, 0.0, 1.0));
-  float pulseReveal = 0.08 + 0.92 * smoothstep(0.02, 0.72, uBeatPulse);
+  float pulseReveal = mix(0.025, 0.11, uNoteActivity) + (0.72 + uNoteVelocity * 0.34) * smoothstep(0.02, 0.72, uBeatPulse);
   color += fieldColor * caustic * (0.46 + projectedField * 0.96) * pulseReveal * (0.82 + uEnergy * beatWave * 0.42);
   float vignette = 1.0 - 0.14 * dot(uv, uv);
   color *= vignette;
@@ -292,6 +395,7 @@ export class AuroraScene {
   readonly backendKind = "three";
   readonly tuning: AuroraTuning = { aurora: 0.95, fieldMotion: 1, particlePlasma: 1.05, coilGlow: 0.92, trail: 0.76, cameraDistance: 1 };
   readonly #performance: AuroraPerformance;
+  readonly #musicalRange: AuroraMusicalRange;
   readonly #renderer: WebGLRenderer;
   readonly #camera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
   readonly #volumeScene = new Scene();
@@ -306,11 +410,14 @@ export class AuroraScene {
   readonly #fieldPresence = numberArray(AURORA_VISIBLE_FIELD_COUNT);
   readonly #fieldPulse = numberArray(AURORA_VISIBLE_FIELD_COUNT);
   readonly #fieldPhase = numberArray(AURORA_VISIBLE_FIELD_COUNT);
+  readonly #fieldPitch = numberArray(AURORA_VISIBLE_FIELD_COUNT);
+  readonly #fieldVelocity = numberArray(AURORA_VISIBLE_FIELD_COUNT);
   readonly #wakePositions = vectorArray(TRAIL_FIELD_COUNT);
   readonly #wakeStrength = numberArray(TRAIL_FIELD_COUNT);
 
   constructor(canvas: HTMLCanvasElement, performance: AuroraPerformance) {
     this.#performance = performance;
+    this.#musicalRange = musicalRange(performance.statics.coils);
     this.#renderer = new WebGLRenderer({ canvas, antialias: false, alpha: false });
     this.#renderer.setSize(performance.resolution.w, performance.resolution.h, false);
     this.#renderer.setPixelRatio(1);
@@ -328,6 +435,12 @@ export class AuroraScene {
         uTime: { value: 0 },
         uEnergy: { value: 0 },
         uBeatPulse: { value: 0 },
+        uNotePitch: { value: 0.5 },
+        uNotePitchDirection: { value: 0 },
+        uNoteVelocity: { value: 0 },
+        uNoteActivity: { value: 0 },
+        uNoteSuccession: { value: 0 },
+        uNoteSilence: { value: 1 },
         uFieldMotion: { value: this.tuning.fieldMotion },
         uAurora: { value: this.tuning.aurora },
         uParticlePlasma: { value: this.tuning.particlePlasma },
@@ -343,6 +456,8 @@ export class AuroraScene {
         uFieldPresence: { value: this.#fieldPresence },
         uFieldPulse: { value: this.#fieldPulse },
         uFieldPhase: { value: this.#fieldPhase },
+        uFieldPitch: { value: this.#fieldPitch },
+        uFieldVelocity: { value: this.#fieldVelocity },
         uWakePosition: { value: this.#wakePositions },
         uWakeStrength: { value: this.#wakeStrength },
       },
@@ -368,7 +483,6 @@ export class AuroraScene {
     const anchor = nextIndex < 0 ? coils.length - 1 : nextIndex;
     const start = Math.max(0, Math.min(coils.length - AURORA_VISIBLE_FIELD_COUNT, anchor - 2));
     const count = Math.min(AURORA_VISIBLE_FIELD_COUNT, coils.length - start);
-    let beatPulse = 0;
     for (let slot = 0; slot < AURORA_VISIBLE_FIELD_COUNT; slot += 1) {
       const coilIndex = start + slot;
       const coil = slot < count ? coils[coilIndex] : undefined;
@@ -380,12 +494,13 @@ export class AuroraScene {
         this.#fieldPresence[slot] = 0;
         this.#fieldPulse[slot] = 0;
         this.#fieldPhase[slot] = 0;
+        this.#fieldPitch[slot] = 0.5;
+        this.#fieldVelocity[slot] = 0;
         continue;
       }
       const relative = coilIndex - anchor;
       const presence = relative < -1 ? 0.18 : relative <= 3 ? 1 - Math.max(0, relative) * 0.14 : 0.18;
       const pulse = Math.exp(-Math.abs(time - coil.t) * 8.5);
-      beatPulse = Math.max(beatPulse, pulse);
       const color = new Color(coil.color);
       this.#fieldCenters[slot]!.set(...coil.center);
       this.#fieldAxes[slot]!.set(...coil.axis).normalize();
@@ -394,13 +509,15 @@ export class AuroraScene {
       this.#fieldPresence[slot] = Math.min(1, presence + pulse * 0.45);
       this.#fieldPulse[slot] = pulse;
       this.#fieldPhase[slot] = coilIndex * 1.61803398875 + coil.pitch * 0.071;
+      this.#fieldPitch[slot] = normalizedPitch(this.#musicalRange, coil.pitch);
+      this.#fieldVelocity[slot] = normalizedVelocity(this.#musicalRange, coil.energy);
     }
     this.#volumeMaterial.uniforms.uFieldCount!.value = count;
-    this.#volumeMaterial.uniforms.uBeatPulse!.value = beatPulse;
   }
 
   renderFrame(time: number): void {
     const energy = energyAt(this.#performance, time);
+    const musical = sampleAuroraMusicalState(this.#performance.statics.coils, time);
     const state = sampleAuroraParticle(this.#performance.statics.route, time);
     const position = new Vector3(...state.position);
     const direction = new Vector3(...state.velocity).normalize();
@@ -416,6 +533,13 @@ export class AuroraScene {
     const uniforms = this.#volumeMaterial.uniforms;
     uniforms.uTime!.value = time;
     uniforms.uEnergy!.value = energy;
+    uniforms.uBeatPulse!.value = musical.beatPulse;
+    uniforms.uNotePitch!.value = musical.pitch;
+    uniforms.uNotePitchDirection!.value = musical.pitchDirection;
+    uniforms.uNoteVelocity!.value = musical.velocity;
+    uniforms.uNoteActivity!.value = musical.activity;
+    uniforms.uNoteSuccession!.value = musical.succession;
+    uniforms.uNoteSilence!.value = musical.silence;
     uniforms.uFieldMotion!.value = this.tuning.fieldMotion;
     uniforms.uAurora!.value = this.tuning.aurora;
     uniforms.uParticlePlasma!.value = this.tuning.particlePlasma;
