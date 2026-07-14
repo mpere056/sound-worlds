@@ -5,19 +5,19 @@
 - P0 complete: deterministic source selection, chord grouping, and one deadline per grouped note time.
 - P1 complete: tested passive Snell refraction and active phase-gradient transmission with constant-speed round trips.
 - P2 first pass complete: finite membrane placement, one-contact lookahead, exact crossing and speed audits, overlap clearance, and early-crossing certification.
-- P3 architectural reset complete: there is no hero particle, target chain, folded volume, or central knot. Faceted phase sheets have view-dependent glass edges, aperture bevels, directional etching, and restrained highlight diffraction.
-- P4 material pass complete: refraction bends read without rectangular cutoffs, note contacts launch directional caustic sweeps, and the glass, field, and spectral response share one optical palette.
-- P5 holographic-instrument pivot implemented, visual acceptance pending: seven stationary glass registers accumulate phase masks from the score. One broad coherent field is re-solved through every written register; there are no rendered route segments and the camera never follows a traveler.
-- P5 temporal semantics complete: future notes ghost their assigned register for three seconds, note contact begins a short continuous writing attack, completed masks persist through silence, and repeated register assignments accumulate instead of replacing prior state.
+- P3 architectural reset implemented, visual acceptance pending: there is no hero particle, target chain, folded volume, or central knot. Broad coherent wavefront strands traverse faceted phase sheets; each sheet has view-dependent glass edges, an aperture bevel, and etching aligned to its compiled outgoing direction. Completed sheets persist as the growing score.
+- P4 fourth pass complete: a fixed-orientation gallery camera glides through a continuous score window without chasing ray headings. Independently clipped route segments preserve exact visible bends and hand off continuously at note boundaries.
+- P4 optical-coherence pass complete: carrier phase comes from absolute score time and remains continuous across a bend. Every note launches a deterministic directional caustic sweep across its sheet, while the composite adds restrained highlight diffraction rather than full-screen bloom.
+- P4 bend-legibility pass complete: segment-local light slabs were replaced by Gaussian wave envelopes with soft longitudinal joins. Incoming and outgoing fields meet at full strength on the membrane, the near future fades by optical travel time, and rounded clipped sheets avoid rectangular light cutoffs.
 - P5 compiler stress fixture complete: a deterministic 100-note phrase at roughly 105 ms spacing stays under the 250 ms test budget with positive membrane clearance and no early crossings.
 
 ## Product invariant
 
-Each grouped note writes one bounded phase contribution into one of seven fixed
-glass registers. The contribution persists, and all downstream interference is
-recomputed from the ordered set of written register masks. The compiler's
-certified central ray remains the deterministic source of phase-gradient data,
-but the runtime does not depict that ray as a traveler or route.
+A coherent wavefront crosses one refractive phase membrane at every grouped
+note. Its certified central ray reaches the active aperture intentionally and
+exactly; no membrane is crossed early. The membrane redirects the downstream
+wave without a discontinuity in central-ray position or speed, and the visible
+change in direction is the membrane's authored impulse rather than a target hit.
 
 ## Mathematical model
 
@@ -62,24 +62,24 @@ chromatic spread. Duration maps only to visual decay.
 
 ## Final aesthetic direction
 
-Phaseglass should feel like a monumental holographic computation instrument
-suspended in a vast, dark architectural space. Seven fixed faceted registers
-receive etched phase information while one continuous broad light field passes
-through the entire installation. Pearl-white highlights and restrained
-cyan/amber spectral edges make sheet thickness, transmission, and changing
-interference legible in still frames. No traveling object or sequential target
-is the subject; the accumulated optical memory and its whole-field consequence
-are the subject together.
+Phaseglass should feel like a monumental precision-optics installation
+suspended in a vast, dark architectural space. Its dominant grammar is planar
+and piecewise linear: faceted phase sheets, etched interference patterns, broad
+parallel wavefront strands, and caustics that reorganize downstream only where
+a note membrane applies an authored impulse. Pearl-white highlights and
+restrained cyan/amber spectral edges make sheet thickness, transmission, and
+changing direction legible in still frames. No traveling object is the subject;
+the growing refractive architecture and the light passing through it are the
+subject together.
 
 The next three seconds must read as unfilled optical capacity. Upcoming notes
-appear as low-energy latent etchings in their assigned fixed register. At
-contact, a short writing sweep resolves the new phase contribution and the
-field downstream of that register reorganizes continuously. Completed masks
-remain in the register, so history, present, and preview are states of one
-instrument rather than stacked effects.
+appear as dormant, low-energy sheets connected by the same wave path that will
+illuminate them. At contact, the entire sheet fills, its directional etching
+resolves, and downstream wavefronts visibly agree with its phase gradient.
+Completed sheets remain as a dim glass score. History, present, and preview are
+therefore states of one optical system, not stacked effects.
 
-Avoid hero particles, route-following cameras, target chains, rendered path
-segments, ring-like apertures,
+Avoid hero particles, chase cameras, target chains, ring-like apertures,
 volumetric nebulae, folded fractal fog, central energy knots, circular portals,
 unrestricted rainbow dispersion, milky full-screen bloom, translucent objects
 with no edge definition, and noise that makes every membrane look the same.
@@ -118,15 +118,16 @@ the Q0 physics gate.
 
 - Build a half-resolution fullscreen raymarch pass with a bounded 32-48 steps,
   sparse architectural depth references, and temporal jitter.
-- Render seven fixed faceted registers with phase-gradient etchings, caustics,
-  and note-triggered mask writing sampled from absolute time. Propagate one
-  broad coherent field through the ordered accumulated masks.
+- Render finite faceted membranes with outgoing-direction etchings, caustics,
+  and note-triggered phase filling sampled from absolute time. Render broad
+  coherent wavefront strands over independently clipped, piecewise-linear route
+  segments for recent history and the three-second preview.
 - Gate: disabling shader quality changes appearance only, never geometry.
 
 ### P4 - Scene and camera
 
-- Render persistent depth-readable interference, register frames, and one
-  stationary gallery camera framing the complete installation.
+- Render persistent depth-readable wavefronts, membrane frames, and a
+  fixed-orientation gallery camera translated by a continuous score window.
 - Add app discovery, tuning, scrub, PNG, and short-video export.
 - Gate: arbitrary seeking reproduces identical architecture and shader state.
 
@@ -140,9 +141,8 @@ the Q0 physics gate.
 
 ## Principal risk
 
-The compiler currently solves sequential finite membranes while the runtime
-re-registers their authored phase gradients into a fixed seven-plane optical
-bench. Preserve the compiler's crossing and bounded-gradient certification, but
-do not imply that the displayed fixed planes are literal locations on its
-central-ray route. A later contract revision should emit register masks
-directly once this choreography passes visual acceptance.
+Finite membranes can intersect earlier spans even when their center contacts are
+valid. Reuse Brick Breaker's time-varying occupancy discipline from the start.
+The broad rendered wavefront is a visualization around the certified central
+ray; it must never imply additional physical contacts outside the active finite
+aperture.
