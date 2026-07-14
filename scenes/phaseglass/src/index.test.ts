@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { PhaseglassMembrane, PhaseglassRouteSegment } from "@reaper-viz/compiler-phaseglass";
-import { PHASEGLASS_FUTURE_PATH_COUNT, PHASEGLASS_PATH_SEGMENT_COUNT, PHASEGLASS_RAYMARCH_SCALE, PHASEGLASS_VOLUME_STEPS, PHASEGLASS_VISIBLE_MEMBRANES, samplePhaseglassAnticipation, samplePhaseglassCameraFrame, samplePhaseglassCausticSweep, samplePhaseglassFuturePath, samplePhaseglassFutureSegments, samplePhaseglassHistorySegments, samplePhaseglassMusicalState, samplePhaseglassViewDirection } from "./index.js";
+import type { PhaseglassMembrane } from "@reaper-viz/compiler-phaseglass";
+import { PHASEGLASS_RAYMARCH_SCALE, PHASEGLASS_REGISTER_COUNT, PHASEGLASS_VOLUME_STEPS, PHASEGLASS_VISIBLE_MEMBRANES, samplePhaseglassAnticipation, samplePhaseglassCameraFrame, samplePhaseglassCausticSweep, samplePhaseglassMusicalState, samplePhaseglassRegisters } from "./index.js";
 
 function membrane(t: number, pitch: number, energy: number): PhaseglassMembrane {
   return {
@@ -27,8 +27,7 @@ describe("Phaseglass shader budget", () => {
   it("keeps the first optical field within its planned mobile-shaped budget", () => {
     expect(PHASEGLASS_RAYMARCH_SCALE).toBe(0.5);
     expect(PHASEGLASS_VISIBLE_MEMBRANES).toBeLessThanOrEqual(8);
-    expect(PHASEGLASS_FUTURE_PATH_COUNT).toBeLessThanOrEqual(8);
-    expect(PHASEGLASS_PATH_SEGMENT_COUNT).toBeLessThanOrEqual(10);
+    expect(PHASEGLASS_REGISTER_COUNT).toBe(7);
     expect(PHASEGLASS_VOLUME_STEPS).toBeLessThanOrEqual(52);
   });
 });
@@ -74,102 +73,54 @@ describe("Phaseglass temporal field", () => {
   });
 });
 
-function kinkedRoute(): PhaseglassRouteSegment[] {
-  return [
-    {
-      id: "segment:0", kind: "deadline", deadlineId: "deadline:0", t0: 0, t1: 1,
-      start: { position: [0, 0, 0], direction: [1, 0, 0], speed: 1 },
-      end: { position: [1, 0, 0], direction: [1, 0, 0], speed: 1 },
-    },
-    {
-      id: "segment:1", kind: "deadline", deadlineId: "deadline:1", t0: 1, t1: 2,
-      start: { position: [1, 0, 0], direction: [0, 0, 1], speed: 1 },
-      end: { position: [1, 0, 1], direction: [0, 0, 1], speed: 1 },
-    },
-    {
-      id: "segment:tail", kind: "tail", t0: 2, t1: 4,
-      start: { position: [1, 0, 1], direction: [0, 1, 0], speed: 1 },
-      end: { position: [1, 2, 1], direction: [0, 1, 0], speed: 1 },
-    },
-  ];
-}
-
-describe("Phaseglass route presentation", () => {
-  it("smooths the camera optical axis across an instantaneous phase turn", () => {
-    const route = kinkedRoute();
-    const before = samplePhaseglassViewDirection(route, 1 - 1e-5);
-    const after = samplePhaseglassViewDirection(route, 1 + 1e-5);
-    const dot = before[0] * after[0] + before[1] * after[1] + before[2] * after[2];
-    expect(dot).toBeGreaterThan(0.999999);
-    expect(before[0]).toBeGreaterThan(0.6);
-    expect(before[2]).toBeGreaterThan(0.6);
+describe("Phaseglass holographic registers", () => {
+  it("keeps future notes as previews without writing phase", () => {
+    const registers = samplePhaseglassRegisters([membrane(2, 60, 0.8)], 0);
+    expect(registers).toHaveLength(PHASEGLASS_REGISTER_COUNT);
+    expect(registers[0]!.preview).toBeGreaterThan(0);
+    expect(registers[0]!.written).toBe(0);
+    expect(registers[0]!.phaseDepth).toBe(0);
   });
 
-  it("samples a deterministic three-second future corridor from absolute time", () => {
-    const route = kinkedRoute();
-    const first = samplePhaseglassFuturePath(route, 0.5, 4);
-    const second = samplePhaseglassFuturePath(route, 0.5, 4);
+  it("writes a note smoothly and preserves it through later silence", () => {
+    const notes = [membrane(1, 60, 0.8)];
+    const contact = samplePhaseglassRegisters(notes, 1)[0]!;
+    const writing = samplePhaseglassRegisters(notes, 1.1)[0]!;
+    const late = samplePhaseglassRegisters(notes, 8)[0]!;
+    expect(contact.written).toBe(0);
+    expect(writing.written).toBeGreaterThan(0);
+    expect(late.written).toBe(1);
+    expect(late.phaseDepth).toBeGreaterThan(0);
+  });
+
+  it("accumulates repeated register notes instead of replacing its mask", () => {
+    const notes = Array.from({ length: PHASEGLASS_REGISTER_COUNT + 1 }, (_, index) => membrane(index * 0.25, 48 + index * 3, 0.55 + index * 0.04));
+    const before = samplePhaseglassRegisters(notes, 0.5)[0]!;
+    const after = samplePhaseglassRegisters(notes, 4)[0]!;
+    expect(before.noteCount).toBe(1);
+    expect(after.noteCount).toBe(2);
+    expect(after.phaseDepth).toBeGreaterThan(before.phaseDepth);
+    expect(after.pitch).not.toBe(before.pitch);
+  });
+
+  it("keeps every register value finite and bounded", () => {
+    const notes = Array.from({ length: 80 }, (_, index) => membrane(index * 0.05, 20 + index * 2, index % 2 ? 1 : 0.05));
+    for (const register of samplePhaseglassRegisters(notes, 20)) {
+      expect([...register.gradient, register.phaseDepth, register.transmission, register.pitch, register.velocity, register.written, register.preview].every(Number.isFinite)).toBe(true);
+      expect(Math.hypot(...register.gradient)).toBeLessThanOrEqual(1);
+      expect(register.phaseDepth).toBeGreaterThanOrEqual(0);
+      expect(register.phaseDepth).toBeLessThanOrEqual(1);
+      expect(register.transmission).toBeGreaterThanOrEqual(0);
+      expect(register.transmission).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("uses one stationary installation camera at every score time", () => {
+    const first = samplePhaseglassCameraFrame(1);
+    const second = samplePhaseglassCameraFrame(1);
     expect(second).toEqual(first);
-    expect(first).toHaveLength(PHASEGLASS_FUTURE_PATH_COUNT);
-    expect(first[0]!.position).toEqual([0.5, 0, 0]);
-    expect(first.at(-1)!.t).toBe(3.5);
-    expect(first[0]!.strength).toBeGreaterThan(first.at(-1)!.strength);
-  });
-
-  it("frames a stable architectural window around upcoming optical turns", () => {
-    const route = kinkedRoute();
-    const first = samplePhaseglassCameraFrame(route, 0.5, 4);
-    const second = samplePhaseglassCameraFrame(route, 0.5, 4);
-    expect(second).toEqual(first);
-    expect(first.extent).toBeGreaterThan(0.8);
-    expect(first.target[0]).toBeGreaterThan(0.5);
-    expect(first.target[2]).toBeGreaterThan(0);
-    expect(Math.hypot(
-      first.position[0] - first.target[0],
-      first.position[1] - first.target[1],
-      first.position[2] - first.target[2],
-    )).toBeGreaterThan(first.extent);
-  });
-
-  it("keeps the composed camera continuous through a phase turn", () => {
-    const route = kinkedRoute();
-    const before = samplePhaseglassCameraFrame(route, 1 - 1e-5, 4);
-    const after = samplePhaseglassCameraFrame(route, 1 + 1e-5, 4);
-    expect(Math.hypot(
-      after.position[0] - before.position[0],
-      after.position[1] - before.position[1],
-      after.position[2] - before.position[2],
-    )).toBeLessThan(0.001);
-    expect(Math.hypot(
-      after.target[0] - before.target[0],
-      after.target[1] - before.target[1],
-      after.target[2] - before.target[2],
-    )).toBeLessThan(0.001);
-  });
-
-  it("preserves exact route corners as independently clipped optical segments", () => {
-    const route = kinkedRoute();
-    const future = samplePhaseglassFutureSegments(route, 0.5, 4);
-    const history = samplePhaseglassHistorySegments(route, 1.5);
-    expect(future).toHaveLength(PHASEGLASS_PATH_SEGMENT_COUNT);
-    expect(future[0]!.start).toEqual([0.5, 0, 0]);
-    expect(future[0]!.end).toEqual([1, 0, 0]);
-    expect(future[1]!.start).toEqual([1, 0, 0]);
-    expect(future[1]!.end).toEqual([1, 0, 1]);
-    expect(future[0]!.t1).toBe(future[1]!.t0);
-    expect(history[0]!.end).toEqual(history[1]!.start);
-  });
-
-  it("pads an empty history window only with inert zero-length segments", () => {
-    const history = samplePhaseglassHistorySegments(kinkedRoute(), 0);
-    expect(history).toHaveLength(PHASEGLASS_PATH_SEGMENT_COUNT);
-    expect(history.every((segment) => segment.strength === 0 && segment.start.every((value, index) => value === segment.end[index]))).toBe(true);
-  });
-
-  it("uses one fixed gallery orientation instead of chasing the ray heading", () => {
-    const route = kinkedRoute();
-    const early = samplePhaseglassCameraFrame(route, 0.25, 4);
-    const late = samplePhaseglassCameraFrame(route, 2.5, 4);
-    expect(late.opticalDirection).toEqual(early.opticalDirection);
+    expect(first.target).toEqual([0, 0, 0]);
+    expect(first.extent).toBe(7.4);
+    expect(Math.hypot(...first.position)).toBeCloseTo(17.2, 5);
   });
 });
