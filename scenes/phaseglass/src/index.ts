@@ -76,6 +76,56 @@ export function samplePhaseglassFuturePath(route: readonly PhaseglassRouteSegmen
   });
 }
 
+export interface PhaseglassCameraFrame {
+  position: PhaseglassVec3;
+  target: PhaseglassVec3;
+  opticalDirection: PhaseglassVec3;
+  extent: number;
+}
+
+export function samplePhaseglassCameraFrame(route: readonly PhaseglassRouteSegment[], time: number, durationSec: number, cameraDistance = 1): PhaseglassCameraFrame {
+  const path = samplePhaseglassFuturePath(route, time, durationSec);
+  const signal = path[0]!.position;
+  const opticalDirection = samplePhaseglassViewDirection(route, time);
+  let weightTotal = 0;
+  const corridorCenter: PhaseglassVec3 = [0, 0, 0];
+  for (let index = 0; index < path.length; index += 1) {
+    const weight = 1 / (1 + index * 0.46);
+    weightTotal += weight;
+    corridorCenter[0] += path[index]!.position[0] * weight;
+    corridorCenter[1] += path[index]!.position[1] * weight;
+    corridorCenter[2] += path[index]!.position[2] * weight;
+  }
+  corridorCenter[0] /= weightTotal;
+  corridorCenter[1] /= weightTotal;
+  corridorCenter[2] /= weightTotal;
+  const target: PhaseglassVec3 = [
+    signal[0] * 0.38 + corridorCenter[0] * 0.62,
+    signal[1] * 0.38 + corridorCenter[1] * 0.62,
+    signal[2] * 0.38 + corridorCenter[2] * 0.62,
+  ];
+  const extent = path.reduce((largest, sample) => Math.max(largest, Math.hypot(
+    sample.position[0] - target[0],
+    sample.position[1] - target[1],
+    sample.position[2] - target[2],
+  )), 0);
+  const side = normalizeVec3([opticalDirection[2], 0.16, -opticalDirection[0]], [1, 0, 0]);
+  const distance = Math.max(0.55, cameraDistance);
+  const retreat = (6.2 + Math.min(9, extent) * 0.72) * distance;
+  const lateral = (3.2 + Math.min(7, extent) * 0.22) * distance;
+  const lift = (2.6 + Math.min(7, extent) * 0.16) * distance;
+  return {
+    position: [
+      target[0] - opticalDirection[0] * retreat + side[0] * lateral,
+      target[1] - opticalDirection[1] * retreat + side[1] * lateral + lift,
+      target[2] - opticalDirection[2] * retreat + side[2] * lateral,
+    ],
+    target,
+    opticalDirection,
+    extent,
+  };
+}
+
 interface MusicalRange {
   minPitch: number;
   maxPitch: number;
@@ -190,58 +240,37 @@ uniform float uWakeStrength[WAKE_COUNT];
 uniform vec3 uPathPosition[PATH_COUNT];
 uniform float uPathStrength[PATH_COUNT];
 
-mat2 rotate2d(float angle) {
-  float c = cos(angle), s = sin(angle);
-  return mat2(c, -s, s, c);
-}
-
 float hash31(vec3 point) {
   return fract(sin(dot(point, vec3(127.1, 311.7, 74.7))) * 43758.5453123);
 }
 
-float phaseFold(vec3 point, float time) {
-  vec3 fold = point;
-  float sum = 0.0;
-  float weight = 1.0;
-  for (int octave = 0; octave < 5; octave++) {
-    fold = abs(fold) / clamp(dot(fold, fold), 0.16, 3.8) - vec3(0.72, 0.64, 0.68);
-    fold.xy *= rotate2d(0.31 + float(octave) * 0.13 + time * 0.012);
-    fold.yz *= rotate2d(-0.19 + time * 0.009);
-    sum += exp(-abs(length(fold) - 1.0) * (5.0 + float(octave) * 1.7)) / weight;
-    weight *= 1.65;
+float segmentDistance(vec3 point, vec3 start, vec3 end, out float along) {
+  vec3 delta = end - start;
+  float lengthSquared = max(0.0001, dot(delta, delta));
+  along = clamp(dot(point - start, delta) / lengthSquared, 0.0, 1.0);
+  return length(point - (start + delta * along));
+}
+
+vec3 architecturalField(vec3 rayDirection) {
+  vec3 color = vec3(0.003, 0.006, 0.008);
+  for (int layer = 0; layer < 4; layer++) {
+    float layerIndex = float(layer);
+    float distanceLayer = 10.0 + layerIndex * 7.0;
+    vec3 point = uCameraPosition + rayDirection * distanceLayer;
+    point += vec3(layerIndex * 3.7, -layerIndex * 1.9, layerIndex * 2.3);
+    vec3 cell = abs(fract(point * (0.095 + layerIndex * 0.012)) - 0.5);
+    float frame = exp(-min(min(cell.x, cell.y), cell.z) * (58.0 + layerIndex * 8.0));
+    float slice = exp(-abs(sin(dot(point, vec3(0.071, 0.053, -0.062)) + layerIndex * 1.4)) * 42.0);
+    float facets = frame * (0.22 + slice * 0.78);
+    vec3 layerColor = mix(vec3(0.025, 0.13, 0.15), vec3(0.16, 0.11, 0.055), layerIndex / 3.0);
+    color += layerColor * facets * (0.38 - layerIndex * 0.055);
   }
-  return sum;
+  float horizon = exp(-abs(rayDirection.y + 0.17) * 45.0);
+  color += vec3(0.025, 0.11, 0.13) * horizon * 0.16;
+  return color;
 }
 
-vec3 opalStrata(vec3 point, vec3 rayDirection, float time) {
-  vec3 drifted = point * 0.16 + vec3(0.0, 0.0, time * 0.018);
-  float fold = phaseFold(drifted, time * 0.24);
-  float depthBands = exp(-abs(sin(dot(point, vec3(0.11, 0.075, 0.052)) + fold * 3.2)) * 16.0);
-  float crossBands = exp(-abs(sin(dot(point, vec3(-0.063, 0.13, 0.087)) - fold * 4.1)) * 19.0);
-  float cells = pow(0.5 + 0.5 * sin(fold * 8.0 + dot(point, vec3(0.17, -0.12, 0.09))), 7.0);
-  float reference = (depthBands * 0.72 + crossBands * 0.5 + depthBands * crossBands) * (0.32 + cells * 0.68);
-  float horizon = pow(max(0.0, 1.0 - abs(rayDirection.y + 0.15)), 8.0) * 0.08;
-  vec3 cold = vec3(0.035, 0.18, 0.21);
-  vec3 warm = vec3(0.23, 0.16, 0.08);
-  return mix(cold, warm, pow(cells, 3.0) * 0.44) * (reference * 0.27 + horizon);
-}
-
-float signalKnot(vec3 local, float time, out vec3 color) {
-  vec3 fold = local * (1.2 + uVelocity * 0.35);
-  float lace = 0.0;
-  float scale = 1.0;
-  for (int iteration = 0; iteration < 5; iteration++) {
-    fold = abs(fold) / clamp(dot(fold, fold), 0.11, 4.2) - vec3(0.78, 0.7, 0.74);
-    fold.xz *= rotate2d(time * 0.18 + float(iteration) * 0.39);
-    lace += exp(-abs(length(fold) - 1.08) * (8.0 + float(iteration) * 1.8)) / scale;
-    scale *= 1.48;
-  }
-  float registerShift = pow(0.5 + 0.5 * sin(fold.x * 0.8 + time * 0.1), 6.0);
-  color = mix(vec3(0.55, 0.95, 1.0), vec3(1.0, 0.69, 0.28), clamp(registerShift * 0.38 + uPitch * 0.18, 0.0, 0.58));
-  return lace * exp(-length(local) * (1.5 - uActivity * 0.22));
-}
-
-void evaluateMembranes(vec3 worldPoint, float time, out float glassDensity, out float causticDensity, out float vacancy, out vec3 tint, inout vec3 warpedPoint) {
+void evaluateMembranes(vec3 worldPoint, float time, out float glassDensity, out float causticDensity, out float vacancy, out vec3 tint) {
   glassDensity = 0.0;
   causticDensity = 0.0;
   vacancy = 0.0;
@@ -251,53 +280,59 @@ void evaluateMembranes(vec3 worldPoint, float time, out float glassDensity, out 
     vec3 local = worldPoint - uMembraneCenter[index];
     float plane = dot(local, uMembraneNormal[index]);
     vec2 disc = vec2(dot(local, uMembraneAxisU[index]), dot(local, uMembraneAxisV[index]));
-    float radial = length(disc) / max(0.08, uMembraneRadius[index]);
-    float gate = smoothstep(1.08, 0.62, radial);
-    float edge = exp(-abs(radial - 0.9) * 15.0);
-    float pitchFrequency = mix(5.0, 11.0, uMembranePitch[index]);
-    float phase = atan(disc.y, disc.x) * (2.0 + uMembranePitch[index] * 4.0) + radial * pitchFrequency - time * 0.45 + uMembranePhase[index];
-    float ripple = sin(phase + sin(disc.x * 3.0 - time * 0.27) * 1.4);
-    float sheet = exp(-abs(plane + ripple * 0.035 * gate) * (25.0 + uMembraneVelocity[index] * 18.0)) * gate;
-    float lace = exp(-abs(sin(phase * 1.37 + plane * 19.0)) * mix(24.0, 47.0, uMembraneVelocity[index])) * sheet;
-    float presence = uMembraneFill[index] * 0.82 + uMembraneRim[index] * 0.35;
-    glassDensity += sheet * presence + edge * exp(-abs(plane) * 18.0) * uMembraneRim[index] * 0.42;
-    causticDensity += lace * (0.45 + uMembraneVelocity[index] * 0.9) * presence;
-    float voidField = exp(-abs(plane) * 4.8) * exp(-radial * radial * 1.6) * uMembraneVacancy[index];
+    vec2 sheetCoordinate = disc / max(0.08, uMembraneRadius[index]);
+    vec2 absoluteCoordinate = abs(sheetCoordinate);
+    float faceted = max(max(absoluteCoordinate.x, absoluteCoordinate.y), (absoluteCoordinate.x + absoluteCoordinate.y) * 0.72);
+    float gate = smoothstep(1.08, 0.76, faceted);
+    float edge = exp(-abs(faceted - 0.94) * 34.0);
+    float ripple = sin(disc.x * mix(5.0, 10.0, uMembranePitch[index]) + sin(disc.y * 4.0 - time * 0.2) + uMembranePhase[index]);
+    float sheet = exp(-abs(plane + ripple * 0.018 * gate) * 16.0) * gate;
+    float etchingA = exp(-abs(sin(disc.x * (5.0 + uMembranePitch[index] * 7.0) + disc.y * 2.1 + uMembranePhase[index])) * 32.0);
+    float etchingB = exp(-abs(sin(disc.y * (6.0 + uMembraneVelocity[index] * 5.0) - disc.x * 1.7 - time * 0.24)) * 38.0);
+    float etching = (etchingA * 0.62 + etchingB * 0.48 + etchingA * etchingB) * sheet;
+    float presence = 0.16 + uMembraneVacancy[index] * 0.48 + uMembraneFill[index] * 0.92 + uMembraneRim[index] * 0.45;
+    glassDensity += sheet * presence * 0.38 + edge * exp(-abs(plane) * 15.0) * presence * 0.5;
+    causticDensity += etching * (0.35 + uMembraneVelocity[index] * 1.25) * presence;
+    float voidField = exp(-abs(plane) * 5.5) * exp(-faceted * faceted * 1.45) * uMembraneVacancy[index];
     vacancy += voidField;
-    causticDensity += edge * exp(-abs(plane) * 8.0) * uMembraneVacancy[index] * 0.08;
-    tint += uMembraneColor[index] * (sheet * presence + lace * 0.72 + voidField * 0.12);
-    warpedPoint += uMembraneNormal[index] * ripple * (sheet * presence * (0.025 + uDispersion * 0.035) + voidField * 0.018);
+    tint += uMembraneColor[index] * (sheet * presence + etching * 0.85 + edge * presence * 0.35);
   }
 }
 
-float wakeField(vec3 point) {
+float pastBeam(vec3 point) {
   float field = 0.0;
-  for (int index = 0; index < WAKE_COUNT; index++) {
-    vec3 local = point - uWakePosition[index];
-    float fracture = pow(0.5 + 0.5 * sin(dot(local, vec3(5.7, 4.1, 6.3)) - uTime * 0.62 + float(index)), 5.0);
-    field += exp(-length(local) * 1.25) * (0.24 + fracture * 0.42) * uWakeStrength[index];
+  for (int index = 0; index < WAKE_COUNT - 1; index++) {
+    float along;
+    float distanceToBeam = segmentDistance(point, uWakePosition[index + 1], uWakePosition[index], along);
+    float strength = mix(uWakeStrength[index + 1], uWakeStrength[index], along);
+    float interference = 0.58 + 0.42 * sin(along * 16.0 - uTime * 0.8 + float(index));
+    field += exp(-distanceToBeam * 11.0) * interference * strength;
   }
   return field;
 }
 
-float futureCorridor(vec3 point, out float corridorVacancy) {
-  float caustic = 0.0;
-  corridorVacancy = 0.0;
+float futureBeam(vec3 point) {
+  float field = 0.0;
   for (int index = 0; index < PATH_COUNT - 1; index++) {
-    vec3 start = uPathPosition[index];
-    vec3 delta = uPathPosition[index + 1] - start;
-    float lengthSquared = max(0.0001, dot(delta, delta));
-    float along = clamp(dot(point - start, delta) / lengthSquared, 0.0, 1.0);
-    vec3 nearest = start + delta * along;
-    float distanceToPath = length(point - nearest);
+    float along;
+    float distanceToPath = segmentDistance(point, uPathPosition[index], uPathPosition[index + 1], along);
     float strength = mix(uPathStrength[index], uPathStrength[index + 1], along);
-    float routePhase = sin(dot(nearest, vec3(0.21, -0.17, 0.13)) + uTime * 0.08) * 1.6;
-    float broken = pow(0.5 + 0.5 * sin(along * 22.0 + float(index) * 1.7 - uTime * 0.36 + routePhase), 9.0);
-    float filament = exp(-distanceToPath * 5.2) * broken * strength;
-    caustic += filament;
-    corridorVacancy += exp(-distanceToPath * 1.85) * strength * 0.22;
+    float dash = smoothstep(0.2, 0.82, 0.5 + 0.5 * sin(along * 25.0 + float(index) * 1.3 - uTime * 0.45));
+    field += exp(-distanceToPath * 9.0) * (0.2 + dash * 0.8) * strength;
   }
-  return caustic;
+  return field;
+}
+
+float signalPacket(vec3 point, out vec3 packetColor) {
+  vec3 local = point - uSignalPosition;
+  float longitudinal = dot(local, uSignalDirection);
+  vec3 lateralVector = local - uSignalDirection * longitudinal;
+  float lateral = length(lateralVector);
+  float core = exp(-lateral * (18.0 + uVelocity * 7.0) - abs(longitudinal) * 7.0);
+  float blade = exp(-abs(dot(lateralVector, vec3(0.71, 0.43, -0.55))) * 28.0 - abs(longitudinal) * 4.0) * exp(-length(local) * 2.3);
+  float modulation = 0.72 + 0.28 * sin(longitudinal * 24.0 - uTime * 2.4);
+  packetColor = mix(vec3(0.62, 0.96, 1.0), vec3(1.0, 0.68, 0.24), uPitch * 0.34 + uDispersion * 0.12);
+  return (core + blade * 0.46) * modulation;
 }
 
 void main() {
@@ -308,53 +343,36 @@ void main() {
   if (length(right) < 0.01) right = vec3(1.0, 0.0, 0.0);
   vec3 up = normalize(cross(right, forward));
   vec3 rayDirection = normalize(forward * 1.62 + right * uv.x + up * uv.y);
-  float depth = 0.15 + hash31(vec3(gl_FragCoord.xy, floor(uTime * 60.0))) * 0.07;
-  float transmittance = 1.0;
-  vec3 color = vec3(0.0025, 0.005, 0.007);
-  float projectedVacancy = 0.0;
-  float projectedGlass = 0.0;
+  float depth = 0.12 + hash31(vec3(gl_FragCoord.xy, floor(uTime * 60.0))) * 0.12;
+  vec3 color = architecturalField(rayDirection);
   for (int step = 0; step < VOLUME_STEPS; step++) {
     vec3 point = uCameraPosition + rayDirection * depth;
-    vec3 warpedPoint = point;
     float glassDensity, causticDensity, vacancy;
     vec3 membraneTint;
-    evaluateMembranes(point, uTime, glassDensity, causticDensity, vacancy, membraneTint, warpedPoint);
-    float wake = wakeField(warpedPoint) * uWake;
-    float corridorVacancy;
-    float corridor = futureCorridor(warpedPoint, corridorVacancy);
-    vec3 knotColor;
-    float knot = signalKnot(warpedPoint - uSignalPosition, uTime, knotColor);
-    float sharedPhase = phaseFold(warpedPoint * 0.17 + uSignalDirection * uTime * 0.025, uTime * 0.18);
-    float mist = exp(-abs(sin(sharedPhase * 4.6 + dot(warpedPoint, vec3(0.12, -0.08, 0.1)))) * 9.5) * (0.018 + uActivity * 0.025);
-    mist *= 1.0 - clamp(vacancy * 0.62 + corridorVacancy * 0.24, 0.0, 0.78);
-    float density = mist + glassDensity * (0.12 + uGlass * 0.18) + causticDensity * uCaustics * 0.095 + wake * 0.08 + knot * 0.14 + corridor * 0.055;
-    density *= 0.76 + uEnergy * 0.34 + uPressure * 0.2;
-    vec3 baseTint = mix(vec3(0.055, 0.38, 0.4), vec3(0.16, 0.28, 0.61), uPitch);
-    vec3 glassTint = glassDensity > 0.001 ? membraneTint / max(0.08, glassDensity + causticDensity * 0.7) : baseTint;
-    vec3 emission = baseTint * mist * 0.8;
-    emission += glassTint * glassDensity * (0.8 + uGlass * 1.1);
-    emission += mix(glassTint, vec3(1.0, 0.76, 0.34), uDispersion * 0.28) * causticDensity * (1.3 + uCaustics * 2.2 + uVelocity * 1.2);
-    emission += knotColor * knot * (1.6 + uVelocity * 1.8 + uPulse * 0.8);
-    emission += baseTint * wake * (0.45 + uPressure * 0.5);
-    emission += mix(vec3(0.12, 0.52, 0.58), vec3(0.64, 0.42, 0.16), uPitch * 0.42) * corridor * (0.38 + uActivity * 0.36);
-    float stepLength = 0.21 + depth * 0.006;
-    color += transmittance * emission * density * stepLength;
-    projectedVacancy += transmittance * vacancy * stepLength * 0.12;
-    projectedGlass += transmittance * glassDensity * stepLength;
-    transmittance *= exp(-density * stepLength * 0.5);
+    evaluateMembranes(point, uTime, glassDensity, causticDensity, vacancy, membraneTint);
+    float history = pastBeam(point) * uWake;
+    float preview = futureBeam(point);
+    vec3 packetColor;
+    float packet = signalPacket(point, packetColor);
+    vec3 glassColor = glassDensity > 0.001 ? membraneTint / max(0.12, glassDensity + causticDensity * 0.8) : vec3(0.12, 0.52, 0.56);
+    vec3 previewColor = mix(vec3(0.19, 0.65, 0.69), vec3(0.72, 0.46, 0.16), uPitch * 0.4);
+    vec3 emission = glassColor * glassDensity * (0.7 + uGlass * 1.15);
+    emission += mix(glassColor, vec3(1.0, 0.72, 0.3), uDispersion * 0.3) * causticDensity * (1.2 + uCaustics * 2.4 + uPulse * 0.55);
+    emission += previewColor * preview * (0.55 + uActivity * 0.35);
+    emission += vec3(0.34, 0.78, 0.82) * history * (0.55 + uPressure * 0.45);
+    emission += packetColor * packet * (2.4 + uVelocity * 2.0 + uPulse * 1.1);
+    emission += previewColor * vacancy * 0.055;
+    float density = glassDensity * 0.22 + causticDensity * 0.1 + preview * 0.07 + history * 0.07 + packet * 0.18;
+    float stepLength = 0.23 + depth * 0.006;
+    float integration = 0.18 + smoothstep(0.0, 0.34, density) * 0.82;
+    color += emission * integration * stepLength * (0.86 + uEnergy * 0.3);
     depth += stepLength;
-    if (transmittance < 0.025 || depth > 29.0) break;
+    if (depth > 30.0) break;
   }
-  vec3 reference = opalStrata(uCameraPosition * 0.24 + rayDirection * 9.0, rayDirection, uTime) * 0.72;
-  reference += opalStrata(uCameraPosition * 0.2 + rayDirection * 17.0 + vec3(3.7, -1.1, 2.3), rayDirection, uTime + 7.0) * 0.58;
-  reference += opalStrata(uCameraPosition * 0.16 + rayDirection * 27.0 + vec3(-4.2, 2.6, -1.8), rayDirection, uTime + 13.0) * 0.42;
-  reference *= 1.0 - clamp(projectedVacancy * 0.5, 0.0, 0.68);
-  reference *= 0.72 + clamp(projectedGlass * 0.28, 0.0, 0.55);
-  color += reference * (0.72 + transmittance * 0.68);
   float vignette = 1.0 - 0.16 * dot(uv, uv);
   color *= vignette;
-  color = color / (0.62 + color);
-  color = pow(max(color, 0.0), vec3(0.84));
+  color = color / (0.72 + color);
+  color = pow(max(color, 0.0), vec3(0.88));
   gl_FragColor = vec4(color, 1.0);
 }`;
 
@@ -489,10 +507,10 @@ export class PhaseglassScene {
   renderFrame(time: number): void {
     const state = samplePhaseglassRay(this.#performance.statics.route, time);
     const position = new Vector3(...state.position);
-    const direction = new Vector3(...samplePhaseglassViewDirection(this.#performance.statics.route, time)).normalize();
-    const side = new Vector3(direction.z, 0.15, -direction.x).normalize();
-    const cameraPosition = position.clone().addScaledVector(direction, -4.8 * this.tuning.cameraDistance).addScaledVector(side, 2.6 * this.tuning.cameraDistance).add(new Vector3(0, 2.2 * this.tuning.cameraDistance, 0));
-    const cameraTarget = position.clone().addScaledVector(direction, 2.2);
+    const physicalDirection = new Vector3(...state.direction).normalize();
+    const cameraFrame = samplePhaseglassCameraFrame(this.#performance.statics.route, time, this.#performance.durationSec, this.tuning.cameraDistance);
+    const cameraPosition = new Vector3(...cameraFrame.position);
+    const cameraTarget = new Vector3(...cameraFrame.target);
     const musical = samplePhaseglassMusicalState(this.#performance.statics.membranes, time);
     this.#updateMembranes(time);
     for (let index = 0; index < WAKE_COUNT; index += 1) {
@@ -510,7 +528,7 @@ export class PhaseglassScene {
     uniforms.uTime!.value = time; uniforms.uEnergy!.value = energyAt(this.#performance, time); uniforms.uPitch!.value = musical.pitch; uniforms.uVelocity!.value = musical.velocity;
     uniforms.uPulse!.value = musical.pulse; uniforms.uActivity!.value = musical.activity; uniforms.uPressure!.value = musical.pressure; uniforms.uSilence!.value = musical.silence;
     uniforms.uGlass!.value = this.tuning.glass; uniforms.uCaustics!.value = this.tuning.caustics; uniforms.uDispersion!.value = this.tuning.dispersion; uniforms.uWake!.value = this.tuning.wake;
-    (uniforms.uCameraPosition!.value as Vector3).copy(cameraPosition); (uniforms.uCameraTarget!.value as Vector3).copy(cameraTarget); (uniforms.uSignalPosition!.value as Vector3).copy(position); (uniforms.uSignalDirection!.value as Vector3).copy(direction);
+    (uniforms.uCameraPosition!.value as Vector3).copy(cameraPosition); (uniforms.uCameraTarget!.value as Vector3).copy(cameraTarget); (uniforms.uSignalPosition!.value as Vector3).copy(position); (uniforms.uSignalDirection!.value as Vector3).copy(physicalDirection);
     this.#compositeMaterial.uniforms.uTime!.value = time;
     this.#renderer.setRenderTarget(this.#target); this.#renderer.render(this.#volumeScene, this.#camera); this.#renderer.setRenderTarget(null); this.#renderer.render(this.#compositeScene, this.#camera);
   }

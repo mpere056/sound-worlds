@@ -5,8 +5,8 @@
 - P0 complete: deterministic source selection, chord grouping, and one deadline per grouped note time.
 - P1 complete: tested passive Snell refraction and active phase-gradient transmission with constant-speed round trips.
 - P2 first pass complete: finite membrane placement, one-contact lookahead, exact crossing and speed audits, overlap clearance, and early-crossing certification.
-- P3 second pass complete: half-resolution volumetric phase field with procedural signal, membrane caustics, three-second future-note vacancies, a fragmented future-route corridor, phrase-pressure continuity, duration-scaled decay, and layered world-anchored black-opal strata.
-- P4 second pass complete: route-following camera, smoothed optical-axis turns, deterministic seeking helpers, and world selector integration. Further full-song art-direction tuning remains.
+- P3 visual reset in progress: the Aurora-like folded volume and central knot have been removed. The current pass uses faceted phase sheets, etched caustics, one narrow optical packet, and a single connected beam language for history and the three-second preview.
+- P4 third pass complete: the camera composes the current packet with several upcoming refractions, smooths optical-axis turns, and remains deterministic under seeking. Further full-song art-direction tuning remains.
 - P5 compiler stress fixture complete: a deterministic 100-note phrase at roughly 105 ms spacing stays under the 250 ms test budget with positive membrane clearance and no early crossings.
 
 ## Product invariant
@@ -59,16 +59,28 @@ chromatic spread. Duration maps only to visual decay.
 
 ## Final aesthetic direction
 
-Phaseglass should feel like precision optics inside a vast black-opal space:
-smoky depth, pearl-white highlights, restrained cyan and amber spectral edges,
-and membranes whose thickness and transmission remain legible in still frames.
-The comet is the brightest stable form; caustics briefly outrank it only at major
-contacts. Camera motion glides along the optical axis with modest banking.
+Phaseglass should feel like a precision optical instrument suspended in a vast,
+dark architectural space. Its dominant grammar is planar and piecewise linear:
+faceted phase sheets, etched interference patterns, a narrow packet of light,
+and a beam that bends only where a note membrane applies an authored impulse.
+Pearl-white highlights and restrained cyan/amber spectral edges make sheet
+thickness, transmission, and changing direction legible in still frames. The
+packet is the brightest stable feature; caustics briefly outrank it only at
+major contacts. Camera motion composes multiple upcoming bends rather than
+chasing one central object.
 
-Avoid unrestricted rainbow dispersion, milky full-screen bloom, translucent
-objects with no edge definition, and noise that makes every membrane look like
-the same portal. Follow the [shared visual-quality standard](shader-worlds-visual-quality-standard.md)
-after the Q0 physics gate.
+The next three seconds must read as unfilled optical capacity. Upcoming notes
+appear as dormant, low-energy sheets connected by the same beam path the active
+packet will traverse. At contact, the sheet fills, its etched caustic resolves,
+and the outgoing beam visibly agrees with its phase gradient. History, present,
+and preview are therefore states of one optical system, not stacked effects.
+
+Avoid volumetric nebulae, folded fractal fog, central energy knots, circular
+portals, unrestricted rainbow dispersion, milky full-screen bloom, translucent
+objects with no edge definition, and noise that makes every membrane look the
+same. Those belong too close to Aurora Cyclotron's visual territory. Follow the
+[shared visual-quality standard](shader-worlds-visual-quality-standard.md) after
+the Q0 physics gate.
 
 ## Work orders
 
@@ -99,16 +111,17 @@ after the Q0 physics gate.
 
 ### P3 - Shader prototype
 
-- Build a half-resolution fullscreen raymarch pass with folded noise, bounded
-  32-48 steps, depth reconstruction, and temporal jitter.
-- Render membranes with refraction, normal distortion, caustics, and a
-  note-triggered radial shockwave sampled from absolute time.
+- Build a half-resolution fullscreen raymarch pass with a bounded 32-48 steps,
+  sparse architectural depth references, and temporal jitter.
+- Render finite faceted membranes with etched caustics and note-triggered phase
+  filling sampled from absolute time. Render one connected piecewise-linear
+  beam for recent history and the three-second preview.
 - Gate: disabling shader quality changes appearance only, never geometry.
 
 ### P4 - Scene and camera
 
-- Render the comet, persistent depth-readable trail, membrane rims, and camera
-  look-ahead from compiled trajectory derivatives.
+- Render the narrow packet, persistent depth-readable beam, membrane rims, and
+  a camera frame derived from both trajectory derivatives and upcoming bends.
 - Add app discovery, tuning, scrub, PNG, and short-video export.
 - Gate: arbitrary seeking reproduces identical comet and shader state.
 

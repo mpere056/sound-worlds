@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PhaseglassMembrane, PhaseglassRouteSegment } from "@reaper-viz/compiler-phaseglass";
-import { PHASEGLASS_FUTURE_PATH_COUNT, PHASEGLASS_RAYMARCH_SCALE, PHASEGLASS_VOLUME_STEPS, PHASEGLASS_VISIBLE_MEMBRANES, samplePhaseglassAnticipation, samplePhaseglassFuturePath, samplePhaseglassMusicalState, samplePhaseglassViewDirection } from "./index.js";
+import { PHASEGLASS_FUTURE_PATH_COUNT, PHASEGLASS_RAYMARCH_SCALE, PHASEGLASS_VOLUME_STEPS, PHASEGLASS_VISIBLE_MEMBRANES, samplePhaseglassAnticipation, samplePhaseglassCameraFrame, samplePhaseglassFuturePath, samplePhaseglassMusicalState, samplePhaseglassViewDirection } from "./index.js";
 
 function membrane(t: number, pitch: number, energy: number): PhaseglassMembrane {
   return {
@@ -101,5 +101,36 @@ describe("Phaseglass route presentation", () => {
     expect(first[0]!.position).toEqual([0.5, 0, 0]);
     expect(first.at(-1)!.t).toBe(3.5);
     expect(first[0]!.strength).toBeGreaterThan(first.at(-1)!.strength);
+  });
+
+  it("frames the current signal together with its upcoming optical turns", () => {
+    const route = kinkedRoute();
+    const first = samplePhaseglassCameraFrame(route, 0.5, 4);
+    const second = samplePhaseglassCameraFrame(route, 0.5, 4);
+    expect(second).toEqual(first);
+    expect(first.extent).toBeGreaterThan(0.8);
+    expect(first.target[0]).toBeGreaterThan(0.5);
+    expect(first.target[2]).toBeGreaterThan(0);
+    expect(Math.hypot(
+      first.position[0] - first.target[0],
+      first.position[1] - first.target[1],
+      first.position[2] - first.target[2],
+    )).toBeGreaterThan(first.extent);
+  });
+
+  it("keeps the composed camera continuous through a phase turn", () => {
+    const route = kinkedRoute();
+    const before = samplePhaseglassCameraFrame(route, 1 - 1e-5, 4);
+    const after = samplePhaseglassCameraFrame(route, 1 + 1e-5, 4);
+    expect(Math.hypot(
+      after.position[0] - before.position[0],
+      after.position[1] - before.position[1],
+      after.position[2] - before.position[2],
+    )).toBeLessThan(0.001);
+    expect(Math.hypot(
+      after.target[0] - before.target[0],
+      after.target[1] - before.target[1],
+      after.target[2] - before.target[2],
+    )).toBeLessThan(0.001);
   });
 });
