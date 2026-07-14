@@ -43,6 +43,22 @@ export function samplePhaseglassAnticipation(leadSeconds: number, decaySeconds =
   return { vacancy: 0, fill: 0.2 + afterglow * 0.8, rim: 0.08 + afterglow * 0.3 };
 }
 
+export interface PhaseglassCausticSweep {
+  position: number;
+  strength: number;
+  contact: number;
+}
+
+export function samplePhaseglassCausticSweep(leadSeconds: number): PhaseglassCausticSweep {
+  const age = Math.max(0, -leadSeconds);
+  const started = smootherStep((-leadSeconds + 0.015) / 0.075);
+  return {
+    position: -0.95 + clamp01(age / 0.9) * 1.9,
+    strength: started * Math.exp(-age * 1.7),
+    contact: Math.exp(-((leadSeconds / 0.085) ** 2)),
+  };
+}
+
 function normalizeVec3(value: PhaseglassVec3, fallback: PhaseglassVec3 = [0, 0, 1]): PhaseglassVec3 {
   const length = Math.hypot(...value);
   return length > 1e-9 ? [value[0] / length, value[1] / length, value[2] / length] : [...fallback];
@@ -294,12 +310,19 @@ uniform float uMembraneRim[MEMBRANE_COUNT];
 uniform float uMembranePitch[MEMBRANE_COUNT];
 uniform float uMembraneVelocity[MEMBRANE_COUNT];
 uniform float uMembranePhase[MEMBRANE_COUNT];
+uniform float uMembraneSweepPosition[MEMBRANE_COUNT];
+uniform float uMembraneSweepStrength[MEMBRANE_COUNT];
+uniform float uMembraneContact[MEMBRANE_COUNT];
 uniform vec3 uHistoryStart[HISTORY_COUNT];
 uniform vec3 uHistoryEnd[HISTORY_COUNT];
 uniform float uHistoryStrength[HISTORY_COUNT];
+uniform float uHistoryT0[HISTORY_COUNT];
+uniform float uHistoryT1[HISTORY_COUNT];
 uniform vec3 uPathStart[PATH_COUNT];
 uniform vec3 uPathEnd[PATH_COUNT];
 uniform float uPathStrength[PATH_COUNT];
+uniform float uPathT0[PATH_COUNT];
+uniform float uPathT1[PATH_COUNT];
 
 float hash31(vec3 point) {
   return fract(sin(dot(point, vec3(127.1, 311.7, 74.7))) * 43758.5453123);
@@ -325,7 +348,7 @@ vec3 architecturalField(vec3 rayDirection) {
   return color;
 }
 
-void evaluatePhaseSheets(vec3 worldPoint, float time, out float structure, out float interference, out float dormant, out vec3 tint) {
+void evaluatePhaseSheets(vec3 worldPoint, vec3 rayDirection, float time, out float structure, out float interference, out float dormant, out vec3 tint) {
   structure = 0.0;
   interference = 0.0;
   dormant = 0.0;
@@ -341,7 +364,9 @@ void evaluatePhaseSheets(vec3 worldPoint, float time, out float structure, out f
     float panelGate = smoothstep(1.78, 1.52, faceted);
     float apertureGate = smoothstep(1.06, 0.82, faceted);
     float frame = exp(-abs(faceted - 1.62) * 32.0);
+    float apertureBevel = exp(-abs(faceted - 1.04) * 34.0);
     float sheet = exp(-abs(plane) * 7.5) * panelGate;
+    float fresnel = pow(1.0 - abs(dot(rayDirection, uMembraneNormal[index])), 2.0);
     vec2 bend = vec2(dot(uMembraneOutgoing[index], uMembraneAxisU[index]), dot(uMembraneOutgoing[index], uMembraneAxisV[index]));
     bend = normalize(bend + vec2(0.0001));
     float phaseCoordinate = dot(disc, bend);
@@ -349,17 +374,21 @@ void evaluatePhaseSheets(vec3 worldPoint, float time, out float structure, out f
     float directionalEtch = exp(-abs(sin(phaseCoordinate * (7.0 + uMembranePitch[index] * 9.0) + crossCoordinate * 1.7 + uMembranePhase[index])) * 30.0);
     float counterEtch = exp(-abs(sin(crossCoordinate * (5.0 + uMembraneVelocity[index] * 7.0) - phaseCoordinate * 2.2 - time * 0.16)) * 38.0);
     float moire = pow(0.5 + 0.5 * cos(phaseCoordinate * 13.0 + sin(crossCoordinate * 5.0 + uMembranePhase[index])), 9.0);
+    float normalizedPhase = phaseCoordinate / max(0.08, uMembraneRadius[index]);
+    float sweep = exp(-abs(normalizedPhase - uMembraneSweepPosition[index]) * 24.0) * uMembraneSweepStrength[index];
+    float contactBloom = (0.24 + moire * 0.76) * uMembraneContact[index];
     float activation = uMembraneFill[index] + uMembraneRim[index] * 0.7;
     float persistent = 0.22 + activation * 0.78;
-    structure += sheet * (panelGate * 0.08 + frame * 0.74) * persistent;
-    float localInterference = sheet * apertureGate * (directionalEtch * 0.46 + counterEtch * 0.27 + moire * 0.58) * (0.18 + activation * (0.82 + uMembraneVelocity[index] * 0.4));
+    structure += sheet * (panelGate * 0.07 + frame * (0.62 + fresnel * 0.46) + apertureBevel * (0.18 + fresnel * 0.28)) * persistent;
+    float localInterference = sheet * apertureGate * (directionalEtch * 0.4 + counterEtch * 0.22 + moire * 0.5 + sweep * 1.25 + contactBloom * 0.72) * (0.18 + activation * (0.82 + uMembraneVelocity[index] * 0.4));
     interference += localInterference;
     dormant += sheet * (frame * 0.72 + directionalEtch * apertureGate * 0.18) * uMembraneVacancy[index];
-    tint += uMembraneColor[index] * (sheet * (0.16 + frame * 0.52) + localInterference * 0.24);
+    vec3 prismaticTint = mix(uMembraneColor[index], mix(vec3(0.62, 0.94, 1.0), vec3(1.0, 0.72, 0.32), uMembranePitch[index]), fresnel * 0.38);
+    tint += prismaticTint * (sheet * (0.14 + frame * 0.48 + apertureBevel * 0.2) + localInterference * 0.24);
   }
 }
 
-vec3 waveSegment(vec3 point, vec3 start, vec3 end, float strength, float dormant) {
+vec3 waveSegment(vec3 point, vec3 start, vec3 end, float strength, float t0, float t1, float dormant) {
   vec3 delta = end - start;
   float segmentLength = length(delta);
   if (strength <= 0.0001 || segmentLength <= 0.0001) return vec3(0.0);
@@ -373,12 +402,12 @@ vec3 waveSegment(vec3 point, vec3 start, vec3 end, float strength, float dormant
   vec3 local = point - center;
   float lateral = dot(local, side);
   float vertical = dot(local, verticalAxis);
-  float alongDistance = along * segmentLength;
   float phase = dot(start, vec3(0.73, 1.17, 0.49)) + dot(end, vec3(0.31, 0.61, 0.97));
+  float scoreTime = mix(t0, t1, along);
   float envelope = exp(-abs(lateral) * 1.65 - abs(vertical) * 4.8);
   float strand = pow(0.5 + 0.5 * cos(lateral * (12.0 + uPitch * 7.0) + vertical * 2.8 + phase), 12.0);
   float broadSheet = exp(-abs(vertical) * 8.5) * exp(-abs(lateral) * 1.25);
-  float movingCrest = pow(0.5 + 0.5 * cos(alongDistance * (4.4 + uPitch * 1.8) - uTime * (2.1 + uActivity * 1.7) + phase), 16.0);
+  float movingCrest = pow(0.5 + 0.5 * cos((scoreTime - uTime) * (17.0 + uPitch * 5.0)), 16.0);
   float wave = (broadSheet * 0.24 + envelope * strand * 0.76) * strength;
   float crest = envelope * movingCrest * strength * (1.0 - dormant * 0.82);
   float spectralEdge = envelope * abs(lateral) * strand * strength;
@@ -388,7 +417,7 @@ vec3 waveSegment(vec3 point, vec3 start, vec3 end, float strength, float dormant
 vec3 historyWave(vec3 point) {
   vec3 field = vec3(0.0);
   for (int index = 0; index < HISTORY_COUNT; index++) {
-    field += waveSegment(point, uHistoryStart[index], uHistoryEnd[index], uHistoryStrength[index], 0.0);
+    field += waveSegment(point, uHistoryStart[index], uHistoryEnd[index], uHistoryStrength[index], uHistoryT0[index], uHistoryT1[index], 0.0);
   }
   return field;
 }
@@ -396,7 +425,7 @@ vec3 historyWave(vec3 point) {
 vec3 futureWave(vec3 point) {
   vec3 field = vec3(0.0);
   for (int index = 0; index < PATH_COUNT; index++) {
-    field += waveSegment(point, uPathStart[index], uPathEnd[index], uPathStrength[index], 1.0);
+    field += waveSegment(point, uPathStart[index], uPathEnd[index], uPathStrength[index], uPathT0[index], uPathT1[index], 1.0);
   }
   return field;
 }
@@ -415,7 +444,7 @@ void main() {
     vec3 point = uCameraPosition + rayDirection * depth;
     float structure, interference, dormant;
     vec3 sheetTint;
-    evaluatePhaseSheets(point, uTime, structure, interference, dormant, sheetTint);
+    evaluatePhaseSheets(point, rayDirection, uTime, structure, interference, dormant, sheetTint);
     vec3 history = historyWave(point) * uWavefront;
     vec3 preview = futureWave(point) * uWavefront;
     vec3 glassColor = structure > 0.001 ? sheetTint / max(0.18, structure + interference * 0.5) : vec3(0.18, 0.62, 0.66);
@@ -447,6 +476,8 @@ varying vec2 vUv;
 uniform sampler2D uVolumeTexture;
 uniform vec2 uVolumeResolution;
 uniform float uTime;
+uniform float uPulse;
+uniform float uDispersion;
 float hash21(vec2 point) { return fract(sin(dot(point, vec2(41.7, 289.1))) * 43758.5453); }
 void main() {
   vec2 texel = 1.0 / uVolumeResolution;
@@ -455,10 +486,20 @@ void main() {
   vec3 south = texture2D(uVolumeTexture, vUv - vec2(0.0, texel.y)).rgb;
   vec3 east = texture2D(uVolumeTexture, vUv + vec2(texel.x, 0.0)).rgb;
   vec3 west = texture2D(uVolumeTexture, vUv - vec2(texel.x, 0.0)).rgb;
-  vec3 color = max(vec3(0.0), center * 1.31 - (north + south + east + west) * 0.072);
-  float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
-  color *= 0.62 + smoothstep(0.006, 0.28, luminance) * 0.78;
-  color += (hash21(gl_FragCoord.xy + uTime * 17.0) - 0.5) * 0.007;
+  vec3 northeast = texture2D(uVolumeTexture, vUv + texel * vec2(1.7, 1.7)).rgb;
+  vec3 northwest = texture2D(uVolumeTexture, vUv + texel * vec2(-1.7, 1.7)).rgb;
+  vec3 southeast = texture2D(uVolumeTexture, vUv + texel * vec2(1.7, -1.7)).rgb;
+  vec3 southwest = texture2D(uVolumeTexture, vUv + texel * vec2(-1.7, -1.7)).rgb;
+  vec3 bloom = (north + south + east + west + northeast + northwest + southeast + southwest) * 0.125;
+  vec3 color = max(vec3(0.0), center * 1.16 - bloom * 0.09);
+  float luminance = dot(center, vec3(0.2126, 0.7152, 0.0722));
+  float highlight = smoothstep(0.08, 0.62, luminance);
+  color += bloom * (0.08 + highlight * (0.2 + uPulse * 0.18));
+  vec2 spectralOffset = vec2(texel.x * (1.2 + uDispersion * 1.8), 0.0);
+  vec3 spectral = vec3(texture2D(uVolumeTexture, vUv + spectralOffset).r, center.g, texture2D(uVolumeTexture, vUv - spectralOffset).b);
+  color = mix(color, spectral, highlight * uDispersion * 0.09);
+  color *= 0.72 + smoothstep(0.008, 0.3, luminance) * 0.54;
+  color += (hash21(gl_FragCoord.xy + uTime * 17.0) - 0.5) * 0.0045;
   gl_FragColor = vec4(max(color, 0.0), 1.0);
 }`;
 
@@ -504,12 +545,19 @@ export class PhaseglassScene {
   readonly #pitch = numbers(PHASEGLASS_VISIBLE_MEMBRANES);
   readonly #velocity = numbers(PHASEGLASS_VISIBLE_MEMBRANES);
   readonly #phase = numbers(PHASEGLASS_VISIBLE_MEMBRANES);
+  readonly #sweepPosition = numbers(PHASEGLASS_VISIBLE_MEMBRANES);
+  readonly #sweepStrength = numbers(PHASEGLASS_VISIBLE_MEMBRANES);
+  readonly #contact = numbers(PHASEGLASS_VISIBLE_MEMBRANES);
   readonly #historyStarts = vectors(PHASEGLASS_PATH_SEGMENT_COUNT);
   readonly #historyEnds = vectors(PHASEGLASS_PATH_SEGMENT_COUNT);
   readonly #historyStrength = numbers(PHASEGLASS_PATH_SEGMENT_COUNT);
+  readonly #historyT0 = numbers(PHASEGLASS_PATH_SEGMENT_COUNT);
+  readonly #historyT1 = numbers(PHASEGLASS_PATH_SEGMENT_COUNT);
   readonly #pathStarts = vectors(PHASEGLASS_PATH_SEGMENT_COUNT);
   readonly #pathEnds = vectors(PHASEGLASS_PATH_SEGMENT_COUNT);
   readonly #pathStrength = numbers(PHASEGLASS_PATH_SEGMENT_COUNT);
+  readonly #pathT0 = numbers(PHASEGLASS_PATH_SEGMENT_COUNT);
+  readonly #pathT1 = numbers(PHASEGLASS_PATH_SEGMENT_COUNT);
 
   constructor(canvas: HTMLCanvasElement, performance: PhaseglassPerformance) {
     this.#performance = performance;
@@ -535,8 +583,9 @@ export class PhaseglassScene {
         uMembraneAxisU: { value: this.#axesU }, uMembraneAxisV: { value: this.#axesV }, uMembraneOutgoing: { value: this.#outgoing }, uMembraneColor: { value: this.#colors },
         uMembraneRadius: { value: this.#radii }, uMembraneVacancy: { value: this.#vacancy }, uMembraneFill: { value: this.#fill }, uMembraneRim: { value: this.#rim },
         uMembranePitch: { value: this.#pitch }, uMembraneVelocity: { value: this.#velocity }, uMembranePhase: { value: this.#phase },
-        uHistoryStart: { value: this.#historyStarts }, uHistoryEnd: { value: this.#historyEnds }, uHistoryStrength: { value: this.#historyStrength },
-        uPathStart: { value: this.#pathStarts }, uPathEnd: { value: this.#pathEnds }, uPathStrength: { value: this.#pathStrength },
+        uMembraneSweepPosition: { value: this.#sweepPosition }, uMembraneSweepStrength: { value: this.#sweepStrength }, uMembraneContact: { value: this.#contact },
+        uHistoryStart: { value: this.#historyStarts }, uHistoryEnd: { value: this.#historyEnds }, uHistoryStrength: { value: this.#historyStrength }, uHistoryT0: { value: this.#historyT0 }, uHistoryT1: { value: this.#historyT1 },
+        uPathStart: { value: this.#pathStarts }, uPathEnd: { value: this.#pathEnds }, uPathStrength: { value: this.#pathStrength }, uPathT0: { value: this.#pathT0 }, uPathT1: { value: this.#pathT1 },
       },
     });
     this.#volumeScene.add(new Mesh(new PlaneGeometry(2, 2), this.#volumeMaterial));
@@ -545,7 +594,7 @@ export class PhaseglassScene {
       fragmentShader: COMPOSITE_FRAGMENT,
       depthWrite: false,
       depthTest: false,
-      uniforms: { uVolumeTexture: { value: this.#target.texture }, uVolumeResolution: { value: new Vector2(width, height) }, uTime: { value: 0 } },
+      uniforms: { uVolumeTexture: { value: this.#target.texture }, uVolumeResolution: { value: new Vector2(width, height) }, uTime: { value: 0 }, uPulse: { value: 0 }, uDispersion: { value: this.tuning.dispersion } },
     });
     this.#compositeScene.add(new Mesh(new PlaneGeometry(2, 2), this.#compositeMaterial));
   }
@@ -560,7 +609,7 @@ export class PhaseglassScene {
       const membrane = slot < count ? membranes[start + slot] : undefined;
       if (!membrane) {
         this.#centers[slot]!.set(0, 0, 200); this.#normals[slot]!.set(0, 0, 1); this.#axesU[slot]!.set(1, 0, 0); this.#axesV[slot]!.set(0, 1, 0); this.#outgoing[slot]!.set(0, 0, 1); this.#colors[slot]!.set(0, 0, 0);
-        this.#radii[slot] = 0; this.#vacancy[slot] = 0; this.#fill[slot] = 0; this.#rim[slot] = 0; this.#pitch[slot] = 0.5; this.#velocity[slot] = 0; this.#phase[slot] = 0;
+        this.#radii[slot] = 0; this.#vacancy[slot] = 0; this.#fill[slot] = 0; this.#rim[slot] = 0; this.#pitch[slot] = 0.5; this.#velocity[slot] = 0; this.#phase[slot] = 0; this.#sweepPosition[slot] = -0.95; this.#sweepStrength[slot] = 0; this.#contact[slot] = 0;
         continue;
       }
       const anticipation = samplePhaseglassAnticipation(membrane.t - time, 0.5 + membrane.duration * 1.1);
@@ -568,6 +617,8 @@ export class PhaseglassScene {
       this.#centers[slot]!.set(...membrane.center); this.#normals[slot]!.set(...membrane.normal).normalize(); this.#axesU[slot]!.set(...membrane.axisU).normalize(); this.#axesV[slot]!.set(...membrane.axisV).normalize(); this.#outgoing[slot]!.set(...membrane.outgoingDirection).normalize();
       this.#colors[slot]!.set(color.r, color.g, color.b); this.#radii[slot] = membrane.radius; this.#vacancy[slot] = anticipation.vacancy; this.#fill[slot] = anticipation.fill; this.#rim[slot] = anticipation.rim;
       this.#pitch[slot] = normalizePitch(this.#range, membrane.pitch); this.#velocity[slot] = normalizeVelocity(this.#range, membrane.energy); this.#phase[slot] = (start + slot) * 1.61803398875 + membrane.pitch * 0.071;
+      const sweep = samplePhaseglassCausticSweep(membrane.t - time);
+      this.#sweepPosition[slot] = sweep.position; this.#sweepStrength[slot] = sweep.strength; this.#contact[slot] = sweep.contact;
     }
     this.#volumeMaterial.uniforms.uMembraneCount!.value = count;
   }
@@ -584,6 +635,8 @@ export class PhaseglassScene {
       this.#historyStarts[index]!.set(...sample.start);
       this.#historyEnds[index]!.set(...sample.end);
       this.#historyStrength[index] = sample.strength;
+      this.#historyT0[index] = sample.t0;
+      this.#historyT1[index] = sample.t1;
     }
     const futurePath = samplePhaseglassFutureSegments(this.#performance.statics.route, time, this.#performance.durationSec);
     for (let index = 0; index < PHASEGLASS_PATH_SEGMENT_COUNT; index += 1) {
@@ -591,6 +644,8 @@ export class PhaseglassScene {
       this.#pathStarts[index]!.set(...sample.start);
       this.#pathEnds[index]!.set(...sample.end);
       this.#pathStrength[index] = sample.strength;
+      this.#pathT0[index] = sample.t0;
+      this.#pathT1[index] = sample.t1;
     }
     const uniforms = this.#volumeMaterial.uniforms;
     uniforms.uTime!.value = time; uniforms.uEnergy!.value = energyAt(this.#performance, time); uniforms.uPitch!.value = musical.pitch; uniforms.uVelocity!.value = musical.velocity;
@@ -598,6 +653,8 @@ export class PhaseglassScene {
     uniforms.uGlass!.value = this.tuning.glass; uniforms.uCaustics!.value = this.tuning.caustics; uniforms.uDispersion!.value = this.tuning.dispersion; uniforms.uWavefront!.value = this.tuning.wavefront;
     (uniforms.uCameraPosition!.value as Vector3).copy(cameraPosition); (uniforms.uCameraTarget!.value as Vector3).copy(cameraTarget);
     this.#compositeMaterial.uniforms.uTime!.value = time;
+    this.#compositeMaterial.uniforms.uPulse!.value = musical.pulse;
+    this.#compositeMaterial.uniforms.uDispersion!.value = this.tuning.dispersion;
     this.#renderer.setRenderTarget(this.#target); this.#renderer.render(this.#volumeScene, this.#camera); this.#renderer.setRenderTarget(null); this.#renderer.render(this.#compositeScene, this.#camera);
   }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PhaseglassMembrane, PhaseglassRouteSegment } from "@reaper-viz/compiler-phaseglass";
-import { PHASEGLASS_FUTURE_PATH_COUNT, PHASEGLASS_PATH_SEGMENT_COUNT, PHASEGLASS_RAYMARCH_SCALE, PHASEGLASS_VOLUME_STEPS, PHASEGLASS_VISIBLE_MEMBRANES, samplePhaseglassAnticipation, samplePhaseglassCameraFrame, samplePhaseglassFuturePath, samplePhaseglassFutureSegments, samplePhaseglassHistorySegments, samplePhaseglassMusicalState, samplePhaseglassViewDirection } from "./index.js";
+import { PHASEGLASS_FUTURE_PATH_COUNT, PHASEGLASS_PATH_SEGMENT_COUNT, PHASEGLASS_RAYMARCH_SCALE, PHASEGLASS_VOLUME_STEPS, PHASEGLASS_VISIBLE_MEMBRANES, samplePhaseglassAnticipation, samplePhaseglassCameraFrame, samplePhaseglassCausticSweep, samplePhaseglassFuturePath, samplePhaseglassFutureSegments, samplePhaseglassHistorySegments, samplePhaseglassMusicalState, samplePhaseglassViewDirection } from "./index.js";
 
 function membrane(t: number, pitch: number, energy: number): PhaseglassMembrane {
   return {
@@ -60,6 +60,17 @@ describe("Phaseglass temporal field", () => {
     expect(dense.pressure).toBeGreaterThan(boundaryAt.pressure);
     expect(dense.activity).toBeGreaterThan(quiet.activity);
     expect(quiet.silence).toBeGreaterThan(dense.silence);
+  });
+
+  it("sweeps a note caustic across its sheet after contact", () => {
+    const waiting = samplePhaseglassCausticSweep(0.2);
+    const contact = samplePhaseglassCausticSweep(0);
+    const crossing = samplePhaseglassCausticSweep(-0.55);
+    const faded = samplePhaseglassCausticSweep(-3);
+    expect(waiting.strength).toBe(0);
+    expect(contact.contact).toBe(1);
+    expect(crossing.position).toBeGreaterThan(contact.position);
+    expect(crossing.strength).toBeGreaterThan(faded.strength);
   });
 });
 
@@ -145,6 +156,7 @@ describe("Phaseglass route presentation", () => {
     expect(future[0]!.end).toEqual([1, 0, 0]);
     expect(future[1]!.start).toEqual([1, 0, 0]);
     expect(future[1]!.end).toEqual([1, 0, 1]);
+    expect(future[0]!.t1).toBe(future[1]!.t0);
     expect(history[0]!.end).toEqual(history[1]!.start);
   });
 

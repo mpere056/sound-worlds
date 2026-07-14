@@ -5,8 +5,9 @@
 - P0 complete: deterministic source selection, chord grouping, and one deadline per grouped note time.
 - P1 complete: tested passive Snell refraction and active phase-gradient transmission with constant-speed round trips.
 - P2 first pass complete: finite membrane placement, one-contact lookahead, exact crossing and speed audits, overlap clearance, and early-crossing certification.
-- P3 architectural reset implemented, visual acceptance pending: there is no hero particle, target chain, folded volume, or central knot. Broad coherent wavefront strands traverse faceted phase sheets; each sheet's etching follows its compiled outgoing direction, and completed sheets persist as the growing score.
+- P3 architectural reset implemented, visual acceptance pending: there is no hero particle, target chain, folded volume, or central knot. Broad coherent wavefront strands traverse faceted phase sheets; each sheet has view-dependent glass edges, an aperture bevel, and etching aligned to its compiled outgoing direction. Completed sheets persist as the growing score.
 - P4 fourth pass complete: a fixed-orientation gallery camera glides through a continuous score window without chasing ray headings. Independently clipped route segments preserve exact visible bends and hand off continuously at note boundaries.
+- P4 optical-coherence pass complete: carrier phase comes from absolute score time and remains continuous across a bend. Every note launches a deterministic directional caustic sweep across its sheet, while the composite adds restrained highlight diffraction rather than full-screen bloom.
 - P5 compiler stress fixture complete: a deterministic 100-note phrase at roughly 105 ms spacing stays under the 250 ms test budget with positive membrane clearance and no early crossings.
 
 ## Product invariant
