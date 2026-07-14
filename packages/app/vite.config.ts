@@ -1,6 +1,7 @@
 import { createReadStream, existsSync, statSync } from "node:fs";
-import { readdir, readFile } from "node:fs/promises";
+import { appendFile, readdir, readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
@@ -8,11 +9,21 @@ import { defineConfig, type Plugin } from "vite";
 const APP_DIR = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(APP_DIR, "../..");
 const PROJECTS = join(ROOT, "projects");
+const PHASEGLASS_SHADER_LOG = join(tmpdir(), "reaper-viz-phaseglass-shader.log");
 
 function sendJson(response: ServerResponse, status: number, value: unknown): void {
   response.statusCode = status;
   response.setHeader("Content-Type", "application/json; charset=utf-8");
   response.end(JSON.stringify(value));
+}
+
+async function readJsonBody(request: IncomingMessage): Promise<unknown> {
+  let body = "";
+  for await (const chunk of request) {
+    body += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
+    if (body.length > 512_000) throw new Error("Diagnostic payload exceeds 512 KB");
+  }
+  return JSON.parse(body || "null") as unknown;
 }
 
 async function projectNames(): Promise<string[]> {
@@ -55,6 +66,14 @@ function projectApi(): Plugin {
       server.middlewares.use(async (request, response, next) => {
         try {
           const url = new URL(request.url ?? "/", "http://localhost");
+          if (url.pathname === "/api/diagnostics/phaseglass-shader" && request.method === "POST") {
+            const diagnostic = await readJsonBody(request);
+            const entry = `${JSON.stringify({ receivedAt: new Date().toISOString(), diagnostic })}\n`;
+            await appendFile(PHASEGLASS_SHADER_LOG, entry, "utf8");
+            console.error(`[Phaseglass shader diagnostic] ${PHASEGLASS_SHADER_LOG}\n${entry}`);
+            sendJson(response, 202, { logged: true, path: PHASEGLASS_SHADER_LOG });
+            return;
+          }
           if (url.pathname === "/api/projects") {
             const projects = await Promise.all((await projectNames()).map(async (id) => {
               const song = JSON.parse(await readFile(join(PROJECTS, id, "song.json"), "utf8")) as { meta: { name: string; durationSec: number } };

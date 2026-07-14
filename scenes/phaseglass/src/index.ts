@@ -11,6 +11,35 @@ export interface PhaseglassTuning {
   cameraDistance: number;
 }
 
+export interface PhaseglassShaderDiagnostic {
+  kind: "shader";
+  stage: "volume" | "composite" | "unknown";
+  webglError: number;
+  linkStatus: boolean;
+  validateStatus: boolean;
+  programLog: string;
+  vertexLog: string;
+  fragmentLog: string;
+  vertexSource: string;
+  fragmentSource: string;
+}
+
+export interface PhaseglassBlackFrameDiagnostic {
+  kind: "black-frame";
+  stage: "volume";
+  webglError: number;
+  time: number;
+  samples: number[];
+  cameraPosition: PhaseglassVec3;
+  cameraTarget: PhaseglassVec3;
+  musical: PhaseglassMusicalState;
+  energy: number;
+  noteCount: number;
+}
+
+export type PhaseglassDiagnostic = PhaseglassShaderDiagnostic | PhaseglassBlackFrameDiagnostic;
+export type PhaseglassDiagnosticHandler = (diagnostic: PhaseglassDiagnostic) => void;
+
 export const PHASEGLASS_RAYMARCH_SCALE = 0.5;
 export const PHASEGLASS_LAYER_COUNT = 3;
 export const PHASEGLASS_NOTE_WINDOW_COUNT = 8;
@@ -504,6 +533,8 @@ export class PhaseglassScene {
   readonly #volumeMaterial: ShaderMaterial;
   readonly #compositeMaterial: ShaderMaterial;
   readonly #target: WebGLRenderTarget;
+  readonly #diagnosticHandler: PhaseglassDiagnosticHandler | undefined;
+  #diagnosticProbeFrames = 3;
   readonly #centers = vectors(PHASEGLASS_VISIBLE_MEMBRANES);
   readonly #normals = vectors(PHASEGLASS_VISIBLE_MEMBRANES);
   readonly #axesU = vectors(PHASEGLASS_VISIBLE_MEMBRANES);
@@ -530,9 +561,28 @@ export class PhaseglassScene {
   readonly #noteStrengths = numbers(PHASEGLASS_NOTE_WINDOW_COUNT);
   readonly #notePreviews = numbers(PHASEGLASS_NOTE_WINDOW_COUNT);
 
-  constructor(canvas: HTMLCanvasElement, performance: PhaseglassPerformance) {
+  constructor(canvas: HTMLCanvasElement, performance: PhaseglassPerformance, onDiagnostic?: PhaseglassDiagnosticHandler) {
     this.#performance = performance;
+    this.#diagnosticHandler = onDiagnostic;
     this.#renderer = new WebGLRenderer({ canvas, antialias: false, alpha: false });
+    this.#renderer.debug.checkShaderErrors = true;
+    this.#renderer.debug.onShaderError = (gl, program, vertexShader, fragmentShader) => {
+      const fragmentSource = gl.getShaderSource(fragmentShader) ?? "";
+      const diagnostic: PhaseglassShaderDiagnostic = {
+        kind: "shader",
+        stage: fragmentSource.includes("holographicField") ? "volume" : fragmentSource.includes("uVolumeTexture") ? "composite" : "unknown",
+        webglError: gl.getError(),
+        linkStatus: Boolean(gl.getProgramParameter(program, gl.LINK_STATUS)),
+        validateStatus: Boolean(gl.getProgramParameter(program, gl.VALIDATE_STATUS)),
+        programLog: (gl.getProgramInfoLog(program) ?? "").trim(),
+        vertexLog: (gl.getShaderInfoLog(vertexShader) ?? "").trim(),
+        fragmentLog: (gl.getShaderInfoLog(fragmentShader) ?? "").trim(),
+        vertexSource: gl.getShaderSource(vertexShader) ?? "",
+        fragmentSource,
+      };
+      console.error("[Phaseglass WebGL shader failure]", diagnostic);
+      this.#diagnosticHandler?.(diagnostic);
+    };
     this.#renderer.setSize(performance.resolution.w, performance.resolution.h, false);
     this.#renderer.setPixelRatio(1);
     this.#renderer.outputColorSpace = SRGBColorSpace;
@@ -635,21 +685,70 @@ export class PhaseglassScene {
     this.#volumeMaterial.uniforms.uNoteCount!.value = disturbances.length;
   }
 
+  #probeVolumeFrame(time: number, cameraFrame: PhaseglassCameraFrame, musical: PhaseglassMusicalState, energy: number): void {
+    if (this.#diagnosticProbeFrames <= 0) return;
+    const samplePoints = [
+      [0.5, 0.5],
+      [0.25, 0.25],
+      [0.75, 0.25],
+      [0.25, 0.75],
+      [0.75, 0.75],
+    ] as const;
+    const samples: number[] = [];
+    const pixel = new Uint8Array(4);
+    for (const [relativeX, relativeY] of samplePoints) {
+      this.#renderer.readRenderTargetPixels(
+        this.#target,
+        Math.min(this.#target.width - 1, Math.floor(this.#target.width * relativeX)),
+        Math.min(this.#target.height - 1, Math.floor(this.#target.height * relativeY)),
+        1,
+        1,
+        pixel,
+      );
+      samples.push(...pixel);
+    }
+    if (samples.some((value, index) => index % 4 !== 3 && value > 2)) {
+      this.#diagnosticProbeFrames = 0;
+      return;
+    }
+    this.#diagnosticProbeFrames -= 1;
+    if (this.#diagnosticProbeFrames > 0) return;
+    const diagnostic: PhaseglassBlackFrameDiagnostic = {
+      kind: "black-frame",
+      stage: "volume",
+      webglError: this.#renderer.getContext().getError(),
+      time,
+      samples,
+      cameraPosition: [...cameraFrame.position],
+      cameraTarget: [...cameraFrame.target],
+      musical,
+      energy,
+      noteCount: Number(this.#volumeMaterial.uniforms.uNoteCount!.value),
+    };
+    console.error("[Phaseglass black volume frame]", diagnostic);
+    this.#diagnosticHandler?.(diagnostic);
+  }
+
   renderFrame(time: number): void {
     const cameraFrame = samplePhaseglassCameraFrame(this.tuning.cameraDistance);
     const cameraPosition = new Vector3(...cameraFrame.position);
     const cameraTarget = new Vector3(...cameraFrame.target);
     const musical = samplePhaseglassMusicalState(this.#performance.statics.membranes, time);
+    const energy = energyAt(this.#performance, time);
     this.#updateOpticalStack(time, musical);
     const uniforms = this.#volumeMaterial.uniforms;
-    uniforms.uTime!.value = time; uniforms.uEnergy!.value = energyAt(this.#performance, time); uniforms.uPitch!.value = musical.pitch; uniforms.uVelocity!.value = musical.velocity;
+    uniforms.uTime!.value = time; uniforms.uEnergy!.value = energy; uniforms.uPitch!.value = musical.pitch; uniforms.uVelocity!.value = musical.velocity;
     uniforms.uPulse!.value = musical.pulse; uniforms.uActivity!.value = musical.activity; uniforms.uPressure!.value = musical.pressure; uniforms.uSilence!.value = musical.silence;
     uniforms.uGlass!.value = this.tuning.glass; uniforms.uCaustics!.value = this.tuning.caustics; uniforms.uDispersion!.value = this.tuning.dispersion; uniforms.uWavefront!.value = this.tuning.wavefront;
     (uniforms.uCameraPosition!.value as Vector3).copy(cameraPosition); (uniforms.uCameraTarget!.value as Vector3).copy(cameraTarget);
     this.#compositeMaterial.uniforms.uTime!.value = time;
     this.#compositeMaterial.uniforms.uPulse!.value = musical.pulse;
     this.#compositeMaterial.uniforms.uDispersion!.value = this.tuning.dispersion;
-    this.#renderer.setRenderTarget(this.#target); this.#renderer.render(this.#volumeScene, this.#camera); this.#renderer.setRenderTarget(null); this.#renderer.render(this.#compositeScene, this.#camera);
+    this.#renderer.setRenderTarget(this.#target);
+    this.#renderer.render(this.#volumeScene, this.#camera);
+    this.#probeVolumeFrame(time, cameraFrame, musical, energy);
+    this.#renderer.setRenderTarget(null);
+    this.#renderer.render(this.#compositeScene, this.#camera);
   }
 
   destroy(): void {

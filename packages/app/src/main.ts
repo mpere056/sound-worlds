@@ -4,7 +4,7 @@ import { captureCanvasPng, exportCanvasMp4, PixiBackend, supportsCanvasMp4 } fro
 import { MarbleScene, type MarblePerformance, type MarblePreparedTransition, type MarbleSceneActivation, type MarbleSceneProfileSnapshot, type MarbleTuning } from "@reaper-viz/scene-marble";
 import { BrickBreakerScene, type BrickBreakerPerformance } from "@reaper-viz/scene-brick-breaker";
 import { AuroraScene, type AuroraPerformance } from "@reaper-viz/scene-aurora";
-import { PhaseglassScene, type PhaseglassPerformance } from "@reaper-viz/scene-phaseglass";
+import { PhaseglassScene, type PhaseglassDiagnostic, type PhaseglassPerformance } from "@reaper-viz/scene-phaseglass";
 import { MetroScene, type MetroPerformance } from "@reaper-viz/scene-metro";
 import { PaintingScene, type PaintingPerformance } from "@reaper-viz/scene-painting";
 import { RunnerScene, type RunnerPerformance } from "@reaper-viz/scene-runner";
@@ -176,6 +176,27 @@ if (marbleProfilingEnabled) {
 function pushBounded<T>(values: T[], value: T, limit = 2400): void {
   values.push(value);
   if (values.length > limit) values.splice(0, values.length - limit);
+}
+
+function reportPhaseglassFailure(diagnostic: PhaseglassDiagnostic): void {
+  const primaryLog = diagnostic.kind === "shader"
+    ? diagnostic.fragmentLog || diagnostic.programLog || diagnostic.vertexLog || "WebGL linked no runnable shader program"
+    : `Uniformly black volume target at ${diagnostic.time.toFixed(3)}s; WebGL error ${diagnostic.webglError}; samples ${diagnostic.samples.join(",")}; notes ${diagnostic.noteCount}`;
+  const summary = primaryLog.replace(/\s+/g, " ").trim().slice(0, 900);
+  statusTitle.textContent = diagnostic.kind === "shader" ? `Phaseglass ${diagnostic.stage} shader failed` : "Phaseglass produced a black GPU frame";
+  statusDetail.textContent = summary;
+  renderFailure = summary;
+  (globalThis as typeof globalThis & { __phaseglassDiagnostic?: PhaseglassDiagnostic }).__phaseglassDiagnostic = diagnostic;
+  void fetch("/api/diagnostics/phaseglass-shader", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      projectId: currentProjectId,
+      userAgent: navigator.userAgent,
+      capturedAt: new Date().toISOString(),
+      diagnostic,
+    }),
+  }).catch((error: unknown) => console.error("[Phaseglass shader diagnostic upload failed]", error));
 }
 
 function profilePercentile(values: readonly number[], amount: number): number {
@@ -703,7 +724,7 @@ async function loadConcept(concept: string): Promise<void> {
     const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.phaseglass.json`);
     if (!response.ok) throw new Error(`Phaseglass performance request failed: ${response.status}`);
     const performance = parsePerformance(await response.json()) as PhaseglassPerformance;
-    const phaseglass = new PhaseglassScene(canvas, performance);
+    const phaseglass = new PhaseglassScene(canvas, performance, reportPhaseglassFailure);
     scene = phaseglass;
     addTuningBinding(bindingPane, phaseglass.tuning, "glass", { min: 0, max: 1.6, step: 0.01, label: "Glass" });
     addTuningBinding(bindingPane, phaseglass.tuning, "caustics", { min: 0, max: 1.6, step: 0.01, label: "Caustics" });
