@@ -360,11 +360,12 @@ void evaluatePhaseSheets(vec3 worldPoint, vec3 rayDirection, float time, out flo
     vec2 disc = vec2(dot(local, uMembraneAxisU[index]), dot(local, uMembraneAxisV[index]));
     vec2 sheetCoordinate = disc / max(0.08, uMembraneRadius[index]);
     vec2 absoluteCoordinate = abs(sheetCoordinate);
-    float faceted = max(max(absoluteCoordinate.x, absoluteCoordinate.y), (absoluteCoordinate.x + absoluteCoordinate.y) * 0.72);
-    float panelGate = smoothstep(1.78, 1.52, faceted);
-    float apertureGate = smoothstep(1.06, 0.82, faceted);
-    float frame = exp(-abs(faceted - 1.62) * 32.0);
-    float apertureBevel = exp(-abs(faceted - 1.04) * 34.0);
+    float roundedSheet = pow(pow(absoluteCoordinate.x, 3.2) + pow(absoluteCoordinate.y, 3.2), 1.0 / 3.2);
+    float faceted = max(roundedSheet, (absoluteCoordinate.x + absoluteCoordinate.y) * 0.67);
+    float panelGate = smoothstep(1.94, 1.38, faceted);
+    float apertureGate = smoothstep(1.1, 0.74, roundedSheet);
+    float frame = exp(-abs(faceted - 1.66) * 24.0);
+    float apertureBevel = exp(-abs(roundedSheet - 1.04) * 26.0);
     float sheet = exp(-abs(plane) * 7.5) * panelGate;
     float fresnel = pow(1.0 - abs(dot(rayDirection, uMembraneNormal[index])), 2.0);
     vec2 bend = vec2(dot(uMembraneOutgoing[index], uMembraneAxisU[index]), dot(uMembraneOutgoing[index], uMembraneAxisV[index]));
@@ -393,7 +394,8 @@ vec3 waveSegment(vec3 point, vec3 start, vec3 end, float strength, float t0, flo
   float segmentLength = length(delta);
   if (strength <= 0.0001 || segmentLength <= 0.0001) return vec3(0.0);
   vec3 direction = delta / segmentLength;
-  float along = clamp(dot(point - start, delta) / max(0.0001, dot(delta, delta)), 0.0, 1.0);
+  float rawAlong = dot(point - start, delta) / max(0.0001, dot(delta, delta));
+  float along = clamp(rawAlong, 0.0, 1.0);
   vec3 center = start + delta * along;
   vec3 side = cross(direction, vec3(0.0, 1.0, 0.0));
   if (length(side) < 0.05) side = cross(direction, vec3(1.0, 0.0, 0.0));
@@ -402,15 +404,21 @@ vec3 waveSegment(vec3 point, vec3 start, vec3 end, float strength, float t0, flo
   vec3 local = point - center;
   float lateral = dot(local, side);
   float vertical = dot(local, verticalAxis);
-  float phase = dot(start, vec3(0.73, 1.17, 0.49)) + dot(end, vec3(0.31, 0.61, 0.97));
   float scoreTime = mix(t0, t1, along);
-  float envelope = exp(-abs(lateral) * 1.65 - abs(vertical) * 4.8);
-  float strand = pow(0.5 + 0.5 * cos(lateral * (12.0 + uPitch * 7.0) + vertical * 2.8 + phase), 12.0);
-  float broadSheet = exp(-abs(vertical) * 8.5) * exp(-abs(lateral) * 1.25);
-  float movingCrest = pow(0.5 + 0.5 * cos((scoreTime - uTime) * (17.0 + uPitch * 5.0)), 16.0);
-  float wave = (broadSheet * 0.24 + envelope * strand * 0.76) * strength;
-  float crest = envelope * movingCrest * strength * (1.0 - dormant * 0.82);
-  float spectralEdge = envelope * abs(lateral) * strand * strength;
+  float outsideDistance = max(max(-rawAlong, rawAlong - 1.0), 0.0) * segmentLength;
+  float joinEnvelope = exp(-outsideDistance * outsideDistance * 2.6);
+  float radialSquared = lateral * lateral * 1.55 + vertical * vertical * 7.2;
+  float envelope = exp(-radialSquared);
+  float broadEnvelope = exp(-radialSquared * 0.42);
+  float core = exp(-radialSquared * 4.8);
+  float carrierPhase = (scoreTime - uTime) * (17.0 + uPitch * 5.0);
+  float strand = pow(0.5 + 0.5 * cos(lateral * (10.0 + uPitch * 6.0) + vertical * 2.2 + scoreTime * 2.4), 6.0);
+  float movingCrest = 0.32 + 0.68 * pow(0.5 + 0.5 * cos(carrierPhase), 4.0);
+  float futureReach = exp(-max(0.0, scoreTime - uTime) * 0.95);
+  float visibleStrength = strength * mix(1.0, 0.2 + futureReach * 0.8, dormant);
+  float wave = (broadEnvelope * 0.2 + envelope * (0.26 + strand * 0.42) + core * 0.58) * visibleStrength * joinEnvelope;
+  float crest = (core * 0.58 + envelope * 0.42) * movingCrest * visibleStrength * joinEnvelope * mix(1.0, 0.7, dormant);
+  float spectralEdge = envelope * smoothstep(0.08, 0.7, abs(lateral)) * strand * visibleStrength * joinEnvelope;
   return vec3(wave, crest, spectralEdge);
 }
 
@@ -454,7 +462,7 @@ void main() {
     emission += mix(glassColor, vec3(1.0, 0.78, 0.4), uDispersion * 0.26) * interference * (0.82 + uCaustics * 2.1 + uPulse * 0.68);
     emission += dormantColor * dormant * 0.42;
     emission += activeWaveColor * (history.x * (0.62 + uPressure * 0.32) + history.y * (0.48 + uVelocity * 0.5 + (1.0 - uSilence) * 0.36));
-    emission += mix(activeWaveColor, vec3(0.42, 0.7, 0.73), 0.58) * preview.x * 0.28;
+    emission += mix(activeWaveColor, vec3(0.42, 0.7, 0.73), 0.52) * (preview.x * 0.24 + preview.y * 0.34);
     emission += mix(vec3(0.27, 0.74, 0.79), vec3(0.95, 0.55, 0.2), uDispersion * 0.5) * (history.z + preview.z * 0.22) * uDispersion;
     float density = structure * 0.18 + interference * 0.12 + history.x * 0.1 + history.y * 0.08 + preview.x * 0.04;
     float stepLength = 0.42 + depth * 0.012;
