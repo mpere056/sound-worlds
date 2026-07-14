@@ -122,9 +122,7 @@ the Q0 physics gate.
   sparse architectural depth references, and temporal jitter.
 - Render three persistent large strata with phase-gradient etchings and
   caustics. Propagate one broad coherent field through them while evaluating up
-  to eight nearby note disturbances from absolute score time. Evaluate the note
-  window only in the field pass; the surface pass consumes bounded aggregate
-  state to avoid fragment-shader loop multiplication.
+  to twelve nearby note disturbances from absolute score time.
 - Gate: disabling shader quality changes appearance only, never geometry.
 
 ### P4 - Scene and camera

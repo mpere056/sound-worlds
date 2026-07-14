@@ -28,7 +28,7 @@ describe("Phaseglass shader budget", () => {
     expect(PHASEGLASS_RAYMARCH_SCALE).toBe(0.5);
     expect(PHASEGLASS_VISIBLE_MEMBRANES).toBeLessThanOrEqual(8);
     expect(PHASEGLASS_LAYER_COUNT).toBe(3);
-    expect(PHASEGLASS_NOTE_WINDOW_COUNT).toBeLessThanOrEqual(8);
+    expect(PHASEGLASS_NOTE_WINDOW_COUNT).toBeLessThanOrEqual(12);
     expect(PHASEGLASS_VOLUME_STEPS).toBeLessThanOrEqual(52);
   });
 });
@@ -95,7 +95,7 @@ describe("Phaseglass optical disturbances", () => {
     const notes = Array.from({ length: 20 }, (_, index) => membrane(index * 0.08, 48 + index, 0.7));
     const disturbances = samplePhaseglassDisturbances(notes, 1);
     expect(disturbances).toHaveLength(PHASEGLASS_NOTE_WINDOW_COUNT);
-    expect(disturbances.filter((disturbance) => disturbance.noteTime <= 1 && disturbance.strength > 0).length).toBeGreaterThanOrEqual(4);
+    expect(disturbances.filter((disturbance) => disturbance.noteTime <= 1 && disturbance.strength > 0).length).toBeGreaterThan(4);
   });
 
   it("maps pitch into phase-front direction and velocity into strength", () => {
