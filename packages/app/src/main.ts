@@ -181,9 +181,15 @@ function pushBounded<T>(values: T[], value: T, limit = 2400): void {
 function reportPhaseglassFailure(diagnostic: PhaseglassDiagnostic): void {
   const primaryLog = diagnostic.kind === "shader"
     ? diagnostic.fragmentLog || diagnostic.programLog || diagnostic.vertexLog || "WebGL linked no runnable shader program"
-    : `Uniformly black volume target at ${diagnostic.time.toFixed(3)}s; WebGL error ${diagnostic.webglError}; samples ${diagnostic.samples.join(",")}; notes ${diagnostic.noteCount}`;
+    : diagnostic.kind === "context-lost"
+      ? `WebGL context lost while rendering Phaseglass; error ${diagnostic.webglError}${diagnostic.statusMessage ? `; ${diagnostic.statusMessage}` : ""}`
+      : `Uniformly black volume target at ${diagnostic.time.toFixed(3)}s; WebGL error ${diagnostic.webglError}; samples ${diagnostic.samples.join(",")}; notes ${diagnostic.noteCount}`;
   const summary = primaryLog.replace(/\s+/g, " ").trim().slice(0, 900);
-  statusTitle.textContent = diagnostic.kind === "shader" ? `Phaseglass ${diagnostic.stage} shader failed` : "Phaseglass produced a black GPU frame";
+  statusTitle.textContent = diagnostic.kind === "shader"
+    ? `Phaseglass ${diagnostic.stage} shader failed`
+    : diagnostic.kind === "context-lost"
+      ? "Phaseglass lost the WebGL context"
+      : "Phaseglass produced a black GPU frame";
   statusDetail.textContent = summary;
   renderFailure = summary;
   (globalThis as typeof globalThis & { __phaseglassDiagnostic?: PhaseglassDiagnostic }).__phaseglassDiagnostic = diagnostic;

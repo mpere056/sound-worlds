@@ -37,7 +37,14 @@ export interface PhaseglassBlackFrameDiagnostic {
   noteCount: number;
 }
 
-export type PhaseglassDiagnostic = PhaseglassShaderDiagnostic | PhaseglassBlackFrameDiagnostic;
+export interface PhaseglassContextLostDiagnostic {
+  kind: "context-lost";
+  stage: "renderer";
+  webglError: number;
+  statusMessage: string;
+}
+
+export type PhaseglassDiagnostic = PhaseglassShaderDiagnostic | PhaseglassBlackFrameDiagnostic | PhaseglassContextLostDiagnostic;
 export type PhaseglassDiagnosticHandler = (diagnostic: PhaseglassDiagnostic) => void;
 
 export const PHASEGLASS_RAYMARCH_SCALE = 0.5;
@@ -318,7 +325,7 @@ vec3 architecturalField(vec3 rayDirection) {
   return color;
 }
 
-void evaluateDisturbances(vec2 coordinate, float layerIndex, out float phaseMask, out float caustic, out float preview, out vec2 bend) {
+void evaluateDisturbances(vec2 coordinate, out float phaseMask, out float caustic, out float preview, out vec2 bend) {
   phaseMask = 0.0;
   caustic = 0.0;
   preview = 0.0;
@@ -330,7 +337,7 @@ void evaluateDisturbances(vec2 coordinate, float layerIndex, out float phaseMask
     vec2 direction = uNoteDirection[noteIndex];
     float frequency = 4.2 + uNotePitch[noteIndex] * 9.6;
     float travel = age * (1.35 + uNoteVelocity[noteIndex] * 2.35);
-    float phaseCoordinate = dot(coordinate, direction) * frequency - travel + uNotePhase[noteIndex] + layerIndex * 0.83;
+    float phaseCoordinate = dot(coordinate, direction) * frequency - travel + uNotePhase[noteIndex];
     float crossCoordinate = dot(coordinate, vec2(-direction.y, direction.x));
     float front = exp(-abs(sin(phaseCoordinate + sin(crossCoordinate * 1.7) * 0.42)) * (12.0 + uNoteVelocity[noteIndex] * 13.0));
     float contact = exp(-lead * lead * 150.0);
@@ -384,7 +391,7 @@ void evaluatePhaseSheets(vec3 worldPoint, vec3 rayDirection, float time, out flo
   }
 }
 
-vec3 holographicField(vec3 point) {
+vec3 holographicField(vec3 point, float notePhase, float noteCaustic, vec2 noteBend) {
   vec2 transverse = point.xy;
   vec2 warped = transverse;
   float phase = point.z * (2.0 + uPitch * 0.7) - uTime * (0.12 + uActivity * 0.08);
@@ -397,10 +404,9 @@ vec3 holographicField(vec3 point) {
     if (index >= uMembraneCount) break;
     float downstreamDistance = point.z - uMembraneCenter[index].z;
     float passed = smoothstep(-0.12, 0.12, downstreamDistance);
-    float notePhase, noteCaustic, notePreview;
-    vec2 noteBend;
-    evaluateDisturbances(warped / max(0.1, uMembraneRadius[index]), float(index), notePhase, noteCaustic, notePreview, noteBend);
-    vec2 gradient = vec2(dot(uMembraneOutgoing[index], uMembraneAxisU[index]), dot(uMembraneOutgoing[index], uMembraneAxisV[index])) + noteBend * 5.5;
+    float layerPhase = notePhase + float(index) * 0.83;
+    vec2 layerBend = noteBend * (4.6 + float(index) * 0.45);
+    vec2 gradient = vec2(dot(uMembraneOutgoing[index], uMembraneAxisU[index]), dot(uMembraneOutgoing[index], uMembraneAxisV[index])) + layerBend;
     float gradientLength = length(gradient);
     vec2 gradientDirection = gradientLength > 0.0001 ? gradient / gradientLength : vec2(0.7071, 0.7071);
     float written = uMembraneFill[index];
@@ -410,10 +416,10 @@ vec3 holographicField(vec3 point) {
     float localCoordinate = dot(warped, gradientDirection);
     float crossCoordinate = dot(warped, vec2(-gradientDirection.y, gradientDirection.x));
     float registerPhase = localCoordinate * (3.8 + uMembranePitch[index] * 7.2) + crossCoordinate * (0.8 + uMembraneVelocity[index] * 1.8) + uMembranePhase[index];
-    float phaseWave = sin(registerPhase + sin(crossCoordinate * 2.1 - uTime * 0.08) * 0.55 + notePhase * 1.45);
+    float phaseWave = sin(registerPhase + sin(crossCoordinate * 2.1 - uTime * 0.08) * 0.55 + layerPhase * 1.45);
     phase += passed * depth * phaseWave * (0.72 + uMembraneVelocity[index] * 0.48);
-    encodedPhase += passed * depth * (0.5 + 0.5 * cos(registerPhase + propagation * 0.34 + notePhase));
-    caustic += passed * depth * (exp(-abs(sin(registerPhase + phase)) * (10.0 + uMembraneVelocity[index] * 10.0)) + noteCaustic * 0.9) * exp(-propagation * 0.045);
+    encodedPhase += passed * depth * (0.5 + 0.5 * cos(registerPhase + propagation * 0.34 + layerPhase));
+    caustic += passed * depth * (exp(-abs(sin(registerPhase + phase)) * (10.0 + uMembraneVelocity[index] * 10.0)) + noteCaustic * (0.72 + float(index) * 0.09)) * exp(-propagation * 0.045);
     spectral += passed * depth * abs(sin(registerPhase * 0.47 + propagation * 0.22));
     transmission *= mix(1.0, uMembraneTransmission[index], passed * written * 0.7);
   }
@@ -440,12 +446,16 @@ void main() {
   vec3 rayDirection = normalize(forward * 1.62 + right * uv.x + up * uv.y);
   float depth = 0.3 + hash31(vec3(gl_FragCoord.xy, floor(uTime * 60.0))) * 0.28;
   vec3 color = architecturalField(rayDirection);
+  float notePhase, noteCaustic, notePreview;
+  vec2 noteBend;
+  evaluateDisturbances(uv, notePhase, noteCaustic, notePreview, noteBend);
+  color += mix(vec3(0.018, 0.07, 0.08), vec3(0.09, 0.055, 0.018), uPitch) * notePreview * 0.18;
   for (int step = 0; step < VOLUME_STEPS; step++) {
     vec3 point = uCameraPosition + rayDirection * depth;
     float structure, interference, dormant;
     vec3 sheetTint;
     evaluatePhaseSheets(point, rayDirection, uTime, structure, interference, dormant, sheetTint);
-    vec3 field = holographicField(point) * uWavefront;
+    vec3 field = holographicField(point, notePhase, noteCaustic, noteBend) * uWavefront;
     vec3 glassColor = structure > 0.001 ? sheetTint / max(0.18, structure + interference * 0.5) : vec3(0.18, 0.62, 0.66);
     vec3 activeWaveColor = mix(vec3(0.45, 0.92, 0.94), vec3(0.98, 0.67, 0.25), uPitch * 0.44);
     vec3 dormantColor = mix(vec3(0.16, 0.43, 0.47), vec3(0.42, 0.31, 0.14), uPitch * 0.32);
@@ -534,6 +544,7 @@ export class PhaseglassScene {
   readonly #compositeMaterial: ShaderMaterial;
   readonly #target: WebGLRenderTarget;
   readonly #diagnosticHandler: PhaseglassDiagnosticHandler | undefined;
+  readonly #canvas: HTMLCanvasElement;
   #diagnosticProbeFrames = 3;
   readonly #centers = vectors(PHASEGLASS_VISIBLE_MEMBRANES);
   readonly #normals = vectors(PHASEGLASS_VISIBLE_MEMBRANES);
@@ -560,11 +571,23 @@ export class PhaseglassScene {
   readonly #notePhases = numbers(PHASEGLASS_NOTE_WINDOW_COUNT);
   readonly #noteStrengths = numbers(PHASEGLASS_NOTE_WINDOW_COUNT);
   readonly #notePreviews = numbers(PHASEGLASS_NOTE_WINDOW_COUNT);
+  readonly #handleContextLost = (event: Event): void => {
+    const diagnostic: PhaseglassContextLostDiagnostic = {
+      kind: "context-lost",
+      stage: "renderer",
+      webglError: this.#renderer.getContext().getError(),
+      statusMessage: (event as WebGLContextEvent).statusMessage ?? "",
+    };
+    console.error("[Phaseglass WebGL context lost]", diagnostic);
+    this.#diagnosticHandler?.(diagnostic);
+  };
 
   constructor(canvas: HTMLCanvasElement, performance: PhaseglassPerformance, onDiagnostic?: PhaseglassDiagnosticHandler) {
     this.#performance = performance;
     this.#diagnosticHandler = onDiagnostic;
+    this.#canvas = canvas;
     this.#renderer = new WebGLRenderer({ canvas, antialias: false, alpha: false });
+    canvas.addEventListener("webglcontextlost", this.#handleContextLost);
     this.#renderer.debug.checkShaderErrors = true;
     this.#renderer.debug.onShaderError = (gl, program, vertexShader, fragmentShader) => {
       const fragmentSource = gl.getShaderSource(fragmentShader) ?? "";
@@ -752,6 +775,7 @@ export class PhaseglassScene {
   }
 
   destroy(): void {
+    this.#canvas.removeEventListener("webglcontextlost", this.#handleContextLost);
     for (const scene of [this.#volumeScene, this.#compositeScene]) {
       scene.traverse((object) => {
         const mesh = object as Mesh;
