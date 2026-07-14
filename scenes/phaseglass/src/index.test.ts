@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PhaseglassMembrane } from "@reaper-viz/compiler-phaseglass";
-import { PHASEGLASS_LAYER_COUNT, PHASEGLASS_NOTE_WINDOW_COUNT, PHASEGLASS_RAYMARCH_SCALE, PHASEGLASS_VOLUME_STEPS, PHASEGLASS_VISIBLE_MEMBRANES, samplePhaseglassAnticipation, samplePhaseglassCameraFrame, samplePhaseglassCausticSweep, samplePhaseglassDisturbances, samplePhaseglassMusicalState } from "./index.js";
+import { PHASEGLASS_RAYMARCH_SCALE, PHASEGLASS_REGISTER_COUNT, PHASEGLASS_VOLUME_STEPS, PHASEGLASS_VISIBLE_MEMBRANES, samplePhaseglassAnticipation, samplePhaseglassCameraFrame, samplePhaseglassCausticSweep, samplePhaseglassMusicalState, samplePhaseglassRegisters } from "./index.js";
 
 function membrane(t: number, pitch: number, energy: number): PhaseglassMembrane {
   return {
@@ -27,8 +27,7 @@ describe("Phaseglass shader budget", () => {
   it("keeps the first optical field within its planned mobile-shaped budget", () => {
     expect(PHASEGLASS_RAYMARCH_SCALE).toBe(0.5);
     expect(PHASEGLASS_VISIBLE_MEMBRANES).toBeLessThanOrEqual(8);
-    expect(PHASEGLASS_LAYER_COUNT).toBe(3);
-    expect(PHASEGLASS_NOTE_WINDOW_COUNT).toBeLessThanOrEqual(12);
+    expect(PHASEGLASS_REGISTER_COUNT).toBe(7);
     expect(PHASEGLASS_VOLUME_STEPS).toBeLessThanOrEqual(52);
   });
 });
@@ -74,45 +73,45 @@ describe("Phaseglass temporal field", () => {
   });
 });
 
-describe("Phaseglass optical disturbances", () => {
-  it("previews a future note without applying its active refractive strength", () => {
-    const [disturbance] = samplePhaseglassDisturbances([membrane(2, 60, 0.8)], 0);
-    expect(disturbance!.preview).toBeGreaterThan(0);
-    expect(disturbance!.strength).toBeLessThan(0.1);
+describe("Phaseglass holographic registers", () => {
+  it("keeps future notes as previews without writing phase", () => {
+    const registers = samplePhaseglassRegisters([membrane(2, 60, 0.8)], 0);
+    expect(registers).toHaveLength(PHASEGLASS_REGISTER_COUNT);
+    expect(registers[0]!.preview).toBeGreaterThan(0);
+    expect(registers[0]!.written).toBe(0);
+    expect(registers[0]!.phaseDepth).toBe(0);
   });
 
-  it("develops a note into a continuous post-contact disturbance", () => {
+  it("writes a note smoothly and preserves it through later silence", () => {
     const notes = [membrane(1, 60, 0.8)];
-    const contact = samplePhaseglassDisturbances(notes, 1)[0]!;
-    const traveling = samplePhaseglassDisturbances(notes, 1.2)[0]!;
-    const resolving = samplePhaseglassDisturbances(notes, 3)[0]!;
-    expect(contact.strength).toBe(0);
-    expect(traveling.strength).toBeGreaterThan(contact.strength);
-    expect(resolving.strength).toBeGreaterThan(0);
+    const contact = samplePhaseglassRegisters(notes, 1)[0]!;
+    const writing = samplePhaseglassRegisters(notes, 1.1)[0]!;
+    const late = samplePhaseglassRegisters(notes, 8)[0]!;
+    expect(contact.written).toBe(0);
+    expect(writing.written).toBeGreaterThan(0);
+    expect(late.written).toBe(1);
+    expect(late.phaseDepth).toBeGreaterThan(0);
   });
 
-  it("keeps dense notes simultaneous within the bounded shader window", () => {
-    const notes = Array.from({ length: 20 }, (_, index) => membrane(index * 0.08, 48 + index, 0.7));
-    const disturbances = samplePhaseglassDisturbances(notes, 1);
-    expect(disturbances).toHaveLength(PHASEGLASS_NOTE_WINDOW_COUNT);
-    expect(disturbances.filter((disturbance) => disturbance.noteTime <= 1 && disturbance.strength > 0).length).toBeGreaterThan(4);
+  it("accumulates repeated register notes instead of replacing its mask", () => {
+    const notes = Array.from({ length: PHASEGLASS_REGISTER_COUNT + 1 }, (_, index) => membrane(index * 0.25, 48 + index * 3, 0.55 + index * 0.04));
+    const before = samplePhaseglassRegisters(notes, 0.5)[0]!;
+    const after = samplePhaseglassRegisters(notes, 4)[0]!;
+    expect(before.noteCount).toBe(1);
+    expect(after.noteCount).toBe(2);
+    expect(after.phaseDepth).toBeGreaterThan(before.phaseDepth);
+    expect(after.pitch).not.toBe(before.pitch);
   });
 
-  it("maps pitch into phase-front direction and velocity into strength", () => {
-    const low = samplePhaseglassDisturbances([membrane(0, 40, 0.2)], 0.3)[0]!;
-    const high = samplePhaseglassDisturbances([membrane(0, 80, 1)], 0.3)[0]!;
-    expect(high.direction).not.toEqual(low.direction);
-    expect(high.pitch).toBeGreaterThan(low.pitch);
-    expect(high.strength).toBeGreaterThan(low.strength);
-  });
-
-  it("keeps every disturbance finite and normalized", () => {
+  it("keeps every register value finite and bounded", () => {
     const notes = Array.from({ length: 80 }, (_, index) => membrane(index * 0.05, 20 + index * 2, index % 2 ? 1 : 0.05));
-    for (const disturbance of samplePhaseglassDisturbances(notes, 2)) {
-      expect([disturbance.noteTime, disturbance.pitch, disturbance.velocity, ...disturbance.direction, disturbance.phase, disturbance.strength, disturbance.preview].every(Number.isFinite)).toBe(true);
-      expect(Math.hypot(...disturbance.direction)).toBeCloseTo(1, 8);
-      expect(disturbance.preview).toBeGreaterThanOrEqual(0);
-      expect(disturbance.preview).toBeLessThanOrEqual(1);
+    for (const register of samplePhaseglassRegisters(notes, 20)) {
+      expect([...register.gradient, register.phaseDepth, register.transmission, register.pitch, register.velocity, register.written, register.preview].every(Number.isFinite)).toBe(true);
+      expect(Math.hypot(...register.gradient)).toBeLessThanOrEqual(1);
+      expect(register.phaseDepth).toBeGreaterThanOrEqual(0);
+      expect(register.phaseDepth).toBeLessThanOrEqual(1);
+      expect(register.transmission).toBeGreaterThanOrEqual(0);
+      expect(register.transmission).toBeLessThanOrEqual(1);
     }
   });
 

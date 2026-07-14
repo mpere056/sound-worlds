@@ -12,9 +12,8 @@ export interface PhaseglassTuning {
 }
 
 export const PHASEGLASS_RAYMARCH_SCALE = 0.5;
-export const PHASEGLASS_LAYER_COUNT = 3;
-export const PHASEGLASS_NOTE_WINDOW_COUNT = 12;
-export const PHASEGLASS_VISIBLE_MEMBRANES = PHASEGLASS_LAYER_COUNT;
+export const PHASEGLASS_REGISTER_COUNT = 7;
+export const PHASEGLASS_VISIBLE_MEMBRANES = PHASEGLASS_REGISTER_COUNT;
 export const PHASEGLASS_VOLUME_STEPS = 48;
 
 function clamp01(value: number): number {
@@ -112,14 +111,29 @@ function normalizeVelocity(range: MusicalRange, velocity: number): number {
   return clamp01(((velocity - range.minVelocity) / (range.maxVelocity - range.minVelocity)) * 0.76 + velocity * 0.24);
 }
 
-export interface PhaseglassDisturbance {
-  noteTime: number;
+export interface PhaseglassRegisterState {
+  gradient: [number, number];
+  phaseDepth: number;
+  transmission: number;
   pitch: number;
   velocity: number;
-  direction: [number, number];
-  phase: number;
-  strength: number;
+  written: number;
   preview: number;
+  sweep: PhaseglassCausticSweep;
+  noteCount: number;
+}
+
+interface RegisterAccumulator {
+  gradientX: number;
+  gradientY: number;
+  pitch: number;
+  velocity: number;
+  weight: number;
+  depth: number;
+  written: number;
+  preview: number;
+  sweep: PhaseglassCausticSweep;
+  noteCount: number;
 }
 
 function localPhaseGradient(membrane: PhaseglassMembrane): [number, number] {
@@ -131,44 +145,66 @@ function localPhaseGradient(membrane: PhaseglassMembrane): [number, number] {
   return [gradientU / magnitude * boundedMagnitude, gradientV / magnitude * boundedMagnitude];
 }
 
-export function samplePhaseglassDisturbances(membranes: readonly PhaseglassMembrane[], time: number): PhaseglassDisturbance[] {
+export function samplePhaseglassRegisters(membranes: readonly PhaseglassMembrane[], time: number): PhaseglassRegisterState[] {
   const range = musicalRange(membranes);
-  return membranes
-    .map((membrane, index) => ({ membrane, index, distance: Math.abs(membrane.t - time) }))
-    .filter(({ membrane }) => membrane.t >= time - 4.2 && membrane.t <= time + 3)
-    .sort((left, right) => left.distance - right.distance || left.index - right.index)
-    .slice(0, PHASEGLASS_NOTE_WINDOW_COUNT)
-    .sort((left, right) => left.membrane.t - right.membrane.t || left.index - right.index)
-    .map(({ membrane, index }) => {
-      const pitch = normalizePitch(range, membrane.pitch);
-      const velocity = normalizeVelocity(range, membrane.energy);
-      const leadSeconds = membrane.t - time;
-      const preview = leadSeconds > 0 ? smootherStep((3 - leadSeconds) / 3) : 0;
-      const age = Math.max(0, -leadSeconds);
-      const attack = leadSeconds <= 0 ? smootherStep(age / 0.18) : 0;
-      const active = attack * Math.exp(-age / (1.65 + membrane.duration * 0.8 + velocity * 1.2));
-      let [directionX, directionY] = localPhaseGradient(membrane);
-      if (Math.hypot(directionX, directionY) < 1e-6) {
-        const angle = pitch * Math.PI * 1.65 + index * 0.17;
-        directionX = Math.cos(angle);
-        directionY = Math.sin(angle);
-      } else {
-        const pitchRotation = (pitch - 0.5) * 1.15;
-        const cosine = Math.cos(pitchRotation);
-        const sine = Math.sin(pitchRotation);
-        [directionX, directionY] = [directionX * cosine - directionY * sine, directionX * sine + directionY * cosine];
-      }
-      const directionLength = Math.max(1e-9, Math.hypot(directionX, directionY));
-      return {
-        noteTime: membrane.t,
-        pitch,
-        velocity,
-        direction: [directionX / directionLength, directionY / directionLength],
-        phase: index * 0.754877666 + pitch * 2.31,
-        strength: active * (0.34 + velocity * 0.66) + preview * (0.045 + velocity * 0.035),
-        preview,
-      };
-    });
+  const accumulators: RegisterAccumulator[] = Array.from({ length: PHASEGLASS_REGISTER_COUNT }, () => ({
+    gradientX: 0,
+    gradientY: 0,
+    pitch: 0,
+    velocity: 0,
+    weight: 0,
+    depth: 0,
+    written: 0,
+    preview: 0,
+    sweep: { position: -0.95, strength: 0, contact: 0 },
+    noteCount: 0,
+  }));
+
+  membranes.forEach((membrane, index) => {
+    const register = accumulators[index % PHASEGLASS_REGISTER_COUNT]!;
+    const leadSeconds = membrane.t - time;
+    if (leadSeconds > 0) {
+      register.preview = Math.max(register.preview, smootherStep((3 - leadSeconds) / 3));
+      return;
+    }
+
+    const pitch = normalizePitch(range, membrane.pitch);
+    const velocity = normalizeVelocity(range, membrane.energy);
+    const writing = smootherStep(-leadSeconds / 0.22);
+    const weight = writing * (0.32 + velocity * 0.68);
+    const [gradientX, gradientY] = localPhaseGradient(membrane);
+    register.gradientX += gradientX * weight;
+    register.gradientY += gradientY * weight;
+    register.pitch += pitch * weight;
+    register.velocity += velocity * weight;
+    register.weight += weight;
+    register.depth += weight * (0.42 + pitch * 0.28 + velocity * 0.3);
+    register.written = Math.max(register.written, writing);
+    register.noteCount += 1;
+
+    const sweep = samplePhaseglassCausticSweep(leadSeconds);
+    if (sweep.contact > register.sweep.contact || sweep.strength > register.sweep.strength) register.sweep = sweep;
+  });
+
+  return accumulators.map((register) => {
+    const divisor = Math.max(1e-9, register.weight);
+    const averageX = register.gradientX / divisor;
+    const averageY = register.gradientY / divisor;
+    const averageMagnitude = Math.hypot(averageX, averageY);
+    const gradientScale = averageMagnitude > 1 ? 1 / averageMagnitude : 1;
+    const phaseDepth = 1 - Math.exp(-register.depth * 0.48);
+    return {
+      gradient: [averageX * gradientScale, averageY * gradientScale],
+      phaseDepth,
+      transmission: clamp01(0.98 - phaseDepth * 0.28 + (register.weight > 0 ? register.velocity / divisor : 0) * 0.08),
+      pitch: register.weight > 0 ? register.pitch / divisor : 0.5,
+      velocity: register.weight > 0 ? register.velocity / divisor : 0,
+      written: register.written,
+      preview: register.preview,
+      sweep: register.sweep,
+      noteCount: register.noteCount,
+    };
+  });
 }
 
 export interface PhaseglassMusicalState {
@@ -219,7 +255,6 @@ const VOLUME_FRAGMENT = `
 precision highp float;
 varying vec2 vUv;
 #define MEMBRANE_COUNT ${PHASEGLASS_VISIBLE_MEMBRANES}
-#define NOTE_COUNT ${PHASEGLASS_NOTE_WINDOW_COUNT}
 #define VOLUME_STEPS ${PHASEGLASS_VOLUME_STEPS}
 
 uniform vec2 uResolution;
@@ -256,14 +291,6 @@ uniform float uMembranePhase[MEMBRANE_COUNT];
 uniform float uMembraneSweepPosition[MEMBRANE_COUNT];
 uniform float uMembraneSweepStrength[MEMBRANE_COUNT];
 uniform float uMembraneContact[MEMBRANE_COUNT];
-uniform int uNoteCount;
-uniform float uNoteTime[NOTE_COUNT];
-uniform float uNotePitch[NOTE_COUNT];
-uniform float uNoteVelocity[NOTE_COUNT];
-uniform vec2 uNoteDirection[NOTE_COUNT];
-uniform float uNotePhase[NOTE_COUNT];
-uniform float uNoteStrength[NOTE_COUNT];
-uniform float uNotePreview[NOTE_COUNT];
 
 float hash31(vec3 point) {
   return fract(sin(dot(point, vec3(127.1, 311.7, 74.7))) * 43758.5453123);
@@ -289,31 +316,6 @@ vec3 architecturalField(vec3 rayDirection) {
   return color;
 }
 
-void evaluateDisturbances(vec2 coordinate, float layerIndex, out float phaseMask, out float caustic, out float preview, out vec2 bend) {
-  phaseMask = 0.0;
-  caustic = 0.0;
-  preview = 0.0;
-  bend = vec2(0.0);
-  for (int noteIndex = 0; noteIndex < NOTE_COUNT; noteIndex++) {
-    if (noteIndex >= uNoteCount) break;
-    float lead = uNoteTime[noteIndex] - uTime;
-    float age = max(0.0, -lead);
-    vec2 direction = uNoteDirection[noteIndex];
-    float frequency = 4.2 + uNotePitch[noteIndex] * 9.6;
-    float travel = age * (1.35 + uNoteVelocity[noteIndex] * 2.35);
-    float phaseCoordinate = dot(coordinate, direction) * frequency - travel + uNotePhase[noteIndex] + layerIndex * 0.83;
-    float crossCoordinate = dot(coordinate, vec2(-direction.y, direction.x));
-    float front = exp(-abs(sin(phaseCoordinate + sin(crossCoordinate * 1.7) * 0.42)) * (12.0 + uNoteVelocity[noteIndex] * 13.0));
-    float contact = exp(-lead * lead * 150.0);
-    float active = uNoteStrength[noteIndex] * (1.0 - step(0.0, lead));
-    float future = uNotePreview[noteIndex] * step(0.0, lead);
-    phaseMask += sin(phaseCoordinate) * active * (0.34 + uNoteVelocity[noteIndex] * 0.66);
-    caustic += front * (active * (0.42 + uNoteVelocity[noteIndex] * 0.92) + contact * (0.55 + uNoteVelocity[noteIndex]));
-    preview += future * exp(-abs(sin(phaseCoordinate)) * 18.0) * 0.24;
-    bend += direction * cos(phaseCoordinate) * active * (0.025 + uNoteVelocity[noteIndex] * 0.075);
-  }
-}
-
 void evaluatePhaseSheets(vec3 worldPoint, vec3 rayDirection, float time, out float structure, out float interference, out float dormant, out vec3 tint) {
   structure = 0.0;
   interference = 0.0;
@@ -334,14 +336,11 @@ void evaluatePhaseSheets(vec3 worldPoint, vec3 rayDirection, float time, out flo
     float apertureBevel = exp(-abs(roundedSheet - 1.04) * 26.0);
     float sheet = exp(-abs(plane) * 7.5) * panelGate;
     float fresnel = pow(1.0 - abs(dot(rayDirection, uMembraneNormal[index])), 2.0);
-    float notePhase, noteCaustic, notePreview;
-    vec2 noteBend;
-    evaluateDisturbances(sheetCoordinate, float(index), notePhase, noteCaustic, notePreview, noteBend);
     vec2 bend = vec2(dot(uMembraneOutgoing[index], uMembraneAxisU[index]), dot(uMembraneOutgoing[index], uMembraneAxisV[index]));
-    bend = normalize(bend + noteBend + vec2(0.0001));
+    bend = normalize(bend + vec2(0.0001));
     float phaseCoordinate = dot(disc, bend);
     float crossCoordinate = dot(disc, vec2(-bend.y, bend.x));
-    float directionalEtch = exp(-abs(sin(phaseCoordinate * (7.0 + uMembranePitch[index] * 9.0) + crossCoordinate * 1.7 + uMembranePhase[index] + notePhase * 1.2)) * 30.0);
+    float directionalEtch = exp(-abs(sin(phaseCoordinate * (7.0 + uMembranePitch[index] * 9.0) + crossCoordinate * 1.7 + uMembranePhase[index])) * 30.0);
     float counterEtch = exp(-abs(sin(crossCoordinate * (5.0 + uMembraneVelocity[index] * 7.0) - phaseCoordinate * 2.2 - time * 0.16)) * 38.0);
     float moire = pow(0.5 + 0.5 * cos(phaseCoordinate * 13.0 + sin(crossCoordinate * 5.0 + uMembranePhase[index])), 9.0);
     float normalizedPhase = phaseCoordinate / max(0.08, uMembraneRadius[index]);
@@ -350,9 +349,9 @@ void evaluatePhaseSheets(vec3 worldPoint, vec3 rayDirection, float time, out flo
     float activation = uMembraneFill[index] + uMembraneRim[index] * 0.7;
     float persistent = 0.22 + activation * 0.78;
     structure += sheet * (panelGate * 0.07 + frame * (0.62 + fresnel * 0.46) + apertureBevel * (0.18 + fresnel * 0.28)) * persistent;
-    float localInterference = sheet * apertureGate * (directionalEtch * 0.34 + counterEtch * 0.18 + moire * 0.38 + sweep * 0.7 + contactBloom * 0.5 + noteCaustic * 1.3) * (0.18 + activation * (0.82 + uMembraneVelocity[index] * 0.4));
+    float localInterference = sheet * apertureGate * (directionalEtch * 0.4 + counterEtch * 0.22 + moire * 0.5 + sweep * 1.25 + contactBloom * 0.72) * (0.18 + activation * (0.82 + uMembraneVelocity[index] * 0.4));
     interference += localInterference;
-    dormant += sheet * (frame * 0.48 + directionalEtch * apertureGate * 0.12 + notePreview) * uMembraneVacancy[index];
+    dormant += sheet * (frame * 0.72 + directionalEtch * apertureGate * 0.18) * uMembraneVacancy[index];
     vec3 prismaticTint = mix(uMembraneColor[index], mix(vec3(0.62, 0.94, 1.0), vec3(1.0, 0.72, 0.32), uMembranePitch[index]), fresnel * 0.38);
     tint += prismaticTint * (sheet * (0.14 + frame * 0.48 + apertureBevel * 0.2) + localInterference * 0.24);
   }
@@ -371,10 +370,7 @@ vec3 holographicField(vec3 point) {
     if (index >= uMembraneCount) break;
     float downstreamDistance = point.z - uMembraneCenter[index].z;
     float passed = smoothstep(-0.12, 0.12, downstreamDistance);
-    float notePhase, noteCaustic, notePreview;
-    vec2 noteBend;
-    evaluateDisturbances(warped / max(0.1, uMembraneRadius[index]), float(index), notePhase, noteCaustic, notePreview, noteBend);
-    vec2 gradient = vec2(dot(uMembraneOutgoing[index], uMembraneAxisU[index]), dot(uMembraneOutgoing[index], uMembraneAxisV[index])) + noteBend * 5.5;
+    vec2 gradient = vec2(dot(uMembraneOutgoing[index], uMembraneAxisU[index]), dot(uMembraneOutgoing[index], uMembraneAxisV[index]));
     float gradientLength = length(gradient);
     vec2 gradientDirection = gradientLength > 0.0001 ? gradient / gradientLength : vec2(0.7071, 0.7071);
     float written = uMembraneFill[index];
@@ -384,10 +380,10 @@ vec3 holographicField(vec3 point) {
     float localCoordinate = dot(warped, gradientDirection);
     float crossCoordinate = dot(warped, vec2(-gradientDirection.y, gradientDirection.x));
     float registerPhase = localCoordinate * (3.8 + uMembranePitch[index] * 7.2) + crossCoordinate * (0.8 + uMembraneVelocity[index] * 1.8) + uMembranePhase[index];
-    float phaseWave = sin(registerPhase + sin(crossCoordinate * 2.1 - uTime * 0.08) * 0.55 + notePhase * 1.45);
-    phase += passed * depth * phaseWave * (0.72 + uMembraneVelocity[index] * 0.48);
-    encodedPhase += passed * depth * (0.5 + 0.5 * cos(registerPhase + propagation * 0.34 + notePhase));
-    caustic += passed * depth * (exp(-abs(sin(registerPhase + phase)) * (10.0 + uMembraneVelocity[index] * 10.0)) + noteCaustic * 0.9) * exp(-propagation * 0.045);
+    float phaseMask = sin(registerPhase + sin(crossCoordinate * 2.1 - uTime * 0.08) * 0.55);
+    phase += passed * depth * phaseMask * (0.72 + uMembraneVelocity[index] * 0.48);
+    encodedPhase += passed * depth * (0.5 + 0.5 * cos(registerPhase + propagation * 0.34));
+    caustic += passed * depth * exp(-abs(sin(registerPhase + phase)) * (10.0 + uMembraneVelocity[index] * 10.0)) * exp(-propagation * 0.045);
     spectral += passed * depth * abs(sin(registerPhase * 0.47 + propagation * 0.22));
     transmission *= mix(1.0, uMembraneTransmission[index], passed * written * 0.7);
   }
@@ -488,10 +484,6 @@ function vectors(length: number): Vector3[] {
   return Array.from({ length }, () => new Vector3());
 }
 
-function vectors2(length: number): Vector2[] {
-  return Array.from({ length }, () => new Vector2(1, 0));
-}
-
 function numbers(length: number): number[] {
   return Array.from({ length }, () => 0);
 }
@@ -525,13 +517,6 @@ export class PhaseglassScene {
   readonly #sweepPosition = numbers(PHASEGLASS_VISIBLE_MEMBRANES);
   readonly #sweepStrength = numbers(PHASEGLASS_VISIBLE_MEMBRANES);
   readonly #contact = numbers(PHASEGLASS_VISIBLE_MEMBRANES);
-  readonly #noteTimes = numbers(PHASEGLASS_NOTE_WINDOW_COUNT);
-  readonly #notePitches = numbers(PHASEGLASS_NOTE_WINDOW_COUNT);
-  readonly #noteVelocities = numbers(PHASEGLASS_NOTE_WINDOW_COUNT);
-  readonly #noteDirections = vectors2(PHASEGLASS_NOTE_WINDOW_COUNT);
-  readonly #notePhases = numbers(PHASEGLASS_NOTE_WINDOW_COUNT);
-  readonly #noteStrengths = numbers(PHASEGLASS_NOTE_WINDOW_COUNT);
-  readonly #notePreviews = numbers(PHASEGLASS_NOTE_WINDOW_COUNT);
 
   constructor(canvas: HTMLCanvasElement, performance: PhaseglassPerformance) {
     this.#performance = performance;
@@ -557,8 +542,6 @@ export class PhaseglassScene {
         uMembraneRadius: { value: this.#radii }, uMembraneVacancy: { value: this.#vacancy }, uMembraneFill: { value: this.#fill }, uMembraneRim: { value: this.#rim },
         uMembranePitch: { value: this.#pitch }, uMembraneVelocity: { value: this.#velocity }, uMembraneDepth: { value: this.#depth }, uMembraneTransmission: { value: this.#transmission }, uMembranePhase: { value: this.#phase },
         uMembraneSweepPosition: { value: this.#sweepPosition }, uMembraneSweepStrength: { value: this.#sweepStrength }, uMembraneContact: { value: this.#contact },
-        uNoteCount: { value: 0 }, uNoteTime: { value: this.#noteTimes }, uNotePitch: { value: this.#notePitches }, uNoteVelocity: { value: this.#noteVelocities },
-        uNoteDirection: { value: this.#noteDirections }, uNotePhase: { value: this.#notePhases }, uNoteStrength: { value: this.#noteStrengths }, uNotePreview: { value: this.#notePreviews },
       },
     });
     this.#volumeScene.add(new Mesh(new PlaneGeometry(2, 2), this.#volumeMaterial));
@@ -572,70 +555,32 @@ export class PhaseglassScene {
     this.#compositeScene.add(new Mesh(new PlaneGeometry(2, 2), this.#compositeMaterial));
   }
 
-  #updateOpticalStack(time: number, musical: PhaseglassMusicalState): void {
-    const disturbances = samplePhaseglassDisturbances(this.#performance.statics.membranes, time);
-    let directionX = 0;
-    let directionY = 0;
-    let directionWeight = 0;
-    let preview = 0;
-    for (let index = 0; index < PHASEGLASS_NOTE_WINDOW_COUNT; index += 1) {
-      const disturbance = disturbances[index];
-      if (!disturbance) {
-        this.#noteTimes[index] = time + 100;
-        this.#notePitches[index] = 0.5;
-        this.#noteVelocities[index] = 0;
-        this.#noteDirections[index]!.set(1, 0);
-        this.#notePhases[index] = 0;
-        this.#noteStrengths[index] = 0;
-        this.#notePreviews[index] = 0;
-        continue;
-      }
-      this.#noteTimes[index] = disturbance.noteTime;
-      this.#notePitches[index] = disturbance.pitch;
-      this.#noteVelocities[index] = disturbance.velocity;
-      this.#noteDirections[index]!.set(...disturbance.direction);
-      this.#notePhases[index] = disturbance.phase;
-      this.#noteStrengths[index] = disturbance.strength;
-      this.#notePreviews[index] = disturbance.preview;
-      const weight = disturbance.strength * (0.25 + disturbance.velocity * 0.75);
-      directionX += disturbance.direction[0] * weight;
-      directionY += disturbance.direction[1] * weight;
-      directionWeight += weight;
-      preview = Math.max(preview, disturbance.preview);
-    }
-    if (directionWeight < 1e-6) {
-      const angle = musical.pitch * Math.PI * 1.65;
-      directionX = Math.cos(angle);
-      directionY = Math.sin(angle);
-    }
-    const directionLength = Math.max(1e-9, Math.hypot(directionX, directionY));
-    directionX /= directionLength;
-    directionY /= directionLength;
-
+  #updateRegisters(time: number): void {
+    const registers = samplePhaseglassRegisters(this.#performance.statics.membranes, time);
     for (let slot = 0; slot < PHASEGLASS_VISIBLE_MEMBRANES; slot += 1) {
-      const color = new Color().setHSL(0.53 - musical.pitch * 0.34 + slot * 0.025, 0.48 + musical.velocity * 0.18, 0.62 + musical.velocity * 0.1);
-      const z = -4.6 + slot * 4.6;
-      this.#centers[slot]!.set((slot - 1) * 0.28, (1 - slot) * 0.2, z);
+      const register = registers[slot]!;
+      const color = new Color().setHSL(0.53 - register.pitch * 0.39, 0.5 + register.velocity * 0.2, 0.62 + register.velocity * 0.12);
+      const z = -6.6 + slot * 2.2;
+      this.#centers[slot]!.set(Math.sin(slot * 1.91) * 0.42, Math.cos(slot * 1.37) * 0.28, z);
       this.#normals[slot]!.set(0, 0, 1);
       this.#axesU[slot]!.set(1, 0, 0);
       this.#axesV[slot]!.set(0, 1, 0);
-      this.#outgoing[slot]!.set(directionX * (0.3 + musical.velocity * 0.34), directionY * (0.3 + musical.velocity * 0.34), 1).normalize();
+      this.#outgoing[slot]!.set(register.gradient[0] * 0.72, register.gradient[1] * 0.72, 1).normalize();
       this.#colors[slot]!.set(color.r, color.g, color.b);
-      this.#radii[slot] = 3.05;
-      this.#vacancy[slot] = 0.22 + preview * 0.78;
-      this.#fill[slot] = 0.58 + musical.activity * 0.42;
-      this.#rim[slot] = 0.08 + musical.pulse * 0.72;
-      this.#pitch[slot] = musical.pitch;
-      this.#velocity[slot] = musical.velocity;
-      this.#depth[slot] = 0.48 + musical.pressure * 0.46;
-      this.#transmission[slot] = 0.94 - musical.velocity * 0.1;
-      this.#phase[slot] = slot * 1.61803398875;
-      this.#sweepPosition[slot] = -0.95;
-      this.#sweepStrength[slot] = 0;
-      this.#contact[slot] = musical.pulse;
+      this.#radii[slot] = 1.02;
+      this.#vacancy[slot] = register.preview;
+      this.#fill[slot] = register.written;
+      this.#rim[slot] = Math.max(register.preview * 0.28, register.sweep.contact);
+      this.#pitch[slot] = register.pitch;
+      this.#velocity[slot] = register.velocity;
+      this.#depth[slot] = register.phaseDepth;
+      this.#transmission[slot] = register.transmission;
+      this.#phase[slot] = slot * 1.61803398875 + register.noteCount * 0.754877666;
+      this.#sweepPosition[slot] = register.sweep.position;
+      this.#sweepStrength[slot] = register.sweep.strength;
+      this.#contact[slot] = register.sweep.contact;
     }
-    this.#volumeMaterial.uniforms.uMembraneCount!.value = PHASEGLASS_LAYER_COUNT;
-    this.#volumeMaterial.uniforms.uNoteCount!.value = disturbances.length;
+    this.#volumeMaterial.uniforms.uMembraneCount!.value = PHASEGLASS_REGISTER_COUNT;
   }
 
   renderFrame(time: number): void {
@@ -643,7 +588,7 @@ export class PhaseglassScene {
     const cameraPosition = new Vector3(...cameraFrame.position);
     const cameraTarget = new Vector3(...cameraFrame.target);
     const musical = samplePhaseglassMusicalState(this.#performance.statics.membranes, time);
-    this.#updateOpticalStack(time, musical);
+    this.#updateRegisters(time);
     const uniforms = this.#volumeMaterial.uniforms;
     uniforms.uTime!.value = time; uniforms.uEnergy!.value = energyAt(this.#performance, time); uniforms.uPitch!.value = musical.pitch; uniforms.uVelocity!.value = musical.velocity;
     uniforms.uPulse!.value = musical.pulse; uniforms.uActivity!.value = musical.activity; uniforms.uPressure!.value = musical.pressure; uniforms.uSilence!.value = musical.silence;

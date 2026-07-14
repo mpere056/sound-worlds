@@ -710,8 +710,8 @@ async function loadConcept(concept: string): Promise<void> {
     addTuningBinding(bindingPane, phaseglass.tuning, "dispersion", { min: 0, max: 1.4, step: 0.01, label: "Dispersion" });
     addTuningBinding(bindingPane, phaseglass.tuning, "wavefront", { min: 0, max: 1.4, step: 0.01, label: "Field" });
     addTuningBinding(bindingPane, phaseglass.tuning, "cameraDistance", { min: 0.65, max: 1.6, step: 0.01, label: "Camera" });
-    sceneLabel.textContent = "Phaseglass - P6 Refractive Field";
-    statusTitle.textContent = "Phaseglass - continuous optical interference";
+    sceneLabel.textContent = "Phaseglass - P5 Holographic Instrument";
+    statusTitle.textContent = "Phaseglass - persistent phase computation";
     const report = performance.statics.routeReport;
     const clearance = report.minimumMembraneClearance === null ? "n/a" : report.minimumMembraneClearance.toFixed(3);
     statusDetail.textContent = `${report.deadlineCount} membranes - exact error ${report.exactCrossingError.toExponential(1)} - speed error ${report.maximumSpeedError.toExponential(1)} - clearance ${clearance} - ${report.earlyCrossingCount} early crossings`;
@@ -863,7 +863,7 @@ async function loadProject(id: string): Promise<void> {
   if (project?.concepts.includes("phaseglass")) {
     const phaseglass = document.createElement("option");
     phaseglass.value = "phaseglass";
-    phaseglass.textContent = "Phaseglass - P6 Refractive Field";
+    phaseglass.textContent = "Phaseglass - P5 Holographic Instrument";
     options.push(phaseglass);
   }
   const testPattern = document.createElement("option");

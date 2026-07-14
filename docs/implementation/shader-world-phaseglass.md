@@ -7,19 +7,17 @@
 - P2 first pass complete: finite membrane placement, one-contact lookahead, exact crossing and speed audits, overlap clearance, and early-crossing certification.
 - P3 architectural reset complete: there is no hero particle, target chain, folded volume, or central knot. Faceted phase sheets have view-dependent glass edges, aperture bevels, directional etching, and restrained highlight diffraction.
 - P4 material pass complete: refraction bends read without rectangular cutoffs, note contacts launch directional caustic sweeps, and the glass, field, and spectral response share one optical palette.
-- P5 register experiment rejected after visual review: cycling notes across seven separate planes read as footsteps, and the generic accumulated field weakened the previously successful refractive-light language.
-- P6 continuous-strata correction implemented, visual acceptance pending: three oversized glass strata remain present as one installation while a bounded window of note disturbances overlaps across the entire optical stack. There is no note-to-object assignment.
-- P6 musical semantics complete: pitch changes phase-front direction and interference spacing; velocity changes front speed, refractive displacement, and caustic focus; note duration and velocity govern post-contact resolution; density emerges from simultaneous disturbances rather than scene replacement.
+- P5 holographic-instrument pivot implemented, visual acceptance pending: seven stationary glass registers accumulate phase masks from the score. One broad coherent field is re-solved through every written register; there are no rendered route segments and the camera never follows a traveler.
+- P5 temporal semantics complete: future notes ghost their assigned register for three seconds, note contact begins a short continuous writing attack, completed masks persist through silence, and repeated register assignments accumulate instead of replacing prior state.
 - P5 compiler stress fixture complete: a deterministic 100-note phrase at roughly 105 ms spacing stays under the 250 ms test budget with positive membrane clearance and no early crossings.
 
 ## Product invariant
 
-Each grouped note contributes one bounded, continuously evolving phase front to
-the complete optical stack. Several fronts may coexist and interfere. The
-compiler's certified phase-gradient direction remains a physical input, with
-pitch rotating and scaling its visible phase language and velocity controlling
-its refractive energy. The runtime does not depict the central ray as a traveler
-or assign individual notes to individual glass objects.
+Each grouped note writes one bounded phase contribution into one of seven fixed
+glass registers. The contribution persists, and all downstream interference is
+recomputed from the ordered set of written register masks. The compiler's
+certified central ray remains the deterministic source of phase-gradient data,
+but the runtime does not depict that ray as a traveler or route.
 
 ## Mathematical model
 
@@ -64,21 +62,21 @@ chromatic spread. Duration maps only to visual decay.
 
 ## Final aesthetic direction
 
-Phaseglass should feel like a monumental refractive computation instrument
-suspended in a vast, dark architectural space. Three oversized, overlapping
-glass strata hold a continuous broad light field whose trajectory and caustics
-are reorganized by simultaneous musical phase fronts. Pearl-white highlights and restrained
+Phaseglass should feel like a monumental holographic computation instrument
+suspended in a vast, dark architectural space. Seven fixed faceted registers
+receive etched phase information while one continuous broad light field passes
+through the entire installation. Pearl-white highlights and restrained
 cyan/amber spectral edges make sheet thickness, transmission, and changing
 interference legible in still frames. No traveling object or sequential target
-is the subject; the changing optical field and its whole-installation consequence
+is the subject; the accumulated optical memory and its whole-field consequence
 are the subject together.
 
-The next three seconds must read as latent phase capacity within the same glass,
-not as a row of future targets. An upcoming note forms a faint directional
-crease across all strata. At contact it becomes an active traveling phase front;
-after contact its bend and caustic continue to propagate and resolve. Closely
-spaced notes overlap into dense interference, while isolated notes have room to
-travel visibly through the installation.
+The next three seconds must read as unfilled optical capacity. Upcoming notes
+appear as low-energy latent etchings in their assigned fixed register. At
+contact, a short writing sweep resolves the new phase contribution and the
+field downstream of that register reorganizes continuously. Completed masks
+remain in the register, so history, present, and preview are states of one
+instrument rather than stacked effects.
 
 Avoid hero particles, route-following cameras, target chains, rendered path
 segments, ring-like apertures,
@@ -120,14 +118,14 @@ the Q0 physics gate.
 
 - Build a half-resolution fullscreen raymarch pass with a bounded 32-48 steps,
   sparse architectural depth references, and temporal jitter.
-- Render three persistent large strata with phase-gradient etchings and
-  caustics. Propagate one broad coherent field through them while evaluating up
-  to twelve nearby note disturbances from absolute score time.
+- Render seven fixed faceted registers with phase-gradient etchings, caustics,
+  and note-triggered mask writing sampled from absolute time. Propagate one
+  broad coherent field through the ordered accumulated masks.
 - Gate: disabling shader quality changes appearance only, never geometry.
 
 ### P4 - Scene and camera
 
-- Render persistent depth-readable interference, large stratum frames, and one
+- Render persistent depth-readable interference, register frames, and one
   stationary gallery camera framing the complete installation.
 - Add app discovery, tuning, scrub, PNG, and short-video export.
 - Gate: arbitrary seeking reproduces identical architecture and shader state.
@@ -143,8 +141,8 @@ the Q0 physics gate.
 ## Principal risk
 
 The compiler currently solves sequential finite membranes while the runtime
-uses their authored note and phase-gradient data as disturbances in a fixed
-three-strata optical bench. Preserve crossing and bounded-gradient certification,
-but do not imply that the displayed strata are literal locations on the
-central-ray route. A later contract revision should emit optical-disturbance
-parameters directly once this choreography passes visual acceptance.
+re-registers their authored phase gradients into a fixed seven-plane optical
+bench. Preserve the compiler's crossing and bounded-gradient certification, but
+do not imply that the displayed fixed planes are literal locations on its
+central-ray route. A later contract revision should emit register masks
+directly once this choreography passes visual acceptance.
