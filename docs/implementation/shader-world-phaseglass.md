@@ -5,16 +5,17 @@
 - P0 complete: deterministic source selection, chord grouping, and one deadline per grouped note time.
 - P1 complete: tested passive Snell refraction and active phase-gradient transmission with constant-speed round trips.
 - P2 first pass complete: finite membrane placement, one-contact lookahead, exact crossing and speed audits, overlap clearance, and early-crossing certification.
-- P3 visual reset in progress: the Aurora-like folded volume and central knot have been removed. The current pass uses faceted phase sheets, etched caustics, one narrow optical packet, and a single connected beam language for history and the three-second preview.
-- P4 third pass complete: the camera composes the current packet with several upcoming refractions, smooths optical-axis turns, and remains deterministic under seeking. Further full-song art-direction tuning remains.
+- P3 architectural reset implemented, visual acceptance pending: there is no hero particle, target chain, folded volume, or central knot. Broad coherent wavefront strands traverse faceted phase sheets; each sheet's etching follows its compiled outgoing direction, and completed sheets persist as the growing score.
+- P4 fourth pass complete: a fixed-orientation gallery camera glides through a continuous score window without chasing ray headings. Independently clipped route segments preserve exact visible bends and hand off continuously at note boundaries.
 - P5 compiler stress fixture complete: a deterministic 100-note phrase at roughly 105 ms spacing stays under the 250 ms test budget with positive membrane clearance and no early crossings.
 
 ## Product invariant
 
-A luminous signal comet crosses one refractive phase membrane at every grouped
-note. The crossing is intentional and exact; no membrane is crossed early.
-The membrane redirects the comet without a discontinuity in position or speed;
-the direction change is the membrane's authored impulse.
+A coherent wavefront crosses one refractive phase membrane at every grouped
+note. Its certified central ray reaches the active aperture intentionally and
+exactly; no membrane is crossed early. The membrane redirects the downstream
+wave without a discontinuity in central-ray position or speed, and the visible
+change in direction is the membrane's authored impulse rather than a target hit.
 
 ## Mathematical model
 
@@ -59,26 +60,28 @@ chromatic spread. Duration maps only to visual decay.
 
 ## Final aesthetic direction
 
-Phaseglass should feel like a precision optical instrument suspended in a vast,
-dark architectural space. Its dominant grammar is planar and piecewise linear:
-faceted phase sheets, etched interference patterns, a narrow packet of light,
-and a beam that bends only where a note membrane applies an authored impulse.
-Pearl-white highlights and restrained cyan/amber spectral edges make sheet
-thickness, transmission, and changing direction legible in still frames. The
-packet is the brightest stable feature; caustics briefly outrank it only at
-major contacts. Camera motion composes multiple upcoming bends rather than
-chasing one central object.
+Phaseglass should feel like a monumental precision-optics installation
+suspended in a vast, dark architectural space. Its dominant grammar is planar
+and piecewise linear: faceted phase sheets, etched interference patterns, broad
+parallel wavefront strands, and caustics that reorganize downstream only where
+a note membrane applies an authored impulse. Pearl-white highlights and
+restrained cyan/amber spectral edges make sheet thickness, transmission, and
+changing direction legible in still frames. No traveling object is the subject;
+the growing refractive architecture and the light passing through it are the
+subject together.
 
 The next three seconds must read as unfilled optical capacity. Upcoming notes
-appear as dormant, low-energy sheets connected by the same beam path the active
-packet will traverse. At contact, the sheet fills, its etched caustic resolves,
-and the outgoing beam visibly agrees with its phase gradient. History, present,
-and preview are therefore states of one optical system, not stacked effects.
+appear as dormant, low-energy sheets connected by the same wave path that will
+illuminate them. At contact, the entire sheet fills, its directional etching
+resolves, and downstream wavefronts visibly agree with its phase gradient.
+Completed sheets remain as a dim glass score. History, present, and preview are
+therefore states of one optical system, not stacked effects.
 
-Avoid volumetric nebulae, folded fractal fog, central energy knots, circular
-portals, unrestricted rainbow dispersion, milky full-screen bloom, translucent
-objects with no edge definition, and noise that makes every membrane look the
-same. Those belong too close to Aurora Cyclotron's visual territory. Follow the
+Avoid hero particles, chase cameras, target chains, ring-like apertures,
+volumetric nebulae, folded fractal fog, central energy knots, circular portals,
+unrestricted rainbow dispersion, milky full-screen bloom, translucent objects
+with no edge definition, and noise that makes every membrane look the same.
+Those belong too close to Aurora Cyclotron's visual territory. Follow the
 [shared visual-quality standard](shader-worlds-visual-quality-standard.md) after
 the Q0 physics gate.
 
@@ -113,17 +116,18 @@ the Q0 physics gate.
 
 - Build a half-resolution fullscreen raymarch pass with a bounded 32-48 steps,
   sparse architectural depth references, and temporal jitter.
-- Render finite faceted membranes with etched caustics and note-triggered phase
-  filling sampled from absolute time. Render one connected piecewise-linear
-  beam for recent history and the three-second preview.
+- Render finite faceted membranes with outgoing-direction etchings, caustics,
+  and note-triggered phase filling sampled from absolute time. Render broad
+  coherent wavefront strands over independently clipped, piecewise-linear route
+  segments for recent history and the three-second preview.
 - Gate: disabling shader quality changes appearance only, never geometry.
 
 ### P4 - Scene and camera
 
-- Render the narrow packet, persistent depth-readable beam, membrane rims, and
-  a camera frame derived from both trajectory derivatives and upcoming bends.
+- Render persistent depth-readable wavefronts, membrane frames, and a
+  fixed-orientation gallery camera translated by a continuous score window.
 - Add app discovery, tuning, scrub, PNG, and short-video export.
-- Gate: arbitrary seeking reproduces identical comet and shader state.
+- Gate: arbitrary seeking reproduces identical architecture and shader state.
 
 ### P5 - Acceptance and budgets
 
@@ -137,3 +141,6 @@ the Q0 physics gate.
 
 Finite membranes can intersect earlier spans even when their center contacts are
 valid. Reuse Brick Breaker's time-varying occupancy discipline from the start.
+The broad rendered wavefront is a visualization around the certified central
+ray; it must never imply additional physical contacts outside the active finite
+aperture.
