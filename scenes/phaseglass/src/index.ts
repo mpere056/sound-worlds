@@ -51,7 +51,7 @@ export const PHASEGLASS_RAYMARCH_SCALE = 0.5;
 export const PHASEGLASS_LAYER_COUNT = 3;
 export const PHASEGLASS_NOTE_WINDOW_COUNT = 8;
 export const PHASEGLASS_VISIBLE_MEMBRANES = PHASEGLASS_LAYER_COUNT;
-export const PHASEGLASS_VOLUME_STEPS = 48;
+export const PHASEGLASS_VOLUME_STEPS = 34;
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
@@ -334,31 +334,52 @@ void evaluateDisturbances(vec2 coordinate, out float phaseMask, out float causti
     if (noteIndex >= uNoteCount) break;
     float lead = uNoteTime[noteIndex] - uTime;
     float age = max(0.0, -lead);
+    float pitch = uNotePitch[noteIndex];
+    float velocity = uNoteVelocity[noteIndex];
     vec2 direction = uNoteDirection[noteIndex];
-    float frequency = 4.2 + uNotePitch[noteIndex] * 9.6;
-    float travel = age * (1.35 + uNoteVelocity[noteIndex] * 2.35);
-    float phaseCoordinate = dot(coordinate, direction) * frequency - travel + uNotePhase[noteIndex];
-    float crossCoordinate = dot(coordinate, vec2(-direction.y, direction.x));
-    float front = exp(-abs(sin(phaseCoordinate + sin(crossCoordinate * 1.7) * 0.42)) * (12.0 + uNoteVelocity[noteIndex] * 13.0));
+    vec2 tangent = vec2(-direction.y, direction.x);
+    float primaryCoordinate = dot(coordinate, direction);
+    float crossCoordinate = dot(coordinate, tangent);
+    float radius = length(coordinate);
+    float angle = atan(coordinate.y, coordinate.x);
+    float frequency = 4.0 + pitch * 11.5;
+    float travel = age * (1.15 + velocity * 3.1);
+    float lowWeight = 1.0 - smoothstep(0.22, 0.52, pitch);
+    float highWeight = smoothstep(0.48, 0.78, pitch);
+    float middleWeight = max(0.0, 1.0 - lowWeight - highWeight);
+    float planarPhase = primaryCoordinate * frequency + crossCoordinate * crossCoordinate * (pitch - 0.5) * 3.4;
+    float radialPhase = radius * frequency * 0.82 + sin(angle * 3.0 + uNotePhase[noteIndex]) * 0.48;
+    float spiralPhase = radius * frequency * 0.72 + angle * (1.6 + pitch * 3.2);
+    float phaseCoordinate = lowWeight * radialPhase + middleWeight * planarPhase + highWeight * spiralPhase - travel + uNotePhase[noteIndex];
+    float crossPhase = crossCoordinate * (3.2 + pitch * 8.4) + primaryCoordinate * (0.6 + velocity * 1.8) - travel * 0.58 + uNotePhase[noteIndex] * 1.37;
+    float front = exp(-abs(sin(phaseCoordinate + sin(crossPhase) * (0.12 + velocity * 0.38))) * (8.0 + velocity * 24.0));
+    float crossFront = exp(-abs(sin(crossPhase)) * (9.0 + velocity * 18.0));
+    front = max(front, crossFront * (middleWeight * 0.34 + highWeight * 0.72));
     float contact = exp(-lead * lead * 150.0);
     float activeStrength = uNoteStrength[noteIndex] * (1.0 - step(0.0, lead));
     float future = uNotePreview[noteIndex] * step(0.0, lead);
-    phaseMask += sin(phaseCoordinate) * activeStrength * (0.34 + uNoteVelocity[noteIndex] * 0.66);
-    caustic += front * (activeStrength * (0.42 + uNoteVelocity[noteIndex] * 0.92) + contact * (0.55 + uNoteVelocity[noteIndex]));
-    preview += future * exp(-abs(sin(phaseCoordinate)) * 18.0) * 0.24;
-    bend += direction * cos(phaseCoordinate) * activeStrength * (0.025 + uNoteVelocity[noteIndex] * 0.075);
+    float morphologyWave = sin(phaseCoordinate) + sin(crossPhase) * (middleWeight * 0.18 + highWeight * 0.42);
+    phaseMask += morphologyWave * activeStrength * (0.46 + velocity * 0.88);
+    caustic += front * (activeStrength * (0.48 + velocity * 1.48) + contact * (0.58 + velocity * 1.22));
+    preview += future * max(exp(-abs(sin(phaseCoordinate)) * 17.0), crossFront * highWeight * 0.55) * 0.28;
+    vec2 bendDirection = direction * cos(phaseCoordinate) + tangent * sin(crossPhase) * (0.18 + pitch * 0.72);
+    bend += bendDirection * activeStrength * (0.032 + velocity * 0.13);
   }
 }
 
-void evaluatePhaseSheets(vec3 worldPoint, vec3 rayDirection, float time, out float structure, out float interference, out float dormant, out vec3 tint) {
+void evaluatePhaseSheets(vec3 rayOrigin, vec3 rayDirection, float time, out float structure, out float interference, out float dormant, out vec3 tint) {
   structure = 0.0;
   interference = 0.0;
   dormant = 0.0;
   tint = vec3(0.0);
   for (int index = 0; index < MEMBRANE_COUNT; index++) {
     if (index >= uMembraneCount) break;
+    float denominator = dot(rayDirection, uMembraneNormal[index]);
+    float safeDenominator = abs(denominator) < 0.015 ? (denominator < 0.0 ? -0.015 : 0.015) : denominator;
+    float rayDistance = dot(uMembraneCenter[index] - rayOrigin, uMembraneNormal[index]) / safeDenominator;
+    float visible = step(0.05, rayDistance) * (1.0 - step(36.0, rayDistance));
+    vec3 worldPoint = rayOrigin + rayDirection * max(0.05, rayDistance);
     vec3 local = worldPoint - uMembraneCenter[index];
-    float plane = dot(local, uMembraneNormal[index]);
     vec2 disc = vec2(dot(local, uMembraneAxisU[index]), dot(local, uMembraneAxisV[index]));
     vec2 sheetCoordinate = disc / max(0.08, uMembraneRadius[index]);
     vec2 absoluteCoordinate = abs(sheetCoordinate);
@@ -368,8 +389,8 @@ void evaluatePhaseSheets(vec3 worldPoint, vec3 rayDirection, float time, out flo
     float apertureGate = smoothstep(1.1, 0.74, roundedSheet);
     float frame = exp(-abs(faceted - 1.66) * 24.0);
     float apertureBevel = exp(-abs(roundedSheet - 1.04) * 26.0);
-    float sheet = exp(-abs(plane) * 7.5) * panelGate;
     float fresnel = pow(1.0 - abs(dot(rayDirection, uMembraneNormal[index])), 2.0);
+    float sheet = panelGate * visible * (0.58 + fresnel * 0.42);
     vec2 bend = vec2(dot(uMembraneOutgoing[index], uMembraneAxisU[index]), dot(uMembraneOutgoing[index], uMembraneAxisV[index]));
     bend = normalize(bend + vec2(0.0001));
     float phaseCoordinate = dot(disc, bend);
@@ -450,21 +471,21 @@ void main() {
   vec2 noteBend;
   evaluateDisturbances(uv, notePhase, noteCaustic, notePreview, noteBend);
   color += mix(vec3(0.018, 0.07, 0.08), vec3(0.09, 0.055, 0.018), uPitch) * notePreview * 0.18;
+  float sheetStructure, sheetInterference, sheetDormant;
+  vec3 sheetTint;
+  evaluatePhaseSheets(uCameraPosition, rayDirection, uTime, sheetStructure, sheetInterference, sheetDormant, sheetTint);
+  vec3 sheetGlassColor = sheetStructure > 0.001 ? sheetTint / max(0.18, sheetStructure + sheetInterference * 0.5) : vec3(0.18, 0.62, 0.66);
+  vec3 sheetEmission = sheetGlassColor * sheetStructure * (0.38 + uGlass * 0.92);
+  sheetEmission += mix(sheetGlassColor, vec3(1.0, 0.78, 0.4), uDispersion * 0.26) * sheetInterference * (0.54 + uCaustics * 1.42 + uPulse * 0.5);
+  sheetEmission += mix(vec3(0.16, 0.43, 0.47), vec3(0.42, 0.31, 0.14), uPitch * 0.32) * sheetDormant * 0.3;
+  color += sheetEmission * (0.52 + uEnergy * 0.18);
   for (int step = 0; step < VOLUME_STEPS; step++) {
     vec3 point = uCameraPosition + rayDirection * depth;
-    float structure, interference, dormant;
-    vec3 sheetTint;
-    evaluatePhaseSheets(point, rayDirection, uTime, structure, interference, dormant, sheetTint);
     vec3 field = holographicField(point, notePhase, noteCaustic, noteBend) * uWavefront;
-    vec3 glassColor = structure > 0.001 ? sheetTint / max(0.18, structure + interference * 0.5) : vec3(0.18, 0.62, 0.66);
     vec3 activeWaveColor = mix(vec3(0.45, 0.92, 0.94), vec3(0.98, 0.67, 0.25), uPitch * 0.44);
-    vec3 dormantColor = mix(vec3(0.16, 0.43, 0.47), vec3(0.42, 0.31, 0.14), uPitch * 0.32);
-    vec3 emission = glassColor * structure * (0.5 + uGlass * 1.22);
-    emission += mix(glassColor, vec3(1.0, 0.78, 0.4), uDispersion * 0.26) * interference * (0.82 + uCaustics * 2.1 + uPulse * 0.68);
-    emission += dormantColor * dormant * 0.42;
-    emission += activeWaveColor * (field.x * (0.56 + uPressure * 0.38) + field.y * (0.62 + uVelocity * 0.58 + (1.0 - uSilence) * 0.22));
+    vec3 emission = activeWaveColor * (field.x * (0.68 + uPressure * 0.52) + field.y * (0.76 + uVelocity * 0.82 + (1.0 - uSilence) * 0.28));
     emission += mix(vec3(0.27, 0.74, 0.79), vec3(0.95, 0.55, 0.2), uDispersion * 0.5) * field.z * uDispersion;
-    float density = structure * 0.18 + interference * 0.12 + field.x * 0.1 + field.y * 0.09;
+    float density = field.x * 0.12 + field.y * 0.11;
     float stepLength = 0.42 + depth * 0.012;
     float integration = 0.16 + smoothstep(0.0, 0.3, density) * 0.84;
     color += emission * integration * stepLength * (0.78 + uEnergy * 0.26);

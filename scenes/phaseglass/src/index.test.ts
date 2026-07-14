@@ -29,7 +29,7 @@ describe("Phaseglass shader budget", () => {
     expect(PHASEGLASS_VISIBLE_MEMBRANES).toBeLessThanOrEqual(8);
     expect(PHASEGLASS_LAYER_COUNT).toBe(3);
     expect(PHASEGLASS_NOTE_WINDOW_COUNT).toBeLessThanOrEqual(8);
-    expect(PHASEGLASS_VOLUME_STEPS).toBeLessThanOrEqual(52);
+    expect(PHASEGLASS_VOLUME_STEPS).toBeLessThanOrEqual(36);
   });
 });
 
