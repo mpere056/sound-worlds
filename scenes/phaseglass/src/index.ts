@@ -13,7 +13,7 @@ export interface PhaseglassTuning {
 
 export const PHASEGLASS_RAYMARCH_SCALE = 0.5;
 export const PHASEGLASS_LAYER_COUNT = 3;
-export const PHASEGLASS_NOTE_WINDOW_COUNT = 12;
+export const PHASEGLASS_NOTE_WINDOW_COUNT = 8;
 export const PHASEGLASS_VISIBLE_MEMBRANES = PHASEGLASS_LAYER_COUNT;
 export const PHASEGLASS_VOLUME_STEPS = 48;
 
@@ -334,14 +334,11 @@ void evaluatePhaseSheets(vec3 worldPoint, vec3 rayDirection, float time, out flo
     float apertureBevel = exp(-abs(roundedSheet - 1.04) * 26.0);
     float sheet = exp(-abs(plane) * 7.5) * panelGate;
     float fresnel = pow(1.0 - abs(dot(rayDirection, uMembraneNormal[index])), 2.0);
-    float notePhase, noteCaustic, notePreview;
-    vec2 noteBend;
-    evaluateDisturbances(sheetCoordinate, float(index), notePhase, noteCaustic, notePreview, noteBend);
     vec2 bend = vec2(dot(uMembraneOutgoing[index], uMembraneAxisU[index]), dot(uMembraneOutgoing[index], uMembraneAxisV[index]));
-    bend = normalize(bend + noteBend + vec2(0.0001));
+    bend = normalize(bend + vec2(0.0001));
     float phaseCoordinate = dot(disc, bend);
     float crossCoordinate = dot(disc, vec2(-bend.y, bend.x));
-    float directionalEtch = exp(-abs(sin(phaseCoordinate * (7.0 + uMembranePitch[index] * 9.0) + crossCoordinate * 1.7 + uMembranePhase[index] + notePhase * 1.2)) * 30.0);
+    float directionalEtch = exp(-abs(sin(phaseCoordinate * (7.0 + uMembranePitch[index] * 9.0) + crossCoordinate * 1.7 + uMembranePhase[index])) * 30.0);
     float counterEtch = exp(-abs(sin(crossCoordinate * (5.0 + uMembraneVelocity[index] * 7.0) - phaseCoordinate * 2.2 - time * 0.16)) * 38.0);
     float moire = pow(0.5 + 0.5 * cos(phaseCoordinate * 13.0 + sin(crossCoordinate * 5.0 + uMembranePhase[index])), 9.0);
     float normalizedPhase = phaseCoordinate / max(0.08, uMembraneRadius[index]);
@@ -350,9 +347,9 @@ void evaluatePhaseSheets(vec3 worldPoint, vec3 rayDirection, float time, out flo
     float activation = uMembraneFill[index] + uMembraneRim[index] * 0.7;
     float persistent = 0.22 + activation * 0.78;
     structure += sheet * (panelGate * 0.07 + frame * (0.62 + fresnel * 0.46) + apertureBevel * (0.18 + fresnel * 0.28)) * persistent;
-    float localInterference = sheet * apertureGate * (directionalEtch * 0.34 + counterEtch * 0.18 + moire * 0.38 + sweep * 0.7 + contactBloom * 0.5 + noteCaustic * 1.3) * (0.18 + activation * (0.82 + uMembraneVelocity[index] * 0.4));
+    float localInterference = sheet * apertureGate * (directionalEtch * 0.34 + counterEtch * 0.18 + moire * 0.38 + sweep * 0.7 + contactBloom * 0.5) * (0.18 + activation * (0.82 + uMembraneVelocity[index] * 0.4));
     interference += localInterference;
-    dormant += sheet * (frame * 0.48 + directionalEtch * apertureGate * 0.12 + notePreview) * uMembraneVacancy[index];
+    dormant += sheet * (frame * 0.48 + directionalEtch * apertureGate * 0.12) * uMembraneVacancy[index];
     vec3 prismaticTint = mix(uMembraneColor[index], mix(vec3(0.62, 0.94, 1.0), vec3(1.0, 0.72, 0.32), uMembranePitch[index]), fresnel * 0.38);
     tint += prismaticTint * (sheet * (0.14 + frame * 0.48 + apertureBevel * 0.2) + localInterference * 0.24);
   }
