@@ -60,4 +60,25 @@ describe("Phaseglass compiler", () => {
     expect(() => compilePhaseglassPlan(song, { chordEpsilonSec: 0.2 })).toThrow("epsilon");
     expect(() => compilePhaseglassPlan(song, { sourceTrackId: "missing" })).toThrow("not found");
   });
+
+  it("keeps a 100-note dense phrase collision-free within the compiler budget", () => {
+    const song = buildFixtureSong({ bars: 30, patterns: [{ role: "lead", beats: [0], pitch: 60, kind: "note" }] });
+    song.tracks[0]!.events = Array.from({ length: 100 }, (_, index) => ({
+      t: 0.2 + index * 0.105,
+      dur: 0.08 + (index % 5) * 0.04,
+      pitch: 42 + (index * 7) % 37,
+      vel: 0.35 + (index % 9) * 0.07,
+      kind: "note" as const,
+    }));
+    song.meta.durationSec = 11.2;
+    song.meta.contentEndSec = 10.7;
+    const startedAt = performance.now();
+    const compiled = compilePhaseglass(song);
+    const elapsedMs = performance.now() - startedAt;
+    expect(compiled.statics.routeReport.deadlineCount).toBe(100);
+    expect(compiled.statics.routeReport.earlyCrossingCount).toBe(0);
+    expect(compiled.statics.routeReport.occupancyViolations).toEqual([]);
+    expect(compiled.statics.routeReport.minimumMembraneClearance).toBeGreaterThan(0.1);
+    expect(elapsedMs).toBeLessThan(250);
+  });
 });

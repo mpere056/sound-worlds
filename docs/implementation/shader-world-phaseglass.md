@@ -5,8 +5,9 @@
 - P0 complete: deterministic source selection, chord grouping, and one deadline per grouped note time.
 - P1 complete: tested passive Snell refraction and active phase-gradient transmission with constant-speed round trips.
 - P2 first pass complete: finite membrane placement, one-contact lookahead, exact crossing and speed audits, overlap clearance, and early-crossing certification.
-- P3 first pass complete: half-resolution volumetric phase field with procedural signal, membrane caustics, three-second future-note vacancies, phrase-pressure continuity, and world-anchored black-opal strata.
-- P4 first pass complete: route-following camera and world selector integration. Visual tuning and wider route stress fixtures remain.
+- P3 second pass complete: half-resolution volumetric phase field with procedural signal, membrane caustics, three-second future-note vacancies, a fragmented future-route corridor, phrase-pressure continuity, duration-scaled decay, and layered world-anchored black-opal strata.
+- P4 second pass complete: route-following camera, smoothed optical-axis turns, deterministic seeking helpers, and world selector integration. Further full-song art-direction tuning remains.
+- P5 compiler stress fixture complete: a deterministic 100-note phrase at roughly 105 ms spacing stays under the 250 ms test budget with positive membrane clearance and no early crossings.
 
 ## Product invariant
 

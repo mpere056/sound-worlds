@@ -1,4 +1,4 @@
-import { samplePhaseglassRay, type PhaseglassMembrane, type PhaseglassPerformance } from "@reaper-viz/compiler-phaseglass";
+import { samplePhaseglassRay, type PhaseglassMembrane, type PhaseglassPerformance, type PhaseglassRouteSegment, type PhaseglassVec3 } from "@reaper-viz/compiler-phaseglass";
 import { Color, LinearFilter, Mesh, OrthographicCamera, PlaneGeometry, Scene, ShaderMaterial, SRGBColorSpace, Vector2, Vector3, WebGLRenderer, WebGLRenderTarget } from "three";
 
 export type { PhaseglassPerformance } from "@reaper-viz/compiler-phaseglass";
@@ -15,6 +15,7 @@ export const PHASEGLASS_RAYMARCH_SCALE = 0.5;
 export const PHASEGLASS_VISIBLE_MEMBRANES = 7;
 export const PHASEGLASS_VOLUME_STEPS = 48;
 const WAKE_COUNT = 7;
+export const PHASEGLASS_FUTURE_PATH_COUNT = 7;
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
@@ -31,15 +32,48 @@ export interface PhaseglassAnticipationState {
   rim: number;
 }
 
-export function samplePhaseglassAnticipation(leadSeconds: number): PhaseglassAnticipationState {
+export function samplePhaseglassAnticipation(leadSeconds: number, decaySeconds = 0.82): PhaseglassAnticipationState {
   if (leadSeconds >= 0) {
     const preview = smootherStep((3 - leadSeconds) / 3);
     const arrival = smootherStep((0.62 - leadSeconds) / 0.62);
     return { vacancy: preview * (1 - arrival), fill: preview * arrival, rim: preview * (0.25 + arrival * 0.75) };
   }
   const age = -leadSeconds;
-  const afterglow = Math.exp(-((age / 0.82) ** 2));
+  const afterglow = Math.exp(-((age / Math.max(0.08, decaySeconds)) ** 2));
   return { vacancy: 0, fill: afterglow, rim: afterglow * 0.38 };
+}
+
+function normalizeVec3(value: PhaseglassVec3, fallback: PhaseglassVec3 = [0, 0, 1]): PhaseglassVec3 {
+  const length = Math.hypot(...value);
+  return length > 1e-9 ? [value[0] / length, value[1] / length, value[2] / length] : [...fallback];
+}
+
+export function samplePhaseglassViewDirection(route: readonly PhaseglassRouteSegment[], time: number, smoothingSeconds = 0.22): PhaseglassVec3 {
+  const before = samplePhaseglassRay(route, Math.max(0, time - smoothingSeconds));
+  const after = samplePhaseglassRay(route, time + smoothingSeconds);
+  return normalizeVec3([
+    after.position[0] - before.position[0],
+    after.position[1] - before.position[1],
+    after.position[2] - before.position[2],
+  ], samplePhaseglassRay(route, time).direction);
+}
+
+export interface PhaseglassFuturePathSample {
+  t: number;
+  position: PhaseglassVec3;
+  strength: number;
+}
+
+export function samplePhaseglassFuturePath(route: readonly PhaseglassRouteSegment[], time: number, durationSec: number, horizonSeconds = 3): PhaseglassFuturePathSample[] {
+  return Array.from({ length: PHASEGLASS_FUTURE_PATH_COUNT }, (_, index) => {
+    const progress = index / (PHASEGLASS_FUTURE_PATH_COUNT - 1);
+    const sampleTime = Math.min(durationSec, time + horizonSeconds * progress);
+    return {
+      t: sampleTime,
+      position: samplePhaseglassRay(route, sampleTime).position,
+      strength: 0.12 + smootherStep(1 - progress) * 0.88,
+    };
+  });
 }
 
 interface MusicalRange {
@@ -118,6 +152,7 @@ precision highp float;
 varying vec2 vUv;
 #define MEMBRANE_COUNT ${PHASEGLASS_VISIBLE_MEMBRANES}
 #define WAKE_COUNT ${WAKE_COUNT}
+#define PATH_COUNT ${PHASEGLASS_FUTURE_PATH_COUNT}
 #define VOLUME_STEPS ${PHASEGLASS_VOLUME_STEPS}
 
 uniform vec2 uResolution;
@@ -152,6 +187,8 @@ uniform float uMembraneVelocity[MEMBRANE_COUNT];
 uniform float uMembranePhase[MEMBRANE_COUNT];
 uniform vec3 uWakePosition[WAKE_COUNT];
 uniform float uWakeStrength[WAKE_COUNT];
+uniform vec3 uPathPosition[PATH_COUNT];
+uniform float uPathStrength[PATH_COUNT];
 
 mat2 rotate2d(float angle) {
   float c = cos(angle), s = sin(angle);
@@ -225,9 +262,11 @@ void evaluateMembranes(vec3 worldPoint, float time, out float glassDensity, out 
     float presence = uMembraneFill[index] * 0.82 + uMembraneRim[index] * 0.35;
     glassDensity += sheet * presence + edge * exp(-abs(plane) * 18.0) * uMembraneRim[index] * 0.42;
     causticDensity += lace * (0.45 + uMembraneVelocity[index] * 0.9) * presence;
-    vacancy += exp(-abs(plane) * 4.8) * exp(-radial * radial * 1.6) * uMembraneVacancy[index];
-    tint += uMembraneColor[index] * (sheet * presence + lace * 0.72);
-    warpedPoint += uMembraneNormal[index] * ripple * sheet * presence * (0.025 + uDispersion * 0.035);
+    float voidField = exp(-abs(plane) * 4.8) * exp(-radial * radial * 1.6) * uMembraneVacancy[index];
+    vacancy += voidField;
+    causticDensity += edge * exp(-abs(plane) * 8.0) * uMembraneVacancy[index] * 0.08;
+    tint += uMembraneColor[index] * (sheet * presence + lace * 0.72 + voidField * 0.12);
+    warpedPoint += uMembraneNormal[index] * ripple * (sheet * presence * (0.025 + uDispersion * 0.035) + voidField * 0.018);
   }
 }
 
@@ -235,10 +274,30 @@ float wakeField(vec3 point) {
   float field = 0.0;
   for (int index = 0; index < WAKE_COUNT; index++) {
     vec3 local = point - uWakePosition[index];
-    float fold = phaseFold(local * 0.56, uTime * 0.35 + float(index));
-    field += exp(-length(local) * 1.25) * (0.26 + fold * 0.34) * uWakeStrength[index];
+    float fracture = pow(0.5 + 0.5 * sin(dot(local, vec3(5.7, 4.1, 6.3)) - uTime * 0.62 + float(index)), 5.0);
+    field += exp(-length(local) * 1.25) * (0.24 + fracture * 0.42) * uWakeStrength[index];
   }
   return field;
+}
+
+float futureCorridor(vec3 point, out float corridorVacancy) {
+  float caustic = 0.0;
+  corridorVacancy = 0.0;
+  for (int index = 0; index < PATH_COUNT - 1; index++) {
+    vec3 start = uPathPosition[index];
+    vec3 delta = uPathPosition[index + 1] - start;
+    float lengthSquared = max(0.0001, dot(delta, delta));
+    float along = clamp(dot(point - start, delta) / lengthSquared, 0.0, 1.0);
+    vec3 nearest = start + delta * along;
+    float distanceToPath = length(point - nearest);
+    float strength = mix(uPathStrength[index], uPathStrength[index + 1], along);
+    float routePhase = sin(dot(nearest, vec3(0.21, -0.17, 0.13)) + uTime * 0.08) * 1.6;
+    float broken = pow(0.5 + 0.5 * sin(along * 22.0 + float(index) * 1.7 - uTime * 0.36 + routePhase), 9.0);
+    float filament = exp(-distanceToPath * 5.2) * broken * strength;
+    caustic += filament;
+    corridorVacancy += exp(-distanceToPath * 1.85) * strength * 0.22;
+  }
+  return caustic;
 }
 
 void main() {
@@ -249,7 +308,7 @@ void main() {
   if (length(right) < 0.01) right = vec3(1.0, 0.0, 0.0);
   vec3 up = normalize(cross(right, forward));
   vec3 rayDirection = normalize(forward * 1.62 + right * uv.x + up * uv.y);
-  float depth = 0.15;
+  float depth = 0.15 + hash31(vec3(gl_FragCoord.xy, floor(uTime * 60.0))) * 0.07;
   float transmittance = 1.0;
   vec3 color = vec3(0.0025, 0.005, 0.007);
   float projectedVacancy = 0.0;
@@ -261,12 +320,14 @@ void main() {
     vec3 membraneTint;
     evaluateMembranes(point, uTime, glassDensity, causticDensity, vacancy, membraneTint, warpedPoint);
     float wake = wakeField(warpedPoint) * uWake;
+    float corridorVacancy;
+    float corridor = futureCorridor(warpedPoint, corridorVacancy);
     vec3 knotColor;
     float knot = signalKnot(warpedPoint - uSignalPosition, uTime, knotColor);
     float sharedPhase = phaseFold(warpedPoint * 0.17 + uSignalDirection * uTime * 0.025, uTime * 0.18);
     float mist = exp(-abs(sin(sharedPhase * 4.6 + dot(warpedPoint, vec3(0.12, -0.08, 0.1)))) * 9.5) * (0.018 + uActivity * 0.025);
-    mist *= 1.0 - clamp(vacancy * 0.62, 0.0, 0.78);
-    float density = mist + glassDensity * (0.12 + uGlass * 0.18) + causticDensity * uCaustics * 0.095 + wake * 0.08 + knot * 0.14;
+    mist *= 1.0 - clamp(vacancy * 0.62 + corridorVacancy * 0.24, 0.0, 0.78);
+    float density = mist + glassDensity * (0.12 + uGlass * 0.18) + causticDensity * uCaustics * 0.095 + wake * 0.08 + knot * 0.14 + corridor * 0.055;
     density *= 0.76 + uEnergy * 0.34 + uPressure * 0.2;
     vec3 baseTint = mix(vec3(0.055, 0.38, 0.4), vec3(0.16, 0.28, 0.61), uPitch);
     vec3 glassTint = glassDensity > 0.001 ? membraneTint / max(0.08, glassDensity + causticDensity * 0.7) : baseTint;
@@ -275,6 +336,7 @@ void main() {
     emission += mix(glassTint, vec3(1.0, 0.76, 0.34), uDispersion * 0.28) * causticDensity * (1.3 + uCaustics * 2.2 + uVelocity * 1.2);
     emission += knotColor * knot * (1.6 + uVelocity * 1.8 + uPulse * 0.8);
     emission += baseTint * wake * (0.45 + uPressure * 0.5);
+    emission += mix(vec3(0.12, 0.52, 0.58), vec3(0.64, 0.42, 0.16), uPitch * 0.42) * corridor * (0.38 + uActivity * 0.36);
     float stepLength = 0.21 + depth * 0.006;
     color += transmittance * emission * density * stepLength;
     projectedVacancy += transmittance * vacancy * stepLength * 0.12;
@@ -283,11 +345,12 @@ void main() {
     depth += stepLength;
     if (transmittance < 0.025 || depth > 29.0) break;
   }
-  vec3 referencePoint = uCameraPosition * 0.24 + rayDirection * 18.0;
-  vec3 reference = opalStrata(referencePoint, rayDirection, uTime);
+  vec3 reference = opalStrata(uCameraPosition * 0.24 + rayDirection * 9.0, rayDirection, uTime) * 0.72;
+  reference += opalStrata(uCameraPosition * 0.2 + rayDirection * 17.0 + vec3(3.7, -1.1, 2.3), rayDirection, uTime + 7.0) * 0.58;
+  reference += opalStrata(uCameraPosition * 0.16 + rayDirection * 27.0 + vec3(-4.2, 2.6, -1.8), rayDirection, uTime + 13.0) * 0.42;
   reference *= 1.0 - clamp(projectedVacancy * 0.5, 0.0, 0.68);
   reference *= 0.72 + clamp(projectedGlass * 0.28, 0.0, 0.55);
-  color += reference * (0.6 + transmittance * 0.55);
+  color += reference * (0.72 + transmittance * 0.68);
   float vignette = 1.0 - 0.16 * dot(uv, uv);
   color *= vignette;
   color = color / (0.62 + color);
@@ -359,6 +422,8 @@ export class PhaseglassScene {
   readonly #phase = numbers(PHASEGLASS_VISIBLE_MEMBRANES);
   readonly #wakePositions = vectors(WAKE_COUNT);
   readonly #wakeStrength = numbers(WAKE_COUNT);
+  readonly #pathPositions = vectors(PHASEGLASS_FUTURE_PATH_COUNT);
+  readonly #pathStrength = numbers(PHASEGLASS_FUTURE_PATH_COUNT);
 
   constructor(canvas: HTMLCanvasElement, performance: PhaseglassPerformance) {
     this.#performance = performance;
@@ -385,6 +450,7 @@ export class PhaseglassScene {
         uMembraneRadius: { value: this.#radii }, uMembraneVacancy: { value: this.#vacancy }, uMembraneFill: { value: this.#fill }, uMembraneRim: { value: this.#rim },
         uMembranePitch: { value: this.#pitch }, uMembraneVelocity: { value: this.#velocity }, uMembranePhase: { value: this.#phase },
         uWakePosition: { value: this.#wakePositions }, uWakeStrength: { value: this.#wakeStrength },
+        uPathPosition: { value: this.#pathPositions }, uPathStrength: { value: this.#pathStrength },
       },
     });
     this.#volumeScene.add(new Mesh(new PlaneGeometry(2, 2), this.#volumeMaterial));
@@ -411,7 +477,7 @@ export class PhaseglassScene {
         this.#radii[slot] = 0; this.#vacancy[slot] = 0; this.#fill[slot] = 0; this.#rim[slot] = 0; this.#pitch[slot] = 0.5; this.#velocity[slot] = 0; this.#phase[slot] = 0;
         continue;
       }
-      const anticipation = samplePhaseglassAnticipation(membrane.t - time);
+      const anticipation = samplePhaseglassAnticipation(membrane.t - time, 0.5 + membrane.duration * 1.1);
       const color = new Color(membrane.color);
       this.#centers[slot]!.set(...membrane.center); this.#normals[slot]!.set(...membrane.normal).normalize(); this.#axesU[slot]!.set(...membrane.axisU).normalize(); this.#axesV[slot]!.set(...membrane.axisV).normalize();
       this.#colors[slot]!.set(color.r, color.g, color.b); this.#radii[slot] = membrane.radius * 1.55; this.#vacancy[slot] = anticipation.vacancy; this.#fill[slot] = anticipation.fill; this.#rim[slot] = anticipation.rim;
@@ -423,7 +489,7 @@ export class PhaseglassScene {
   renderFrame(time: number): void {
     const state = samplePhaseglassRay(this.#performance.statics.route, time);
     const position = new Vector3(...state.position);
-    const direction = new Vector3(...state.direction).normalize();
+    const direction = new Vector3(...samplePhaseglassViewDirection(this.#performance.statics.route, time)).normalize();
     const side = new Vector3(direction.z, 0.15, -direction.x).normalize();
     const cameraPosition = position.clone().addScaledVector(direction, -4.8 * this.tuning.cameraDistance).addScaledVector(side, 2.6 * this.tuning.cameraDistance).add(new Vector3(0, 2.2 * this.tuning.cameraDistance, 0));
     const cameraTarget = position.clone().addScaledVector(direction, 2.2);
@@ -433,6 +499,12 @@ export class PhaseglassScene {
       const sample = samplePhaseglassRay(this.#performance.statics.route, Math.max(0, time - (index + 1) * 0.085));
       this.#wakePositions[index]!.set(...sample.position);
       this.#wakeStrength[index] = this.tuning.wake * (1 - index / WAKE_COUNT);
+    }
+    const futurePath = samplePhaseglassFuturePath(this.#performance.statics.route, time, this.#performance.durationSec);
+    for (let index = 0; index < PHASEGLASS_FUTURE_PATH_COUNT; index += 1) {
+      const sample = futurePath[index]!;
+      this.#pathPositions[index]!.set(...sample.position);
+      this.#pathStrength[index] = sample.strength;
     }
     const uniforms = this.#volumeMaterial.uniforms;
     uniforms.uTime!.value = time; uniforms.uEnergy!.value = energyAt(this.#performance, time); uniforms.uPitch!.value = musical.pitch; uniforms.uVelocity!.value = musical.velocity;
