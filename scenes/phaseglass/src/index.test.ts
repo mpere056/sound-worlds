@@ -148,6 +148,12 @@ describe("Phaseglass route presentation", () => {
     expect(history[0]!.end).toEqual(history[1]!.start);
   });
 
+  it("pads an empty history window only with inert zero-length segments", () => {
+    const history = samplePhaseglassHistorySegments(kinkedRoute(), 0);
+    expect(history).toHaveLength(PHASEGLASS_PATH_SEGMENT_COUNT);
+    expect(history.every((segment) => segment.strength === 0 && segment.start.every((value, index) => value === segment.end[index]))).toBe(true);
+  });
+
   it("uses one fixed gallery orientation instead of chasing the ray heading", () => {
     const route = kinkedRoute();
     const early = samplePhaseglassCameraFrame(route, 0.25, 4);

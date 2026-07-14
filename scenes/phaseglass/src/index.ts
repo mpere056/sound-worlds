@@ -306,7 +306,7 @@ float hash31(vec3 point) {
 }
 
 vec3 architecturalField(vec3 rayDirection) {
-  vec3 color = vec3(0.002, 0.004, 0.006);
+  vec3 color = vec3(0.006, 0.012, 0.015);
   for (int layer = 0; layer < 5; layer++) {
     float layerIndex = float(layer);
     float distanceLayer = 9.0 + layerIndex * 6.5;
@@ -361,7 +361,8 @@ void evaluatePhaseSheets(vec3 worldPoint, float time, out float structure, out f
 
 vec3 waveSegment(vec3 point, vec3 start, vec3 end, float strength, float dormant) {
   vec3 delta = end - start;
-  float segmentLength = max(0.001, length(delta));
+  float segmentLength = length(delta);
+  if (strength <= 0.0001 || segmentLength <= 0.0001) return vec3(0.0);
   vec3 direction = delta / segmentLength;
   float along = clamp(dot(point - start, delta) / max(0.0001, dot(delta, delta)), 0.0, 1.0);
   vec3 center = start + delta * along;
