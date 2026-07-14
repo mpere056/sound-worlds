@@ -74,6 +74,9 @@ importers:
       '@reaper-viz/compiler-marble':
         specifier: workspace:*
         version: link:../../compilers/marble
+      '@reaper-viz/compiler-phaseglass':
+        specifier: workspace:*
+        version: link:../../compilers/phaseglass
       '@reaper-viz/core':
         specifier: workspace:*
         version: link:../core
@@ -95,6 +98,9 @@ importers:
       '@reaper-viz/scene-painting':
         specifier: workspace:*
         version: link:../../scenes/painting
+      '@reaper-viz/scene-phaseglass':
+        specifier: workspace:*
+        version: link:../../scenes/phaseglass
       '@reaper-viz/scene-runner':
         specifier: workspace:*
         version: link:../../scenes/runner
@@ -206,6 +212,19 @@ importers:
       pixi.js:
         specifier: 8.19.0
         version: 8.19.0
+
+  scenes/phaseglass:
+    dependencies:
+      '@reaper-viz/compiler-phaseglass':
+        specifier: workspace:*
+        version: link:../../compilers/phaseglass
+      three:
+        specifier: 0.170.0
+        version: 0.170.0
+    devDependencies:
+      '@types/three':
+        specifier: 0.170.0
+        version: 0.170.0
 
   scenes/runner:
     dependencies:

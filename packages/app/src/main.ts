@@ -4,6 +4,7 @@ import { captureCanvasPng, exportCanvasMp4, PixiBackend, supportsCanvasMp4 } fro
 import { MarbleScene, type MarblePerformance, type MarblePreparedTransition, type MarbleSceneActivation, type MarbleSceneProfileSnapshot, type MarbleTuning } from "@reaper-viz/scene-marble";
 import { BrickBreakerScene, type BrickBreakerPerformance } from "@reaper-viz/scene-brick-breaker";
 import { AuroraScene, type AuroraPerformance } from "@reaper-viz/scene-aurora";
+import { PhaseglassScene, type PhaseglassPerformance } from "@reaper-viz/scene-phaseglass";
 import { MetroScene, type MetroPerformance } from "@reaper-viz/scene-metro";
 import { PaintingScene, type PaintingPerformance } from "@reaper-viz/scene-painting";
 import { RunnerScene, type RunnerPerformance } from "@reaper-viz/scene-runner";
@@ -697,6 +698,23 @@ async function loadConcept(concept: string): Promise<void> {
     const particleClearance = report.minimumParticleClearance === null ? "n/a" : report.minimumParticleClearance.toFixed(3);
     const coilClearance = report.minimumCoilSurfaceClearance === null ? "n/a" : report.minimumCoilSurfaceClearance.toFixed(3);
     statusDetail.textContent = `${report.deadlineCount} coils · radius ${report.maximumRouteRadius.toFixed(1)} · particle clearance ${particleClearance} · coil clearance ${coilClearance} · ${report.occupancyViolations.length} violations`;
+  } else if (concept === "phaseglass") {
+    destroyPixiBackend();
+    const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.phaseglass.json`);
+    if (!response.ok) throw new Error(`Phaseglass performance request failed: ${response.status}`);
+    const performance = parsePerformance(await response.json()) as PhaseglassPerformance;
+    const phaseglass = new PhaseglassScene(canvas, performance);
+    scene = phaseglass;
+    addTuningBinding(bindingPane, phaseglass.tuning, "glass", { min: 0, max: 1.6, step: 0.01, label: "Glass" });
+    addTuningBinding(bindingPane, phaseglass.tuning, "caustics", { min: 0, max: 1.6, step: 0.01, label: "Caustics" });
+    addTuningBinding(bindingPane, phaseglass.tuning, "dispersion", { min: 0, max: 1.4, step: 0.01, label: "Dispersion" });
+    addTuningBinding(bindingPane, phaseglass.tuning, "wake", { min: 0, max: 1.4, step: 0.01, label: "Wake" });
+    addTuningBinding(bindingPane, phaseglass.tuning, "cameraDistance", { min: 0.65, max: 1.6, step: 0.01, label: "Camera" });
+    sceneLabel.textContent = "Phaseglass - P3 Optical Field";
+    statusTitle.textContent = "Phaseglass - active phase volume";
+    const report = performance.statics.routeReport;
+    const clearance = report.minimumMembraneClearance === null ? "n/a" : report.minimumMembraneClearance.toFixed(3);
+    statusDetail.textContent = `${report.deadlineCount} membranes - exact error ${report.exactCrossingError.toExponential(1)} - speed error ${report.maximumSpeedError.toExponential(1)} - clearance ${clearance} - ${report.earlyCrossingCount} early crossings`;
   } else if (concept === "metro") {
     const backend = await ensurePixiBackend();
     const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.metro.json`);
@@ -842,6 +860,12 @@ async function loadProject(id: string): Promise<void> {
     aurora.textContent = "Aurora Cyclotron · A4 Volumetric Field";
     options.push(aurora);
   }
+  if (project?.concepts.includes("phaseglass")) {
+    const phaseglass = document.createElement("option");
+    phaseglass.value = "phaseglass";
+    phaseglass.textContent = "Phaseglass - P3 Optical Field";
+    options.push(phaseglass);
+  }
   const testPattern = document.createElement("option");
   testPattern.value = "testpattern";
   testPattern.textContent = "Pipeline Test Pattern";
@@ -873,6 +897,13 @@ async function loadProject(id: string): Promise<void> {
     aurora.textContent = "Aurora Cyclotron · compile required";
     aurora.disabled = true;
     options.push(aurora);
+  }
+  if (!project?.concepts.includes("phaseglass")) {
+    const phaseglass = document.createElement("option");
+    phaseglass.value = "phaseglass";
+    phaseglass.textContent = "Phaseglass - compile required";
+    phaseglass.disabled = true;
+    options.push(phaseglass);
   }
   conceptSelect.replaceChildren(...options);
   await loadConcept(options[0]?.value ?? "testpattern");

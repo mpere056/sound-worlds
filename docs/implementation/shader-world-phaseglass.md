@@ -1,5 +1,13 @@
 # Phaseglass implementation plan
 
+## Current implementation status
+
+- P0 complete: deterministic source selection, chord grouping, and one deadline per grouped note time.
+- P1 complete: tested passive Snell refraction and active phase-gradient transmission with constant-speed round trips.
+- P2 first pass complete: finite membrane placement, one-contact lookahead, exact crossing and speed audits, overlap clearance, and early-crossing certification.
+- P3 first pass complete: half-resolution volumetric phase field with procedural signal, membrane caustics, three-second future-note vacancies, phrase-pressure continuity, and world-anchored black-opal strata.
+- P4 first pass complete: route-following camera and world selector integration. Visual tuning and wider route stress fixtures remain.
+
 ## Product invariant
 
 A luminous signal comet crosses one refractive phase membrane at every grouped
