@@ -1,0 +1,295 @@
+{
+  "schemaVersion": 1,
+  "concept": "phaseglass-plan",
+  "durationSec": 12.5,
+  "options": {
+    "chordEpsilonSec": 0.025,
+    "seed": "sha256:96c12be35fc40c995b7e08f988923b481288af89125a65c543924d7038772416:phaseglass",
+    "signalSpeed": 5.2,
+    "minimumMembraneSpacing": 0.08,
+    "mode": "active-phase"
+  },
+  "deadlines": [
+    {
+      "id": "phaseglass-deadline:0:0.531250:40:0.6220:0.6599",
+      "t": 0.53125,
+      "notes": [
+        {
+          "trackId": "{5B995CE5-591E-4477-9745-1A65A262B74C}",
+          "pitch": 40,
+          "velocity": 0.622047244094488,
+          "duration": 0.659895833333333
+        }
+      ],
+      "representativePitch": 40,
+      "energy": 0.622047244094488
+    },
+    {
+      "id": "phaseglass-deadline:1:1.204687:41:0.5433:0.7344",
+      "t": 1.2046875,
+      "notes": [
+        {
+          "trackId": "{5B995CE5-591E-4477-9745-1A65A262B74C}",
+          "pitch": 41,
+          "velocity": 0.543307086614173,
+          "duration": 0.734375
+        }
+      ],
+      "representativePitch": 41,
+      "energy": 0.543307086614173
+    },
+    {
+      "id": "phaseglass-deadline:2:1.916146:48:0.5039:0.7302",
+      "t": 1.91614583333333,
+      "notes": [
+        {
+          "trackId": "{5B995CE5-591E-4477-9745-1A65A262B74C}",
+          "pitch": 48,
+          "velocity": 0.503937007874016,
+          "duration": 0.730208333333333
+        }
+      ],
+      "representativePitch": 48,
+      "energy": 0.503937007874016
+    },
+    {
+      "id": "phaseglass-deadline:3:2.595312:47:0.4646:0.6755",
+      "t": 2.5953125,
+      "notes": [
+        {
+          "trackId": "{5B995CE5-591E-4477-9745-1A65A262B74C}",
+          "pitch": 47,
+          "velocity": 0.464566929133858,
+          "duration": 0.675520833333334
+        }
+      ],
+      "representativePitch": 47,
+      "energy": 0.464566929133858
+    },
+    {
+      "id": "phaseglass-deadline:4:3.256250:41:0.6378:0.6031",
+      "t": 3.25625,
+      "notes": [
+        {
+          "trackId": "{5B995CE5-591E-4477-9745-1A65A262B74C}",
+          "pitch": 41,
+          "velocity": 0.637795275590551,
+          "duration": 0.603125
+        }
+      ],
+      "representativePitch": 41,
+      "energy": 0.637795275590551
+    },
+    {
+      "id": "phaseglass-deadline:5:4.415625:40:0.5354:0.1135",
+      "t": 4.415625,
+      "notes": [
+        {
+          "trackId": "{5B995CE5-591E-4477-9745-1A65A262B74C}",
+          "pitch": 40,
+          "velocity": 0.535433070866142,
+          "duration": 0.113541666666666
+        }
+      ],
+      "representativePitch": 40,
+      "energy": 0.535433070866142
+    },
+    {
+      "id": "phaseglass-deadline:6:4.905729:52:0.6614:0.2474",
+      "t": 4.90572916666667,
+      "notes": [
+        {
+          "trackId": "{5B995CE5-591E-4477-9745-1A65A262B74C}",
+          "pitch": 52,
+          "velocity": 0.661417322834646,
+          "duration": 0.247395833333334
+        }
+      ],
+      "representativePitch": 52,
+      "energy": 0.661417322834646
+    },
+    {
+      "id": "phaseglass-deadline:7:5.364583:50:0.4803:0.2177",
+      "t": 5.36458333333333,
+      "notes": [
+        {
+          "trackId": "{5B995CE5-591E-4477-9745-1A65A262B74C}",
+          "pitch": 50,
+          "velocity": 0.480314960629921,
+          "duration": 0.217708333333333
+        }
+      ],
+      "representativePitch": 50,
+      "energy": 0.480314960629921
+    },
+    {
+      "id": "phaseglass-deadline:8:5.860938:48:0.4882:0.2370",
+      "t": 5.8609375,
+      "notes": [
+        {
+          "trackId": "{5B995CE5-591E-4477-9745-1A65A262B74C}",
+          "pitch": 48,
+          "velocity": 0.488188976377953,
+          "duration": 0.236979166666666
+        }
+      ],
+      "representativePitch": 48,
+      "energy": 0.488188976377953
+    },
+    {
+      "id": "phaseglass-deadline:9:6.335417:60:0.6142:0.1646",
+      "t": 6.33541666666667,
+      "notes": [
+        {
+          "trackId": "{5B995CE5-591E-4477-9745-1A65A262B74C}",
+          "pitch": 60,
+          "velocity": 0.614173228346457,
+          "duration": 0.164583333333334
+        }
+      ],
+      "representativePitch": 60,
+      "energy": 0.614173228346457
+    },
+    {
+      "id": "phaseglass-deadline:10:6.652083:59:0.5669:0.0620",
+      "t": 6.65208333333333,
+      "notes": [
+        {
+          "trackId": "{5B995CE5-591E-4477-9745-1A65A262B74C}",
+          "pitch": 59,
+          "velocity": 0.566929133858268,
+          "duration": 0.0619791666666663
+        }
+      ],
+      "representativePitch": 59,
+      "energy": 0.566929133858268
+    },
+    {
+      "id": "phaseglass-deadline:11:6.927083:55:0.4961:0.0708",
+      "t": 6.92708333333333,
+      "notes": [
+        {
+          "trackId": "{5B995CE5-591E-4477-9745-1A65A262B74C}",
+          "pitch": 55,
+          "velocity": 0.496062992125984,
+          "duration": 0.0708333333333337
+        }
+      ],
+      "representativePitch": 55,
+      "energy": 0.496062992125984
+    },
+    {
+      "id": "phaseglass-deadline:12:7.136458:57:0.5118:0.0672",
+      "t": 7.13645833333333,
+      "notes": [
+        {
+          "trackId": "{5B995CE5-591E-4477-9745-1A65A262B74C}",
+          "pitch": 57,
+          "velocity": 0.511811023622047,
+          "duration": 0.0671875000000002
+        }
+      ],
+      "representativePitch": 57,
+      "energy": 0.511811023622047
+    },
+    {
+      "id": "phaseglass-deadline:13:7.394271:53:0.5433:0.0578",
+      "t": 7.39427083333333,
+      "notes": [
+        {
+          "trackId": "{5B995CE5-591E-4477-9745-1A65A262B74C}",
+          "pitch": 53,
+          "velocity": 0.543307086614173,
+          "duration": 0.0578124999999998
+        }
+      ],
+      "representativePitch": 53,
+      "energy": 0.543307086614173
+    },
+    {
+      "id": "phaseglass-deadline:14:7.622396:55:0.4724:0.0859",
+      "t": 7.62239583333333,
+      "notes": [
+        {
+          "trackId": "{5B995CE5-591E-4477-9745-1A65A262B74C}",
+          "pitch": 55,
+          "velocity": 0.47244094488189,
+          "duration": 0.0859375
+        }
+      ],
+      "representativePitch": 55,
+      "energy": 0.47244094488189
+    },
+    {
+      "id": "phaseglass-deadline:15:7.796875:52:0.5433:0.0740",
+      "t": 7.796875,
+      "notes": [
+        {
+          "trackId": "{5B995CE5-591E-4477-9745-1A65A262B74C}",
+          "pitch": 52,
+          "velocity": 0.543307086614173,
+          "duration": 0.0739583333333336
+        }
+      ],
+      "representativePitch": 52,
+      "energy": 0.543307086614173
+    },
+    {
+      "id": "phaseglass-deadline:16:8.399479:48:0.6220:0.6411",
+      "t": 8.39947916666667,
+      "notes": [
+        {
+          "trackId": "{5B995CE5-591E-4477-9745-1A65A262B74C}",
+          "pitch": 48,
+          "velocity": 0.622047244094488,
+          "duration": 0.641145833333333
+        }
+      ],
+      "representativePitch": 48,
+      "energy": 0.622047244094488
+    },
+    {
+      "id": "phaseglass-deadline:17:9.134375:47:0.5669:0.4854",
+      "t": 9.134375,
+      "notes": [
+        {
+          "trackId": "{5B995CE5-591E-4477-9745-1A65A262B74C}",
+          "pitch": 47,
+          "velocity": 0.566929133858268,
+          "duration": 0.485416666666666
+        }
+      ],
+      "representativePitch": 47,
+      "energy": 0.566929133858268
+    },
+    {
+      "id": "phaseglass-deadline:18:9.916146:41:0.5748:0.5839",
+      "t": 9.91614583333333,
+      "notes": [
+        {
+          "trackId": "{5B995CE5-591E-4477-9745-1A65A262B74C}",
+          "pitch": 41,
+          "velocity": 0.574803149606299,
+          "duration": 0.583854166666667
+        }
+      ],
+      "representativePitch": 41,
+      "energy": 0.574803149606299
+    }
+  ],
+  "report": {
+    "sourceTrackId": "{5B995CE5-591E-4477-9745-1A65A262B74C}",
+    "sourceTrackName": "Untitled Track",
+    "selectionReason": "auto score 90.010: Untitled Track",
+    "sourceNoteCount": 19,
+    "groupedDeadlineCount": 19,
+    "compoundDeadlineCount": 0,
+    "firstDeadlineSec": 0.53125,
+    "finalDeadlineSec": 9.91614583333333,
+    "minimumGapSec": 0.17447916666666963,
+    "mode": "active-phase",
+    "warnings": [
+      "Active phase-gradient membranes preserve speed while supplying authored tangential momentum"
+    ]
+  }
+}
