@@ -334,12 +334,12 @@ void evaluateDisturbances(vec2 coordinate, float layerIndex, out float phaseMask
     float crossCoordinate = dot(coordinate, vec2(-direction.y, direction.x));
     float front = exp(-abs(sin(phaseCoordinate + sin(crossCoordinate * 1.7) * 0.42)) * (12.0 + uNoteVelocity[noteIndex] * 13.0));
     float contact = exp(-lead * lead * 150.0);
-    float active = uNoteStrength[noteIndex] * (1.0 - step(0.0, lead));
+    float activeStrength = uNoteStrength[noteIndex] * (1.0 - step(0.0, lead));
     float future = uNotePreview[noteIndex] * step(0.0, lead);
-    phaseMask += sin(phaseCoordinate) * active * (0.34 + uNoteVelocity[noteIndex] * 0.66);
-    caustic += front * (active * (0.42 + uNoteVelocity[noteIndex] * 0.92) + contact * (0.55 + uNoteVelocity[noteIndex]));
+    phaseMask += sin(phaseCoordinate) * activeStrength * (0.34 + uNoteVelocity[noteIndex] * 0.66);
+    caustic += front * (activeStrength * (0.42 + uNoteVelocity[noteIndex] * 0.92) + contact * (0.55 + uNoteVelocity[noteIndex]));
     preview += future * exp(-abs(sin(phaseCoordinate)) * 18.0) * 0.24;
-    bend += direction * cos(phaseCoordinate) * active * (0.025 + uNoteVelocity[noteIndex] * 0.075);
+    bend += direction * cos(phaseCoordinate) * activeStrength * (0.025 + uNoteVelocity[noteIndex] * 0.075);
   }
 }
 
