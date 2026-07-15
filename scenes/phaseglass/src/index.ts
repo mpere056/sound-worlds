@@ -333,7 +333,7 @@ float hash31(vec3 point) {
 }
 
 vec3 architecturalField(vec3 rayDirection) {
-  vec3 color = vec3(0.006, 0.012, 0.015);
+  vec3 color = vec3(0.008, 0.018, 0.022);
   for (int layer = 0; layer < 5; layer++) {
     float layerIndex = float(layer);
     float distanceLayer = 9.0 + layerIndex * 6.5;
@@ -343,13 +343,24 @@ vec3 architecturalField(vec3 rayDirection) {
     float verticalFrame = exp(-min(grid.x, grid.z) * (72.0 + layerIndex * 8.0));
     float horizontalFrame = exp(-grid.y * (82.0 + layerIndex * 7.0));
     float draftingPlane = exp(-abs(sin(dot(point, vec3(0.047, -0.019, 0.061)) + layerIndex * 1.7)) * 56.0);
-    float structure = verticalFrame * (0.18 + horizontalFrame * 0.82) + draftingPlane * horizontalFrame * 0.34;
-    vec3 layerColor = mix(vec3(0.018, 0.105, 0.12), vec3(0.13, 0.085, 0.035), layerIndex / 4.0);
-    color += layerColor * structure * (0.34 - layerIndex * 0.038);
+    float structure = verticalFrame * (0.2 + horizontalFrame * 0.8) + draftingPlane * horizontalFrame * 0.42;
+    vec3 layerColor = mix(vec3(0.025, 0.16, 0.18), vec3(0.19, 0.12, 0.045), layerIndex / 4.0);
+    color += layerColor * structure * (0.46 - layerIndex * 0.048);
   }
   float horizon = exp(-abs(rayDirection.y + 0.21) * 54.0);
-  color += vec3(0.018, 0.075, 0.085) * horizon * 0.22;
+  color += vec3(0.025, 0.11, 0.125) * horizon * 0.3;
   return color;
+}
+
+vec3 refractedArchitecture(vec3 rayDirection, vec3 right, vec3 up, vec2 bend, float dispersionAmount) {
+  vec2 boundedBend = clamp(bend * (0.86 + uGlass * 0.72), vec2(-0.22), vec2(0.22));
+  vec3 opticalOffset = right * boundedBend.x + up * boundedBend.y;
+  float redIndex = 1.0 + dispersionAmount;
+  float blueIndex = max(0.72, 1.0 - dispersionAmount);
+  vec3 redField = architecturalField(normalize(rayDirection + opticalOffset * redIndex));
+  vec3 greenField = architecturalField(normalize(rayDirection + opticalOffset));
+  vec3 blueField = architecturalField(normalize(rayDirection + opticalOffset * blueIndex));
+  return vec3(redField.r, greenField.g, blueField.b);
 }
 
 void evaluateDisturbances(vec2 coordinate, out float phaseMask, out float caustic, out float preview, out vec2 bend) {
@@ -407,8 +418,8 @@ void evaluateDisturbances(vec2 coordinate, out float phaseMask, out float causti
     float activeStrength = uNoteStrength[noteIndex] * (1.0 - step(0.0, lead));
     float future = uNotePreview[noteIndex] * step(0.0, lead);
     float morphologyWave = (sin(phaseCoordinate) + sin(secondaryPhase) * (0.16 + phraseCoherence * 0.46)) * envelope;
-    phaseMask += morphologyWave * activeStrength * (0.58 + velocity * 1.02) * NOTE_EXPRESSION;
-    caustic += front * (activeStrength * (0.62 + velocity * 1.72) + contact * (0.7 + velocity * 1.45)) * NOTE_EXPRESSION * 0.88;
+    phaseMask += morphologyWave * activeStrength * (0.22 + velocity * 0.38) * NOTE_EXPRESSION;
+    caustic += front * (activeStrength * (0.52 + velocity * 1.48) + contact * (0.62 + velocity * 1.28)) * NOTE_EXPRESSION * 0.72;
     preview += future * max(primaryFront, secondaryFront * 0.7) * envelope * 0.34 * NOTE_EXPRESSION * 0.78;
     vec2 defocusGradient = pupil * 4.0 / aperture;
     vec2 astigmatismGradient = (chromaAxis * (2.0 * chromaX) - chromaTangent * (2.0 * chromaY)) / aperture;
@@ -482,10 +493,10 @@ vec3 holographicField(vec3 point, float notePhase, float noteCaustic, vec2 noteB
     float localCoordinate = dot(warped, gradientDirection);
     float crossCoordinate = dot(warped, vec2(-gradientDirection.y, gradientDirection.x));
     float registerPhase = localCoordinate * (3.8 + uMembranePitch[index] * 7.2) + crossCoordinate * (0.8 + uMembraneVelocity[index] * 1.8) + uMembranePhase[index];
-    float phaseWave = sin(registerPhase + sin(crossCoordinate * 2.1 - uTime * 0.08) * 0.55 + layerPhase * 1.45);
-    phase += passed * depth * phaseWave * (0.72 + uMembraneVelocity[index] * 0.48);
+    float phaseWave = sin(registerPhase + sin(crossCoordinate * 2.1 - uTime * 0.08) * 0.55 + layerPhase * 0.42);
+    phase += passed * depth * phaseWave * (0.34 + uMembraneVelocity[index] * 0.25);
     encodedPhase += passed * depth * (0.5 + 0.5 * cos(registerPhase + propagation * 0.34 + layerPhase));
-    caustic += passed * depth * (exp(-abs(sin(registerPhase + phase)) * (10.0 + uMembraneVelocity[index] * 10.0)) + noteCaustic * (0.72 + float(index) * 0.09)) * exp(-propagation * 0.045);
+    caustic += passed * depth * (exp(-abs(sin(registerPhase + phase)) * (10.0 + uMembraneVelocity[index] * 10.0)) * 0.28 + noteCaustic * (0.16 + float(index) * 0.025)) * exp(-propagation * 0.045);
     spectral += passed * depth * abs(sin(registerPhase * 0.47 + propagation * 0.22));
     transmission *= mix(1.0, uMembraneTransmission[index], passed * written * 0.7);
   }
@@ -496,9 +507,9 @@ vec3 holographicField(vec3 point, float notePhase, float noteCaustic, vec2 noteB
   float wavefront = pow(0.5 + 0.5 * cos(phase + encodedPhase * 0.38), 7.0);
   float crossInterference = pow(0.5 + 0.5 * cos(phase * 0.57 - warped.x * warped.y * 0.22 + encodedPhase), 9.0);
   float filaments = pow(0.5 + 0.5 * sin(phase * 1.31 + radialSquared * 0.26), 12.0);
-  float density = broadField * transmission * (0.09 + wavefront * 0.2 + crossInterference * 0.13 + encodedPhase * 0.045);
-  float focus = middleField * transmission * (caustic * 0.28 + filaments * (0.08 + encodedPhase * 0.08));
-  float dispersion = broadField * transmission * spectral * (0.035 + crossInterference * 0.07);
+  float density = broadField * transmission * (0.045 + wavefront * 0.055 + crossInterference * 0.035 + encodedPhase * 0.025);
+  float focus = middleField * transmission * (caustic * 0.14 + filaments * (0.018 + encodedPhase * 0.026));
+  float dispersion = broadField * transmission * spectral * (0.018 + crossInterference * 0.028);
   return vec3(density, focus, dispersion);
 }
 
@@ -510,11 +521,20 @@ void main() {
   if (length(right) < 0.01) right = vec3(1.0, 0.0, 0.0);
   vec3 up = normalize(cross(right, forward));
   vec3 rayDirection = normalize(forward * 1.62 + right * uv.x + up * uv.y);
-  float depth = 0.3 + hash31(vec3(gl_FragCoord.xy, floor(uTime * 60.0))) * 0.28;
-  vec3 color = architecturalField(rayDirection);
   float notePhase, noteCaustic, notePreview;
   vec2 noteBend;
   evaluateDisturbances(uv, notePhase, noteCaustic, notePreview, noteBend);
+  float depth = 0.3 + hash31(vec3(gl_FragCoord.xy, floor(uTime * 60.0))) * 0.28;
+  vec3 directArchitecture = architecturalField(rayDirection);
+  float opticalThickness = clamp(length(noteBend) * 4.2 + abs(notePhase) * 0.045 + noteCaustic * 0.075, 0.0, 1.0);
+  float chromaticSeparation = (0.022 + uDispersion * 0.075) * (0.38 + opticalThickness * 0.62);
+  vec3 bentArchitecture = refractedArchitecture(rayDirection, right, up, noteBend, chromaticSeparation);
+  vec3 color = mix(directArchitecture, bentArchitecture, 0.12 + opticalThickness * 0.88);
+  float gradientStrength = clamp(length(noteBend) * 5.8, 0.0, 1.0);
+  float focalEnergy = clamp(noteCaustic * 0.12, 0.0, 1.0) * (0.18 + gradientStrength * 0.82);
+  vec3 refractiveGlint = mix(vec3(0.16, 0.72, 0.79), vec3(0.95, 0.61, 0.25), uPitch * 0.42);
+  color += refractiveGlint * focalEnergy * (0.09 + uCaustics * 0.18);
+  color *= mix(vec3(1.0), vec3(0.82, 0.94, 0.96), opticalThickness * 0.24);
   color += mix(vec3(0.018, 0.07, 0.08), vec3(0.09, 0.055, 0.018), uPitch) * notePreview * 0.26;
   float sheetStructure, sheetInterference, sheetDormant;
   vec3 sheetTint;
@@ -523,13 +543,13 @@ void main() {
   vec3 sheetEmission = sheetGlassColor * sheetStructure * (0.38 + uGlass * 0.92);
   sheetEmission += mix(sheetGlassColor, vec3(1.0, 0.78, 0.4), uDispersion * 0.26) * sheetInterference * (0.54 + uCaustics * 1.42 + uPulse * 0.5);
   sheetEmission += mix(vec3(0.16, 0.43, 0.47), vec3(0.42, 0.31, 0.14), uPitch * 0.32) * sheetDormant * 0.3;
-  color += sheetEmission * (0.52 + uEnergy * 0.18);
+  color += sheetEmission * (0.28 + uEnergy * 0.12);
   for (int step = 0; step < VOLUME_STEPS; step++) {
     vec3 point = uCameraPosition + rayDirection * depth;
     vec3 field = holographicField(point, notePhase, noteCaustic, noteBend) * uWavefront;
     vec3 activeWaveColor = mix(vec3(0.45, 0.92, 0.94), vec3(0.98, 0.67, 0.25), uPitch * 0.44);
     float notePresence = clamp(noteCaustic * 0.16 + length(noteBend) * 1.8 + abs(notePhase) * 0.08, 0.0, 1.0);
-    vec3 emission = activeWaveColor * (field.x * (0.74 + uPressure * 0.64) + field.y * (0.84 + uVelocity * 1.02 + (1.0 - uSilence) * 0.34)) * (1.0 + notePresence * 0.72);
+    vec3 emission = activeWaveColor * (field.x * (0.42 + uPressure * 0.34) + field.y * (0.48 + uVelocity * 0.56 + (1.0 - uSilence) * 0.2)) * (1.0 + notePresence * 0.38);
     emission += mix(vec3(0.27, 0.74, 0.79), vec3(0.95, 0.55, 0.2), uDispersion * 0.5) * field.z * uDispersion;
     float density = field.x * 0.12 + field.y * 0.11;
     float stepLength = 0.42 + depth * 0.012;
