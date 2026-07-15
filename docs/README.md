@@ -26,6 +26,11 @@ what works today, what was verified, and what should be built next.
   - the project-wide lesson from the first successful one-track Marble pass:
   numeric hit timing is necessary, but visible behavior between hits must also
   match the musical sustain/release.
+- [Sound Worlds engineering and design learnings](implementation/sound-worlds-engineering-learnings.md)
+  - the cross-project field guide from Marble Music, Brick Breaker, Aurora
+  Cyclotron, and Phaseglass: inverse physics, collision certification, shader
+  decisions, failed approaches, performance, diagnostics, and the checklist for
+  starting future worlds.
 - [Visual brief: untitled-project-6d2e04f7](implementation/project-brief-untitled-project-6d2e04f7.md)
   - what the current reference export actually contains and why it is best used
   as a Marble Music/small-generator testbed.

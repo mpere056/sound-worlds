@@ -5,6 +5,12 @@ draft is expected and desirable while timing, inverse physics, occupancy, and
 seeking are unsettled. A concept may not be called visually complete merely
 because its shader is colorful, bright, or technically complex.
 
+Use this standard together with the
+[Sound Worlds engineering and design learnings](sound-worlds-engineering-learnings.md),
+which explains when a shader should be the foundation, when ordinary geometry
+is more appropriate, and which visual failure patterns have already been
+rejected in implemented worlds.
+
 ## Promotion stages
 
 ### Q0 - Physics graybox
@@ -91,4 +97,3 @@ Every concept promoted beyond graybox must add:
 - six approved reference frames;
 - a full-song frame-time trace;
 - a list of known visual compromises at each adaptive quality tier.
-

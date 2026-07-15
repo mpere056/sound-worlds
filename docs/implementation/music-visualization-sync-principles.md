@@ -4,6 +4,11 @@ This document records the first major sync lesson from the Marble Music
 one-track generator. It is a project-wide rule for future Sound Worlds work,
 not just a Marble implementation detail.
 
+For the broader set of lessons from Marble Music, Brick Breaker, Aurora
+Cyclotron, and Phaseglass, including inverse physics, shaders, effects,
+performance, and rejected approaches, see the
+[Sound Worlds engineering and design learnings](sound-worlds-engineering-learnings.md).
+
 ## Core lesson
 
 Mathematical timing is necessary, but it is not enough.
