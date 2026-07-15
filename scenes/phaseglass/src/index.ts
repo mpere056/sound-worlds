@@ -151,7 +151,9 @@ function normalizeVelocity(range: MusicalRange, velocity: number): number {
 export interface PhaseglassDisturbance {
   noteTime: number;
   pitch: number;
+  pitchClass: number;
   velocity: number;
+  duration: number;
   direction: [number, number];
   phase: number;
   strength: number;
@@ -198,7 +200,9 @@ export function samplePhaseglassDisturbances(membranes: readonly PhaseglassMembr
       return {
         noteTime: membrane.t,
         pitch,
+        pitchClass: ((membrane.pitch % 12) + 12) % 12 / 11,
         velocity,
+        duration: clamp01(membrane.duration / 1.2),
         direction: [directionX / directionLength, directionY / directionLength],
         phase: index * 0.754877666 + pitch * 2.31,
         strength: active * (0.34 + velocity * 0.66) + preview * (0.045 + velocity * 0.035),
@@ -295,7 +299,9 @@ uniform float uMembraneContact[MEMBRANE_COUNT];
 uniform int uNoteCount;
 uniform float uNoteTime[NOTE_COUNT];
 uniform float uNotePitch[NOTE_COUNT];
+uniform float uNotePitchClass[NOTE_COUNT];
 uniform float uNoteVelocity[NOTE_COUNT];
+uniform float uNoteDuration[NOTE_COUNT];
 uniform vec2 uNoteDirection[NOTE_COUNT];
 uniform float uNotePhase[NOTE_COUNT];
 uniform float uNoteStrength[NOTE_COUNT];
@@ -335,35 +341,51 @@ void evaluateDisturbances(vec2 coordinate, out float phaseMask, out float causti
     float lead = uNoteTime[noteIndex] - uTime;
     float age = max(0.0, -lead);
     float pitch = uNotePitch[noteIndex];
+    float pitchClass = uNotePitchClass[noteIndex];
     float velocity = uNoteVelocity[noteIndex];
+    float duration = uNoteDuration[noteIndex];
     vec2 direction = uNoteDirection[noteIndex];
     vec2 tangent = vec2(-direction.y, direction.x);
-    float primaryCoordinate = dot(coordinate, direction);
-    float crossCoordinate = dot(coordinate, tangent);
-    float radius = length(coordinate);
-    float angle = atan(coordinate.y, coordinate.x);
-    float frequency = 4.0 + pitch * 11.5;
-    float travel = age * (1.15 + velocity * 3.1);
-    float lowWeight = 1.0 - smoothstep(0.22, 0.52, pitch);
-    float highWeight = smoothstep(0.48, 0.78, pitch);
+    float drift = age * (0.16 + velocity * 0.34);
+    vec2 center = direction * drift + tangent * sin(uNotePhase[noteIndex] * 1.7) * 0.14;
+    vec2 relative = coordinate - center;
+    vec2 local = vec2(dot(relative, direction), dot(relative, tangent));
+    float radiusSquared = dot(local, local);
+    float radius = sqrt(radiusSquared + 0.0001);
+    float angle = atan(local.y, local.x);
+    float travel = age * (1.0 + velocity * 2.7);
+    float lowWeight = 1.0 - smoothstep(0.25, 0.46, pitch);
+    float highWeight = smoothstep(0.56, 0.77, pitch);
     float middleWeight = max(0.0, 1.0 - lowWeight - highWeight);
-    float planarPhase = primaryCoordinate * frequency + crossCoordinate * crossCoordinate * (pitch - 0.5) * 3.4;
-    float radialPhase = radius * frequency * 0.82 + sin(angle * 3.0 + uNotePhase[noteIndex]) * 0.48;
-    float spiralPhase = radius * frequency * 0.72 + angle * (1.6 + pitch * 3.2);
-    float phaseCoordinate = lowWeight * radialPhase + middleWeight * planarPhase + highWeight * spiralPhase - travel + uNotePhase[noteIndex];
-    float crossPhase = crossCoordinate * (3.2 + pitch * 8.4) + primaryCoordinate * (0.6 + velocity * 1.8) - travel * 0.58 + uNotePhase[noteIndex] * 1.37;
-    float front = exp(-abs(sin(phaseCoordinate + sin(crossPhase) * (0.12 + velocity * 0.38))) * (8.0 + velocity * 24.0));
-    float crossFront = exp(-abs(sin(crossPhase)) * (9.0 + velocity * 18.0));
-    front = max(front, crossFront * (middleWeight * 0.34 + highWeight * 0.72));
+    float armCount = 2.0 + floor(pitchClass * 4.999);
+    float aperture = 1.05 + duration * 1.45;
+    float envelope = exp(-radiusSquared * (1.28 / aperture));
+    float lensStrength = 4.8 + pitch * 4.2;
+    float saddleStrength = 6.2 + pitchClass * 4.8;
+    float vortexStrength = 5.4 + pitch * 8.2;
+    float lensPhase = radiusSquared * lensStrength + radiusSquared * radiusSquared * (1.1 + duration * 2.2);
+    float saddlePhase = (local.x * local.x - local.y * local.y) * saddleStrength + local.x * local.y * (2.8 + pitchClass * 5.2);
+    float vortexPhase = radius * vortexStrength + angle * armCount + sin(angle * (armCount + 1.0) + uNotePhase[noteIndex]) * 0.46;
+    float phaseCoordinate = lowWeight * lensPhase + middleWeight * saddlePhase + highWeight * vortexPhase - travel + uNotePhase[noteIndex];
+    float secondaryPhase = lowWeight * (radius * (7.0 + duration * 3.0)) + middleWeight * (local.x * local.y * (9.0 + velocity * 4.0)) + highWeight * (angle * (armCount + 2.0) - radius * 4.2) - travel * 0.52;
+    float sharpness = 7.0 + velocity * 27.0;
+    float primaryFront = exp(-abs(sin(phaseCoordinate)) * sharpness);
+    float secondaryFront = exp(-abs(sin(secondaryPhase)) * (8.0 + velocity * 20.0));
+    float front = max(primaryFront, secondaryFront * (middleWeight * 0.72 + highWeight * 0.88)) * envelope;
     float contact = exp(-lead * lead * 150.0);
     float activeStrength = uNoteStrength[noteIndex] * (1.0 - step(0.0, lead));
     float future = uNotePreview[noteIndex] * step(0.0, lead);
-    float morphologyWave = sin(phaseCoordinate) + sin(crossPhase) * (middleWeight * 0.18 + highWeight * 0.42);
-    phaseMask += morphologyWave * activeStrength * (0.46 + velocity * 0.88);
-    caustic += front * (activeStrength * (0.48 + velocity * 1.48) + contact * (0.58 + velocity * 1.22));
-    preview += future * max(exp(-abs(sin(phaseCoordinate)) * 17.0), crossFront * highWeight * 0.55) * 0.28;
-    vec2 bendDirection = direction * cos(phaseCoordinate) + tangent * sin(crossPhase) * (0.18 + pitch * 0.72);
-    bend += bendDirection * activeStrength * (0.032 + velocity * 0.13);
+    float morphologyWave = (sin(phaseCoordinate) + sin(secondaryPhase) * (middleWeight * 0.48 + highWeight * 0.64)) * envelope;
+    phaseMask += morphologyWave * activeStrength * (0.58 + velocity * 1.02);
+    caustic += front * (activeStrength * (0.62 + velocity * 1.72) + contact * (0.7 + velocity * 1.45));
+    preview += future * max(primaryFront, secondaryFront * 0.7) * envelope * 0.34;
+    vec2 lensGradient = local * (2.0 * lensStrength + 4.0 * radiusSquared * (1.1 + duration * 2.2));
+    vec2 saddleGradient = vec2(local.x * 2.0 * saddleStrength + local.y * (2.8 + pitchClass * 5.2), -local.y * 2.0 * saddleStrength + local.x * (2.8 + pitchClass * 5.2));
+    vec2 vortexGradient = local / radius * vortexStrength + vec2(-local.y, local.x) / (radiusSquared + 0.08) * armCount;
+    vec2 localGradient = lowWeight * lensGradient + middleWeight * saddleGradient + highWeight * vortexGradient;
+    localGradient /= 1.0 + length(localGradient) * 0.14;
+    vec2 worldGradient = direction * localGradient.x + tangent * localGradient.y;
+    bend += worldGradient * activeStrength * envelope * (0.009 + velocity * 0.034);
   }
 }
 
@@ -382,15 +404,8 @@ void evaluatePhaseSheets(vec3 rayOrigin, vec3 rayDirection, float time, out floa
     vec3 local = worldPoint - uMembraneCenter[index];
     vec2 disc = vec2(dot(local, uMembraneAxisU[index]), dot(local, uMembraneAxisV[index]));
     vec2 sheetCoordinate = disc / max(0.08, uMembraneRadius[index]);
-    vec2 absoluteCoordinate = abs(sheetCoordinate);
-    float roundedSheet = pow(pow(absoluteCoordinate.x, 3.2) + pow(absoluteCoordinate.y, 3.2), 1.0 / 3.2);
-    float faceted = max(roundedSheet, (absoluteCoordinate.x + absoluteCoordinate.y) * 0.67);
-    float panelGate = smoothstep(1.94, 1.38, faceted);
-    float apertureGate = smoothstep(1.1, 0.74, roundedSheet);
-    float frame = exp(-abs(faceted - 1.66) * 24.0);
-    float apertureBevel = exp(-abs(roundedSheet - 1.04) * 26.0);
     float fresnel = pow(1.0 - abs(dot(rayDirection, uMembraneNormal[index])), 2.0);
-    float sheet = panelGate * visible * (0.58 + fresnel * 0.42);
+    float sheet = exp(-dot(sheetCoordinate, sheetCoordinate) * 0.22) * visible;
     vec2 bend = vec2(dot(uMembraneOutgoing[index], uMembraneAxisU[index]), dot(uMembraneOutgoing[index], uMembraneAxisV[index]));
     bend = normalize(bend + vec2(0.0001));
     float phaseCoordinate = dot(disc, bend);
@@ -402,13 +417,12 @@ void evaluatePhaseSheets(vec3 rayOrigin, vec3 rayDirection, float time, out floa
     float sweep = exp(-abs(normalizedPhase - uMembraneSweepPosition[index]) * 24.0) * uMembraneSweepStrength[index];
     float contactBloom = (0.24 + moire * 0.76) * uMembraneContact[index];
     float activation = uMembraneFill[index] + uMembraneRim[index] * 0.7;
-    float persistent = 0.22 + activation * 0.78;
-    structure += sheet * (panelGate * 0.07 + frame * (0.62 + fresnel * 0.46) + apertureBevel * (0.18 + fresnel * 0.28)) * persistent;
-    float localInterference = sheet * apertureGate * (directionalEtch * 0.34 + counterEtch * 0.18 + moire * 0.38 + sweep * 0.7 + contactBloom * 0.5) * (0.18 + activation * (0.82 + uMembraneVelocity[index] * 0.4));
+    structure += sheet * (0.012 + fresnel * 0.026) * (0.22 + activation * 0.3);
+    float localInterference = sheet * (directionalEtch * 0.05 + counterEtch * 0.035 + moire * 0.045 + sweep * 0.16 + contactBloom * 0.12) * (0.1 + activation * 0.24);
     interference += localInterference;
-    dormant += sheet * (frame * 0.48 + directionalEtch * apertureGate * 0.12) * uMembraneVacancy[index];
+    dormant += sheet * directionalEtch * 0.024 * uMembraneVacancy[index];
     vec3 prismaticTint = mix(uMembraneColor[index], mix(vec3(0.62, 0.94, 1.0), vec3(1.0, 0.72, 0.32), uMembranePitch[index]), fresnel * 0.38);
-    tint += prismaticTint * (sheet * (0.14 + frame * 0.48 + apertureBevel * 0.2) + localInterference * 0.24);
+    tint += prismaticTint * (sheet * (0.025 + fresnel * 0.03) + localInterference * 0.16);
   }
 }
 
@@ -587,7 +601,9 @@ export class PhaseglassScene {
   readonly #contact = numbers(PHASEGLASS_VISIBLE_MEMBRANES);
   readonly #noteTimes = numbers(PHASEGLASS_NOTE_WINDOW_COUNT);
   readonly #notePitches = numbers(PHASEGLASS_NOTE_WINDOW_COUNT);
+  readonly #notePitchClasses = numbers(PHASEGLASS_NOTE_WINDOW_COUNT);
   readonly #noteVelocities = numbers(PHASEGLASS_NOTE_WINDOW_COUNT);
+  readonly #noteDurations = numbers(PHASEGLASS_NOTE_WINDOW_COUNT);
   readonly #noteDirections = vectors2(PHASEGLASS_NOTE_WINDOW_COUNT);
   readonly #notePhases = numbers(PHASEGLASS_NOTE_WINDOW_COUNT);
   readonly #noteStrengths = numbers(PHASEGLASS_NOTE_WINDOW_COUNT);
@@ -648,7 +664,8 @@ export class PhaseglassScene {
         uMembraneRadius: { value: this.#radii }, uMembraneVacancy: { value: this.#vacancy }, uMembraneFill: { value: this.#fill }, uMembraneRim: { value: this.#rim },
         uMembranePitch: { value: this.#pitch }, uMembraneVelocity: { value: this.#velocity }, uMembraneDepth: { value: this.#depth }, uMembraneTransmission: { value: this.#transmission }, uMembranePhase: { value: this.#phase },
         uMembraneSweepPosition: { value: this.#sweepPosition }, uMembraneSweepStrength: { value: this.#sweepStrength }, uMembraneContact: { value: this.#contact },
-        uNoteCount: { value: 0 }, uNoteTime: { value: this.#noteTimes }, uNotePitch: { value: this.#notePitches }, uNoteVelocity: { value: this.#noteVelocities },
+        uNoteCount: { value: 0 }, uNoteTime: { value: this.#noteTimes }, uNotePitch: { value: this.#notePitches }, uNotePitchClass: { value: this.#notePitchClasses },
+        uNoteVelocity: { value: this.#noteVelocities }, uNoteDuration: { value: this.#noteDurations },
         uNoteDirection: { value: this.#noteDirections }, uNotePhase: { value: this.#notePhases }, uNoteStrength: { value: this.#noteStrengths }, uNotePreview: { value: this.#notePreviews },
       },
     });
@@ -674,7 +691,9 @@ export class PhaseglassScene {
       if (!disturbance) {
         this.#noteTimes[index] = time + 100;
         this.#notePitches[index] = 0.5;
+        this.#notePitchClasses[index] = 0;
         this.#noteVelocities[index] = 0;
+        this.#noteDurations[index] = 0;
         this.#noteDirections[index]!.set(1, 0);
         this.#notePhases[index] = 0;
         this.#noteStrengths[index] = 0;
@@ -683,7 +702,9 @@ export class PhaseglassScene {
       }
       this.#noteTimes[index] = disturbance.noteTime;
       this.#notePitches[index] = disturbance.pitch;
+      this.#notePitchClasses[index] = disturbance.pitchClass;
       this.#noteVelocities[index] = disturbance.velocity;
+      this.#noteDurations[index] = disturbance.duration;
       this.#noteDirections[index]!.set(...disturbance.direction);
       this.#notePhases[index] = disturbance.phase;
       this.#noteStrengths[index] = disturbance.strength;

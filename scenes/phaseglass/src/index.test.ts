@@ -103,13 +103,26 @@ describe("Phaseglass optical disturbances", () => {
     const high = samplePhaseglassDisturbances([membrane(0, 80, 1)], 0.3)[0]!;
     expect(high.direction).not.toEqual(low.direction);
     expect(high.pitch).toBeGreaterThan(low.pitch);
+    expect(high.pitchClass).not.toBe(low.pitchClass);
     expect(high.strength).toBeGreaterThan(low.strength);
+  });
+
+  it("carries pitch class and duration into the optical phase profile", () => {
+    const first = membrane(0, 60, 0.7);
+    const second = { ...membrane(0.1, 67, 0.7), duration: 0.9 };
+    const [firstDisturbance, secondDisturbance] = samplePhaseglassDisturbances([first, second], 0.2);
+    expect(firstDisturbance!.pitchClass).not.toBe(secondDisturbance!.pitchClass);
+    expect(secondDisturbance!.duration).toBeGreaterThan(firstDisturbance!.duration);
   });
 
   it("keeps every disturbance finite and normalized", () => {
     const notes = Array.from({ length: 80 }, (_, index) => membrane(index * 0.05, 20 + index * 2, index % 2 ? 1 : 0.05));
     for (const disturbance of samplePhaseglassDisturbances(notes, 2)) {
-      expect([disturbance.noteTime, disturbance.pitch, disturbance.velocity, ...disturbance.direction, disturbance.phase, disturbance.strength, disturbance.preview].every(Number.isFinite)).toBe(true);
+      expect([disturbance.noteTime, disturbance.pitch, disturbance.pitchClass, disturbance.velocity, disturbance.duration, ...disturbance.direction, disturbance.phase, disturbance.strength, disturbance.preview].every(Number.isFinite)).toBe(true);
+      expect(disturbance.pitchClass).toBeGreaterThanOrEqual(0);
+      expect(disturbance.pitchClass).toBeLessThanOrEqual(1);
+      expect(disturbance.duration).toBeGreaterThanOrEqual(0);
+      expect(disturbance.duration).toBeLessThanOrEqual(1);
       expect(Math.hypot(...disturbance.direction)).toBeCloseTo(1, 8);
       expect(disturbance.preview).toBeGreaterThanOrEqual(0);
       expect(disturbance.preview).toBeLessThanOrEqual(1);
