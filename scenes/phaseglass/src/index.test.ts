@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PhaseglassMembrane } from "@reaper-viz/compiler-phaseglass";
-import { PHASEGLASS_LAYER_COUNT, PHASEGLASS_NOTE_WINDOW_COUNT, PHASEGLASS_RAYMARCH_SCALE, PHASEGLASS_VOLUME_STEPS, PHASEGLASS_VISIBLE_MEMBRANES, samplePhaseglassAnticipation, samplePhaseglassCameraFrame, samplePhaseglassCausticSweep, samplePhaseglassDisturbances, samplePhaseglassMusicalState } from "./index.js";
+import { PHASEGLASS_LAYER_COUNT, PHASEGLASS_NOTE_EXPRESSION, PHASEGLASS_NOTE_WINDOW_COUNT, PHASEGLASS_RAYMARCH_SCALE, PHASEGLASS_VOLUME_STEPS, PHASEGLASS_VISIBLE_MEMBRANES, samplePhaseglassAnticipation, samplePhaseglassCameraFrame, samplePhaseglassCausticSweep, samplePhaseglassDisturbances, samplePhaseglassMusicalState } from "./index.js";
 
 function membrane(t: number, pitch: number, energy: number): PhaseglassMembrane {
   return {
@@ -30,6 +30,8 @@ describe("Phaseglass shader budget", () => {
     expect(PHASEGLASS_LAYER_COUNT).toBe(3);
     expect(PHASEGLASS_NOTE_WINDOW_COUNT).toBeLessThanOrEqual(8);
     expect(PHASEGLASS_VOLUME_STEPS).toBeLessThanOrEqual(36);
+    expect(PHASEGLASS_NOTE_EXPRESSION).toBeGreaterThanOrEqual(1.5);
+    expect(PHASEGLASS_NOTE_EXPRESSION).toBeLessThanOrEqual(2.2);
   });
 });
 

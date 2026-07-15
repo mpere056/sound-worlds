@@ -52,6 +52,7 @@ export const PHASEGLASS_LAYER_COUNT = 3;
 export const PHASEGLASS_NOTE_WINDOW_COUNT = 8;
 export const PHASEGLASS_VISIBLE_MEMBRANES = PHASEGLASS_LAYER_COUNT;
 export const PHASEGLASS_VOLUME_STEPS = 34;
+export const PHASEGLASS_NOTE_EXPRESSION = 1.9;
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
@@ -261,6 +262,7 @@ varying vec2 vUv;
 #define MEMBRANE_COUNT ${PHASEGLASS_VISIBLE_MEMBRANES}
 #define NOTE_COUNT ${PHASEGLASS_NOTE_WINDOW_COUNT}
 #define VOLUME_STEPS ${PHASEGLASS_VOLUME_STEPS}
+#define NOTE_EXPRESSION ${PHASEGLASS_NOTE_EXPRESSION.toFixed(2)}
 
 uniform vec2 uResolution;
 uniform float uTime;
@@ -359,7 +361,7 @@ void evaluateDisturbances(vec2 coordinate, out float phaseMask, out float causti
     float middleWeight = max(0.0, 1.0 - lowWeight - highWeight);
     float armCount = 2.0 + floor(pitchClass * 4.999);
     float aperture = 1.05 + duration * 1.45;
-    float envelope = exp(-radiusSquared * (1.28 / aperture));
+    float envelope = exp(-radiusSquared * (0.92 / aperture));
     float lensStrength = 4.8 + pitch * 4.2;
     float saddleStrength = 6.2 + pitchClass * 4.8;
     float vortexStrength = 5.4 + pitch * 8.2;
@@ -376,16 +378,16 @@ void evaluateDisturbances(vec2 coordinate, out float phaseMask, out float causti
     float activeStrength = uNoteStrength[noteIndex] * (1.0 - step(0.0, lead));
     float future = uNotePreview[noteIndex] * step(0.0, lead);
     float morphologyWave = (sin(phaseCoordinate) + sin(secondaryPhase) * (middleWeight * 0.48 + highWeight * 0.64)) * envelope;
-    phaseMask += morphologyWave * activeStrength * (0.58 + velocity * 1.02);
-    caustic += front * (activeStrength * (0.62 + velocity * 1.72) + contact * (0.7 + velocity * 1.45));
-    preview += future * max(primaryFront, secondaryFront * 0.7) * envelope * 0.34;
+    phaseMask += morphologyWave * activeStrength * (0.58 + velocity * 1.02) * NOTE_EXPRESSION;
+    caustic += front * (activeStrength * (0.62 + velocity * 1.72) + contact * (0.7 + velocity * 1.45)) * NOTE_EXPRESSION * 0.88;
+    preview += future * max(primaryFront, secondaryFront * 0.7) * envelope * 0.34 * NOTE_EXPRESSION * 0.78;
     vec2 lensGradient = local * (2.0 * lensStrength + 4.0 * radiusSquared * (1.1 + duration * 2.2));
     vec2 saddleGradient = vec2(local.x * 2.0 * saddleStrength + local.y * (2.8 + pitchClass * 5.2), -local.y * 2.0 * saddleStrength + local.x * (2.8 + pitchClass * 5.2));
     vec2 vortexGradient = local / radius * vortexStrength + vec2(-local.y, local.x) / (radiusSquared + 0.08) * armCount;
     vec2 localGradient = lowWeight * lensGradient + middleWeight * saddleGradient + highWeight * vortexGradient;
     localGradient /= 1.0 + length(localGradient) * 0.14;
     vec2 worldGradient = direction * localGradient.x + tangent * localGradient.y;
-    bend += worldGradient * activeStrength * envelope * (0.009 + velocity * 0.034);
+    bend += worldGradient * activeStrength * envelope * (0.009 + velocity * 0.034) * NOTE_EXPRESSION * 1.12;
   }
 }
 
@@ -484,7 +486,7 @@ void main() {
   float notePhase, noteCaustic, notePreview;
   vec2 noteBend;
   evaluateDisturbances(uv, notePhase, noteCaustic, notePreview, noteBend);
-  color += mix(vec3(0.018, 0.07, 0.08), vec3(0.09, 0.055, 0.018), uPitch) * notePreview * 0.18;
+  color += mix(vec3(0.018, 0.07, 0.08), vec3(0.09, 0.055, 0.018), uPitch) * notePreview * 0.26;
   float sheetStructure, sheetInterference, sheetDormant;
   vec3 sheetTint;
   evaluatePhaseSheets(uCameraPosition, rayDirection, uTime, sheetStructure, sheetInterference, sheetDormant, sheetTint);
@@ -497,7 +499,8 @@ void main() {
     vec3 point = uCameraPosition + rayDirection * depth;
     vec3 field = holographicField(point, notePhase, noteCaustic, noteBend) * uWavefront;
     vec3 activeWaveColor = mix(vec3(0.45, 0.92, 0.94), vec3(0.98, 0.67, 0.25), uPitch * 0.44);
-    vec3 emission = activeWaveColor * (field.x * (0.68 + uPressure * 0.52) + field.y * (0.76 + uVelocity * 0.82 + (1.0 - uSilence) * 0.28));
+    float notePresence = clamp(noteCaustic * 0.16 + length(noteBend) * 1.8 + abs(notePhase) * 0.08, 0.0, 1.0);
+    vec3 emission = activeWaveColor * (field.x * (0.74 + uPressure * 0.64) + field.y * (0.84 + uVelocity * 1.02 + (1.0 - uSilence) * 0.34)) * (1.0 + notePresence * 0.72);
     emission += mix(vec3(0.27, 0.74, 0.79), vec3(0.95, 0.55, 0.2), uDispersion * 0.5) * field.z * uDispersion;
     float density = field.x * 0.12 + field.y * 0.11;
     float stepLength = 0.42 + depth * 0.012;
