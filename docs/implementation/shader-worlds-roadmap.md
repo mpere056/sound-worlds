@@ -1,84 +1,88 @@
-# Physics-first shader worlds roadmap
+# Physics-first visual worlds roadmap
 
-This roadmap defines five one-track, one-hero-object worlds whose shader
-identity follows from a deterministic physical model. Each concept has its own
-work orders, but all five share the same musical and runtime contracts.
+This roadmap covers five one-track worlds whose visible identity follows from a
+deterministic physical model. They do not all use the same rendering foundation:
+some are object-first, some field-first, and some hybrid. Shader use is chosen
+only when it serves the product invariant.
 
 ## Shared product contract
 
-- Select one note-bearing source track with the existing deterministic policy.
-- Group simultaneous notes using a fixed chord epsilon; one group owns one
-  exact interaction deadline.
-- Compile all trajectory, interaction, camera, and shader-control data before
-  playback. Runtime rendering samples absolute song time and never advances a
-  hidden simulation.
-- Every grouped deadline has exactly one visible interaction. No early contact,
-  duplicate ownership, silent deadline, or retiming is allowed.
-- Preserve a continuous hero-object trajectory with documented speed,
-  acceleration, curvature, and visibility bounds.
-- Shader effects may visualize physics but may not alter compiled physics.
-- Seeking to times in any order must produce byte-identical poses and uniforms.
-- The final note owns an authored terminal interaction and visual resolution.
+- Select one note-bearing source track with the deterministic policy.
+- Group simultaneous notes using a fixed chord epsilon.
+- Give every grouped deadline one exact owned interaction or field transition.
+- Compile authoritative trajectory, interaction, field, camera, and shader data
+  before playback.
+- Sample absolute song time; never advance hidden authoritative simulation.
+- Preserve continuous state and concept-specific physical bounds.
+- Certify no early ownership, solid overlap, invalid field state, or hidden
+  deadline.
+- Use shaders to visualize compiled state without changing its timing or truth.
+- Make seeking order-independent and deterministic.
+- Prepare a final-note interaction and visual resolution through the audio tail.
+
+Phaseglass is the important field-only exception to the older hero-object rule:
+its changing optical medium is the subject. Aurora retains compiled charged
+physics but renders it as an abstract shared field. Pendulum, Vortex, and
+Singularity each make different architecture choices documented in their plans.
 
 ## Shared package shape
 
 ```text
 compilers/<concept>       grouping, inverse physics, search, certification
-scenes/<concept>          Three.js geometry and GLSL shader playback
+scenes/<concept>          geometry and/or field playback
 packages/core             vector math, curves, deterministic RNG, diagnostics
 packages/app              discovery, transport, tuning, export
 ```
 
-Each compiler emits a JSON performance containing source diagnostics, grouped
-deadlines, physical segments, interactions, camera keys, bounded shader curves,
-and a certification report. Each scene must render from that artifact without
-re-solving the route.
+Each compiler emits source diagnostics, grouped deadlines, authoritative state,
+interactions, camera data, bounded visual controls, and certification. Scenes
+consume the artifact without re-solving the world.
 
 ## Candidate comparison
 
-| World | Core model | Inverse-solver risk | Shader cost | Recommended order |
-|---|---|---:|---:|---:|
-| Aurora Cyclotron | closed-form Lorentz helices | low-medium | medium-high | 1 |
-| Phaseglass | bounded vector refraction | low | high | 2 |
-| Pendulum Cathedral | constrained swing and ballistic transfer | medium | medium | 3 |
-| Vortex Loom | incompressible flow integration | medium-high | high | 4 |
-| Singularity Slalom | patched-conic gravity | high | high | 5 |
+| World | Core model | Foundation | Inverse risk | GPU cost | Order |
+|---|---|---|---:|---:|---:|
+| Aurora Cyclotron | Lorentz fields | field-first hybrid | low-medium | high | 1 |
+| Phaseglass | vector refraction | field-first hybrid | low | high | 2 |
+| Pendulum Cathedral | constrained swing/ballistics | object-first hybrid | medium | medium | 3 |
+| Vortex Loom | incompressible flow | field-first hybrid | medium-high | high | 4 |
+| Singularity Slalom | patched-conic gravity | object-first hybrid | high | high | 5 |
 
-The recommended first spike is Aurora Cyclotron because constant-field helical
-motion has a closed form, making exact note timing easier to certify than the
-iterative Marble Music and Brick Breaker searches.
+## Physics-first promotion policy
 
-## Physics-first, polish-later promotion policy
+Every concept begins as a plain graybox. Visual promotion starts only after
+event ownership, continuity, occupancy, seeking, camera containment, and final
+resolution pass. Promotion then follows the
+[Sound Worlds visual-quality standard](shader-worlds-visual-quality-standard.md)
+and the [cross-world engineering learnings](sound-worlds-engineering-learnings.md).
 
-Each concept begins as a deliberately plain physics graybox. Shader polish must
-not begin until exact note ownership, trajectory continuity, occupancy, seeking,
-and camera containment pass. After that gate, promotion follows the shared
-[shader worlds visual-quality standard](shader-worlds-visual-quality-standard.md):
-art-direction lock, composition/camera, material and shader craft, musical
-effects, then full-song visual acceptance. This preserves physics priority
-without lowering the final expectation of a refined, professional result.
+Q0 proves the invariant. Q1 locks art direction and anti-goals. Q2 proves
+composition and anticipation. Q3 proves material/field coherence. Q4 proves
+musical expression. Q5 is full-song final acceptance.
 
 ## Plans
 
-- [Phaseglass](shader-world-phaseglass.md)
-- [Singularity Slalom](shader-world-singularity-slalom.md)
-- [Vortex Loom](shader-world-vortex-loom.md)
-- [Pendulum Cathedral](shader-world-pendulum-cathedral.md)
 - [Aurora Cyclotron](shader-world-aurora-cyclotron.md)
+- [Phaseglass](shader-world-phaseglass.md)
+- [Pendulum Cathedral](shader-world-pendulum-cathedral.md)
+- [Vortex Loom](shader-world-vortex-loom.md)
+- [Singularity Slalom](shader-world-singularity-slalom.md)
 - [Shared visual-quality standard](shader-worlds-visual-quality-standard.md)
 
 ## Cross-concept acceptance gate
 
-Before visual polish, every prototype must pass the same reference-song audit:
+Before Q1, every prototype must pass the relevant reference-song audit:
 
-1. Every grouped note has exactly one interaction within `1e-6` seconds.
-2. Numerical and analytical samplers agree within documented tolerances.
-3. No future target is contacted early and no target geometry overlaps.
-4. Speed, acceleration, and curvature stay inside concept-specific bounds.
-5. The hero object remains inside the 9:16 safe viewport at sampled intervals.
+1. Every grouped note has exactly one owned interaction or field transition
+   within `1e-6` seconds.
+2. Analytical and numerical samplers agree within documented tolerances.
+3. No future target, annulus, aperture, body, or mechanism is owned early.
+4. State, speed, acceleration, curvature, tension, or field bounds pass.
+5. The current event and next preparation remain readable in 9:16.
 6. A 100-note fixture compiles deterministically within the concept budget.
-7. The shader holds 60 FPS at 1080 x 1920 on the reference machine, with an
-   adaptive-quality fallback that does not change physics or event timing.
+7. Random seek order reproduces authoritative state, camera, and visual inputs.
+8. Adaptive visual quality does not alter physics or event ownership.
+9. The ending resolves from a prepared state and preserves the audio tail.
 
-Passing this gate promotes a concept only from Q0 physics graybox to Q1 art
-direction. It does not constitute visual completion.
+Passing this gate promotes only the physics/system graybox. It is not evidence
+of final visual quality.

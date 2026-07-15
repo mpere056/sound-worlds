@@ -31,6 +31,17 @@ what works today, what was verified, and what should be built next.
   Cyclotron, and Phaseglass: inverse physics, collision certification, shader
   decisions, failed approaches, performance, diagnostics, and the checklist for
   starting future worlds.
+- [Physics-first visual worlds roadmap](implementation/shader-worlds-roadmap.md)
+  - the architecture-specific build order and shared contracts for Aurora
+  Cyclotron, Phaseglass, Vortex Loom, Pendulum Cathedral, and Singularity
+  Slalom.
+- [Sound Worlds visual-quality and acceptance standard](implementation/shader-worlds-visual-quality-standard.md)
+  - Q0-Q5 gates for object-first, field-first, ecosystem-first,
+  schematic-first, and hybrid worlds, with explicit perceptual-evidence and
+  full-song review requirements.
+- [Music-synchronized ecosystem worlds roadmap](implementation/ecosystem-worlds-roadmap.md)
+  - five active-world plans with causal simulation, ecological choreography,
+  authored spectacle, world-specific vertical slices, and restoration gates.
 - [Visual brief: untitled-project-6d2e04f7](implementation/project-brief-untitled-project-6d2e04f7.md)
   - what the current reference export actually contains and why it is best used
   as a Marble Music/small-generator testbed.

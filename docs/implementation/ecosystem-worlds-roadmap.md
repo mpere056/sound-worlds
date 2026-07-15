@@ -28,6 +28,26 @@ objects twitch on every beat. The spectacle channel is intentionally allowed to
 violate ordinary appearance, geometry, scale, time-of-day, lighting, or physics
 when the violation is authored as the musical event.
 
+The two music channels must remain explicit in plans, schemas, diagnostics, and
+review language:
+
+1. **Ecological choreography** selects or retimes behavior the world could
+   already perform. It preserves needs, causality, collision, and resource
+   accounting.
+2. **Expressive spectacle** is allowed to violate ordinary appearance, geometry,
+   time, scale, or physics. It has explicit ownership, coupling, restoration,
+   and camera-safety contracts.
+
+Do not weaken spectacle until it becomes ordinary ecology, and do not disguise
+an impossible ecological action as choreography. Both channels are valuable
+because they do different jobs.
+
+The shared lessons in
+[Sound Worlds engineering and design learnings](sound-worlds-engineering-learnings.md)
+apply to every ecosystem. Music is not an after-the-fact pulse layer, shaders
+are optional tools rather than a required foundation, and dense music should
+accumulate bounded pressure instead of resetting the world.
+
 ## Shared architecture
 
 ### 1. World truth layer
@@ -44,6 +64,12 @@ Use a deterministic fixed-step simulation with explicit components:
 
 The baseline simulation must run without music and pass domain invariants.
 
+Use multiple timescales rather than forcing every process into one expensive
+tick. Fast motion, schedules, resource transfer, population trends, and climate
+may use different deterministic update cadences with declared handoff rules.
+Background populations may be aggregated only when totals, causal pressure, and
+hero-agent affordances remain equivalent.
+
 ### 2. Musical intent layer
 
 Separate discrete hero voices from continuous track influence:
@@ -54,6 +80,11 @@ Separate discrete hero voices from continuous track influence:
 - Voice assignment uses salience, track role, pitch continuity, sustain, and
   hysteresis so visual identities do not flicker between tracks.
 - Notes become `ActionIntent` records; they do not directly mutate entities.
+- Voice handoff occurs only at musically and behaviorally valid boundaries.
+- Velocity changes effort, urgency, group size, material response, or consequence
+  according to the domain action; a loud note is not merely more glow.
+- Silence restores idle ecology and environmental motion; it does not pause the
+  world clock.
 
 ```ts
 interface ActionIntent {
@@ -131,6 +162,12 @@ Spectacle may be surreal and physically impossible. It still needs deterministic
 timing, bounded geometry, camera safety, and explicit state ownership so a visual
 effect does not accidentally corrupt unrelated simulation data.
 
+Every spectacle defines anticipation, attack, sustain, restoration, and tail.
+A reversible event must prove exact restoration under forward playback, random
+seeking, cancellation, and overlap with another spectacle. A committed
+transition emits the new authoritative state and a reconciliation report for
+agents, resources, paths, and cameras.
+
 ### 5. Physics retiming layer
 
 Back-solve bounded motion so the selected action arrives exactly on its note:
@@ -159,6 +196,38 @@ planning followed by deterministic conflict repair.
 World-scale shader or geometry waves may disassemble and reassemble structures.
 Reversible spectacles retain indexed home transforms and exact restoration;
 authored transitions instead produce an explicit new world state.
+
+### 7. Rendering and visual hierarchy policy
+
+Choose rendering from the domain rather than forcing all worlds into one style:
+
+- cities and dungeons are primarily object/agent worlds with selective material
+  and spectacle shaders;
+- reefs and canopies may use shared water, wind, light, or nutrient shaders
+  while agents remain semantic objects;
+- orbital habitats use object geometry plus bounded field visualization for
+  power, atmosphere, and windows;
+- a shader may visualize authoritative state but may not invent agent state or
+  hide failed choreography.
+
+Every frame needs a hierarchy: current hero action, next affordance, local causal
+context, ecosystem state, then spectacle and background population. Dense
+passages reduce background articulation before hero readability.
+
+The camera follows places and processes more often than individual agents. Use
+stable district, habitat, or territory framing with bounded transitions. Exact
+hero actions remain visible without four tracking cameras fighting for control.
+
+### 8. Offline compilation, checkpoints, and seeking
+
+The first ecosystem products are prerecorded. Run the baseline simulation,
+extract affordances, assign music, back-solve hero actions, reserve space-time,
+and compile spectacle before playback. Store deterministic checkpoints and
+event logs so arbitrary seeking restores authoritative state and visual history.
+
+Runtime agents may animate locally from compiled state, but runtime simulation
+does not own musical deadlines. Live ecosystem performance is a separate later
+architecture with rolling affordance windows and explicit uncertainty.
 
 ## Five example worlds
 
@@ -189,6 +258,32 @@ Music bindings:
 Multi-voice suitability: excellent. Road, pedestrian, transit, and utility
 voices can remain distinct while sharing reservations at intersections.
 
+World invariant: every visible trip, light phase, delivery, construction action,
+and utility response belongs to a schedule, demand, inventory, or maintenance
+loop. Cars do not circulate solely to fill the frame.
+
+Rendering architecture: object-first agent world with instanced traffic and
+pedestrians, authored buildings, and selective shaders for windows, power flow,
+weather, and reversible masonry spectacle.
+
+First vertical slice: one four-way intersection, two shops, one bus stop, one
+delivery loop, one waste pickup, and one power feeder with fewer than 40 agents.
+Compile four hero voices into a signal phase, bus arrival, pedestrian door
+event, and delivery contact without deadlock.
+
+Acceptance gates:
+
+- no-music traffic completes purposeful trips without collision or gridlock;
+- signal retiming remains legal and preserves downstream capacity;
+- every synchronized arrival has a visible cause and consequence;
+- a facade wave restores every indexed piece and never blocks an authoritative
+  entrance;
+- camera framing shows the intersection process rather than chasing one car.
+
+Principal risk: a busy city can look active while its agents are meaningless.
+Audit trip purpose, inventory transfer, and occupancy before adding population
+or lighting spectacle.
+
 ### 2. Tidal Reef
 
 A coral reef where sunlight supports algae and plankton, grazers feed, predators
@@ -218,6 +313,31 @@ Music bindings:
 Multi-voice suitability: good. Four hero swimmers can share a passive current,
 but current edits must be globally validated because they affect every swimmer.
 
+World invariant: movement transfers energy, food, risk, parasites, larvae, or
+nutrients. Schooling is a strategy inside current and predator constraints, not
+decorative boid noise.
+
+Rendering architecture: hybrid agent/field world. Fish and coral remain
+semantic geometry; current, suspended nutrients, caustic light, and
+bioluminescence use shared field shaders driven by authoritative environment.
+
+First vertical slice: one coral shelter, one grazing patch, one cleaning station,
+one current loop, two grazer species, one cleaner, and one predator. Four hero
+actions cover feeding, coordinated turning, cleaning contact, and shelter entry.
+
+Acceptance gates:
+
+- current remains bounded and divergence-limited around coral obstacles;
+- feeding energy and motion cost remain within the declared ledger;
+- hero paths reserve swept volumes and do not cut through coral or schools;
+- current visuals, particles, and fish drift agree on direction;
+- water-parting spectacle decouples simulation exactly or commits a separately
+  certified state.
+
+Principal risk: current edits have global consequences. Prefer local behavior
+retiming and render-only current spectacle until whole-population revalidation
+is fast and reliable.
+
 ### 3. Mycelial Canopy
 
 A layered rainforest with water, light competition, plant growth, pollination,
@@ -244,6 +364,31 @@ Music bindings:
 
 Multi-voice suitability: good. Separate canopy layers reduce collisions, while
 the nutrient and water systems provide meaningful shared modulation.
+
+World invariant: visible growth and animal activity arise from light, water,
+nutrient, pollination, predation, and decay flows. The underground network is a
+resource exchange system, not merely glowing lines.
+
+Rendering architecture: multi-timescale hybrid. Plants, branches, creatures,
+and transfers are semantic objects; wind, rain, dappled light, and mycelial
+transport use shaders fed by authoritative spring, weather, and resource fields.
+
+First vertical slice: two plants competing for light, one fungal exchange link,
+one flowering/pollination loop, one decomposer patch, and one branch corridor.
+Four hero actions cover pollinator arrival, seed release, branch landing, and
+nutrient transfer.
+
+Acceptance gates:
+
+- slow growth is identical across checkpoint cadence;
+- water and nutrient totals close within declared regeneration and decay;
+- fast wind and creature motion cannot retroactively change compiled slow state;
+- glowing mycelium follows measured transfer direction and amount;
+- canopy-breathing spectacle restores branch collision and plant anchors.
+
+Principal risk: slow ecology is difficult to perceive within one song. Use a
+pre-song equilibrium and section-scale compiled changes, not unrelated
+note-by-note spawning disguised as growth.
 
 ### 4. Emberdeep Dungeon
 
@@ -272,6 +417,31 @@ Music bindings:
 
 Multi-voice suitability: medium. Strong interactions are expressive, but
 combat, soft bodies, projectiles, and narrow corridors create costly conflicts.
+
+World invariant: every creature, trap, flame, fungus, item, and passage exists
+inside a resource, territory, defense, maintenance, or decomposition loop.
+Fantasy rules remain consistent until an explicit spectacle breaks them.
+
+Rendering architecture: object-first simulation with selective soft-body,
+fluid, heat, rune, and lighting shaders. Rooms, routes, creature roles, and trap
+mechanics take priority over generalized magical fog.
+
+First vertical slice: two connected rooms containing one slime-residue loop,
+one fungal decomposer, one scavenger route, one territorial guardian, one
+fuel-consuming torch, and one resettable trap. Hero actions are patrol turn,
+trap release, slime compression, and door transfer.
+
+Acceptance gates:
+
+- no-music simulation reaches a bounded ecology instead of eliminating agents;
+- corridor reservations prevent creature, projectile, and door conflicts;
+- trap reset and torch fuel are explicit processes;
+- rune effects have local ownership rather than becoming generic beat flashes;
+- room rotation restores navmesh, doors, colliders, and agents exactly.
+
+Principal risk: the domain invites feature explosion. Do not add procedural
+rooms, broad combat, or many species before the two-room loop passes seeking and
+musical choreography.
 
 ### 5. Halo Habitat
 
@@ -302,6 +472,31 @@ Music bindings:
 Multi-voice suitability: excellent. Transit, docking, maintenance, and life
 support provide naturally separate voices joined by shared power and schedules.
 
+World invariant: every visible machine and schedule supports habitation through
+air, water, food, power, maintenance, transport, or cargo. Rotation and
+artificial day/night affect the same authoritative environment.
+
+Rendering architecture: object-first systems world with compiled orbital and
+transit motion plus selective shaders for atmosphere, greenhouse light, power
+flow, windows, and reversible habitat spectacle.
+
+First vertical slice: one rotating segment with a greenhouse, water recovery
+unit, battery, maintenance drone, rail stop, and docking port. Four hero voices
+own docking, repair arrival, transit stop, and crop/water operation.
+
+Acceptance gates:
+
+- air, water, crop, waste, and power ledgers remain bounded;
+- rotating-frame motion and docking use declared reference frames;
+- synchronized loads cannot consume unavailable power or bypass maintenance;
+- artificial-day spectacle is render-decoupled unless climate is recompiled;
+- habitat-opening spectacle preserves pressure zones and occupants through exact
+  decoupling or a certified transition.
+
+Principal risk: dashboards disguised as scenery can overwhelm the world. Keep
+resource truth in diagnostics while visualizing it through inhabitants, light,
+machinery, and spatial consequence rather than labels.
+
 ## Implementation work orders
 
 ### E0 - Domain invariants and headless toy world
@@ -310,18 +505,24 @@ support provide naturally separate voices joined by shared power and schedules.
   with fewer than 50 agents and no music.
 - Define conservation, capacity, liveness, deadlock, and determinism diagnostics.
 - Gate: one simulated hour is deterministic and no agent lacks a valid role.
+- Add a no-music causal audit tracing each visible agent to a resource, schedule,
+  relationship, or environmental process.
 
 ### E1 - Fixed-step simulation and checkpoints
 
 - Build an ECS-like state model, deterministic RNG streams, spatial index,
   scheduled processes, and fixed checkpoints for arbitrary seeking.
 - Gate: checkpoint restore matches uninterrupted simulation byte-for-byte.
+- Separate fast motion, schedules, resource transfer, and population timescales;
+  render quality and frame rate must not alter any layer.
 
 ### E2 - Affordance extraction
 
 - Predict bounded future action windows without mutating world state.
 - Emit preconditions, consequences, physical family, and camera relevance.
 - Gate: accepting an affordance preserves all domain invariants.
+- Record why rejected affordances fail and how long each valid window remains
+  feasible under neighboring plans.
 
 ### E3 - Music intent and four-voice assignment
 
@@ -343,6 +544,8 @@ support provide naturally separate voices joined by shared power and schedules.
   transitions with explicit coupling and restoration policies.
 - Gate: ecological modulation preserves invariants; spectacle may violate normal
   world logic but cannot ambiguously mutate authoritative simulation state.
+- Add overlap, interruption, random-seek, exact-restoration, and committed-state
+  reconciliation tests for every spectacle family.
 
 ### E6 - Rendering, shaders, and scalable populations
 
@@ -350,6 +553,8 @@ support provide naturally separate voices joined by shared power and schedules.
   aggregation. Hero agents retain full trajectories; background populations may
   use statistically equivalent groups while preserving resource totals.
 - Gate: 60 FPS target with unchanged simulation results across visual quality.
+- Require an architecture declaration per world: object-first, field-first, or
+  hybrid, including which shader inputs are authoritative and which are visual.
 
 ### E7 - Acceptance
 
@@ -357,6 +562,9 @@ support provide naturally separate voices joined by shared power and schedules.
   arbitrary-seek, full-song, camera, performance, and human legibility audits.
 - Require reviewers to explain each visible agent's role and each musical event's
   causal meaning before the world is promoted beyond engineering preview.
+- Review choreography and spectacle separately: ordinary behavior remains
+  internally valid, while reality-breaking effects are intentional, reversible
+  or explicitly committed, and visually consequential.
 
 ## Recommended order
 

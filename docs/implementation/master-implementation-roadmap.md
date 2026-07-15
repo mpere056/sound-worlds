@@ -60,24 +60,29 @@ each grouped note destroys one brick and the final brick breaks exactly on the
 final note. Headless B0-B5 compiler work may proceed alongside Marble Music;
 scene polish begins only after its deterministic solver gates pass.
 
-Five additional one-track concepts are specified in the
-[Physics-first shader worlds roadmap](shader-worlds-roadmap.md). Each has a
-separate implementation plan for its inverse physics, exact note ownership,
-global certification, shader architecture, and performance gates. Start with
-the Aurora Cyclotron closed-form Lorentz feasibility spike; keep all five in
-planning until one passes the shared headless reference-song gate. A rough
-physics draft is only Q0; the shared
-[shader-world visual-quality standard](shader-worlds-visual-quality-standard.md)
-then governs art direction, composition, materials, shader craft, motion, and
-full-song visual acceptance through Q5.
+Five additional one-track concepts are coordinated by the
+[Physics-first visual worlds roadmap](shader-worlds-roadmap.md). Aurora
+Cyclotron and Phaseglass now have engineering-preview implementations, while
+Pendulum Cathedral, Vortex Loom, and Singularity Slalom have strengthened plans
+for distinct physical and rendering foundations. The next unbuilt foundation
+should be Pendulum Cathedral C0-C2: prove the object-first nonlinear mechanism
+in neutral materials before cathedral art direction or shader effects. Vortex
+Loom follows after deterministic field checkpoints and transport ownership are
+proven; Singularity Slalom remains last because its patched-conic route and
+lensing stack carry the highest combined risk. Existing previews are not
+visually complete merely because they run: the shared
+[Sound Worlds visual-quality and acceptance standard](shader-worlds-visual-quality-standard.md)
+governs architecture declaration, perceptual evidence, art direction, motion,
+performance, and full-song review through Q5.
 
 A future [Music-synchronized ecosystem worlds roadmap](ecosystem-worlds-roadmap.md)
-defines active city, reef, rainforest, fantasy-dungeon, and orbital-habitat
-worlds. These begin as deterministic causal simulations with resources,
-lifecycles, affordances, and space-time reservations. One musical channel
-choreographs only valid actions; a separate spectacle channel may deliberately
-bend or break world logic through typed render overrides, reversible geometry,
-or authored state transitions. When this work begins, build the small Pulse
+defines Pulse District, Tidal Reef, Mycelial Canopy, Emberdeep Dungeon, and Halo
+Habitat. Each plan now declares its world invariant, rendering architecture,
+first vertical slice, acceptance gates, principal risk, and ecological
+timescales. One musical channel choreographs only valid actions; a separate
+spectacle channel may deliberately bend or break world logic through typed
+render overrides, reversible geometry, or authored state transitions with an
+explicit restoration path. When this work begins, build the small Pulse
 District headless loop first and extract shared architecture only after a second
 world proves it.
 
