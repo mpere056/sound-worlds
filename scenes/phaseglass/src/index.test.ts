@@ -109,20 +109,37 @@ describe("Phaseglass optical disturbances", () => {
     expect(high.strength).toBeGreaterThan(low.strength);
   });
 
-  it("carries pitch class and duration into the optical phase profile", () => {
+  it("maps pitch class around a normalized circle-of-fifths axis", () => {
     const first = membrane(0, 60, 0.7);
     const second = { ...membrane(0.1, 67, 0.7), duration: 0.9 };
     const [firstDisturbance, secondDisturbance] = samplePhaseglassDisturbances([first, second], 0.2);
     expect(firstDisturbance!.pitchClass).not.toBe(secondDisturbance!.pitchClass);
+    expect(firstDisturbance!.chroma).not.toEqual(secondDisturbance!.chroma);
+    expect(Math.hypot(...firstDisturbance!.chroma)).toBeCloseTo(1, 8);
+    expect(Math.hypot(...secondDisturbance!.chroma)).toBeCloseTo(1, 8);
     expect(secondDisturbance!.duration).toBeGreaterThan(firstDisturbance!.duration);
+  });
+
+  it("maps melodic direction and onset spacing into signed optical context", () => {
+    const ascending = samplePhaseglassDisturbances([membrane(0, 60, 0.7), membrane(0.2, 67, 0.7)], 0.3)[1]!;
+    const descending = samplePhaseglassDisturbances([membrane(0, 67, 0.7), membrane(0.2, 60, 0.7)], 0.3)[1]!;
+    expect(ascending.interval).toBeGreaterThan(0);
+    expect(descending.interval).toBeLessThan(0);
+    expect(ascending.spacing).toBeCloseTo(0.2 / 1.2, 8);
   });
 
   it("keeps every disturbance finite and normalized", () => {
     const notes = Array.from({ length: 80 }, (_, index) => membrane(index * 0.05, 20 + index * 2, index % 2 ? 1 : 0.05));
     for (const disturbance of samplePhaseglassDisturbances(notes, 2)) {
-      expect([disturbance.noteTime, disturbance.pitch, disturbance.pitchClass, disturbance.velocity, disturbance.duration, ...disturbance.direction, disturbance.phase, disturbance.strength, disturbance.preview].every(Number.isFinite)).toBe(true);
+      expect([disturbance.noteTime, disturbance.pitch, disturbance.pitchClass, disturbance.register, ...disturbance.chroma, disturbance.interval, disturbance.spacing, disturbance.velocity, disturbance.duration, ...disturbance.direction, disturbance.phase, disturbance.strength, disturbance.preview].every(Number.isFinite)).toBe(true);
       expect(disturbance.pitchClass).toBeGreaterThanOrEqual(0);
       expect(disturbance.pitchClass).toBeLessThanOrEqual(1);
+      expect(disturbance.register).toBeGreaterThanOrEqual(0);
+      expect(disturbance.register).toBeLessThanOrEqual(1);
+      expect(disturbance.interval).toBeGreaterThanOrEqual(-1);
+      expect(disturbance.interval).toBeLessThanOrEqual(1);
+      expect(disturbance.spacing).toBeGreaterThanOrEqual(0);
+      expect(disturbance.spacing).toBeLessThanOrEqual(1);
       expect(disturbance.duration).toBeGreaterThanOrEqual(0);
       expect(disturbance.duration).toBeLessThanOrEqual(1);
       expect(Math.hypot(...disturbance.direction)).toBeCloseTo(1, 8);
