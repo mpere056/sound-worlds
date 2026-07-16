@@ -1,5 +1,11 @@
 # Vortex Loom implementation plan
 
+> **Shelved on 2026-07-16.** Human visual review rejected the core
+> shuttle-and-weave concept after multiple rendering revisions. The certified
+> physics and implementation remain as engineering evidence, but no further
+> Vortex Loom work should proceed unless the user explicitly reopens it. The
+> replacement research direction is [Spectral Bloom](spectral-bloom-concept.md).
+
 ## Current implementation state
 
 The first V0-V6 engineering slice is implemented and selectable in the preview

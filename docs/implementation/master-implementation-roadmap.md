@@ -60,20 +60,26 @@ each grouped note destroys one brick and the final brick breaks exactly on the
 final note. Headless B0-B5 compiler work may proceed alongside Marble Music;
 scene polish begins only after its deterministic solver gates pass.
 
-Five additional one-track concepts are coordinated by the
+The physics-first concepts are coordinated by the
 [Physics-first visual worlds roadmap](shader-worlds-roadmap.md). Aurora
 Cyclotron and Phaseglass now have engineering-preview implementations, while
-Pendulum Cathedral, Vortex Loom, and Singularity Slalom have strengthened plans
-for distinct physical and rendering foundations. The next unbuilt foundation
+Pendulum Cathedral and Singularity Slalom have strengthened plans for distinct
+physical and rendering foundations. Vortex Loom is shelved after repeated human
+review rejected its shuttle-and-weave visual identity despite certified physics;
+its code remains only as engineering evidence. The next unbuilt foundation
 should be Pendulum Cathedral C0-C2: prove the object-first nonlinear mechanism
-in neutral materials before cathedral art direction or shader effects. Vortex
-Loom follows after deterministic field checkpoints and transport ownership are
-proven; Singularity Slalom remains last because its patched-conic route and
+in neutral materials before cathedral art direction or shader effects.
+Singularity Slalom remains last because its patched-conic route and
 lensing stack carry the highest combined risk. Existing previews are not
 visually complete merely because they run: the shared
 [Sound Worlds visual-quality and acceptance standard](shader-worlds-visual-quality-standard.md)
 governs architecture declaration, perceptual evidence, art direction, motion,
 performance, and full-song review through Q5.
+
+A separate [Spectral Bloom concept](spectral-bloom-concept.md) is awaiting user
+approval. It uses master-audio spectral analysis to deform one persistent 3D
+particle body and is intentionally independent of the one-note interaction
+contract used by the physics-first roadmap.
 
 A future [Music-synchronized ecosystem worlds roadmap](ecosystem-worlds-roadmap.md)
 defines Pulse District, Tidal Reef, Mycelial Canopy, Emberdeep Dungeon, and Halo
