@@ -86,6 +86,15 @@ baseline geometry with no deformation memory. Continue with compact
 high-resolution analysis, stereo/spatial channels, stronger waveform
 parameterization, material refinement, adaptive tiers, and Q5.
 
+A distinct [Waveform Halo implementation](waveform-halo-implementation.md)
+uses the same truthful master-waveform analysis for a different spatial
+grammar: the current waveform is a luminous aperture perimeter and recent
+measured frames form an outward 3D contour history. Cyclic phase alignment
+preserves sample values while making adjacent contours coherent. Silence has
+one exact circle and no residual terrain. Continue with higher-resolution
+analysis, compact artifacts, material refinement, stereo mapping, profiling,
+and two-song Q5 acceptance.
+
 A future [Music-synchronized ecosystem worlds roadmap](ecosystem-worlds-roadmap.md)
 defines Pulse District, Tidal Reef, Mycelial Canopy, Emberdeep Dungeon, and Halo
 Habitat. Each plan now declares its world invariant, rendering architecture,

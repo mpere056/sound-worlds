@@ -19,11 +19,11 @@ describe("Waveform Halo geometry", () => {
     expect(history.depth).toBe(0);
   });
 
-  it("maps waveform sign directly to inward and outward perimeter displacement", () => {
+  it("maps waveform magnitude outward while preserving the silent circle as the inner boundary", () => {
     const crest = waveformHaloContourPosition(0.6, 0, 0.8, 0.8);
     const trough = waveformHaloContourPosition(-0.6, 0, 0.8, 0.8);
     expect(crest.radius).toBeGreaterThan(1.55);
-    expect(trough.radius).toBeLessThan(1.55);
+    expect(trough.radius).toBeCloseTo(crest.radius, 8);
   });
 
   it("opens measured history into depth only while the current signal is active", () => {

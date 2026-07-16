@@ -43,7 +43,7 @@ export function waveformHaloContourPosition(waveform: number, history: number, c
   const gate = Math.pow(activity, 0.72);
   const core = h < 0.0001;
   return {
-    radius: Math.max(0.62, 1.55 + waveform * waveformDepth * (0.72 + h * 0.48) + h * historySpread * 3.15 * gate),
+    radius: 1.55 + Math.abs(waveform) * waveformDepth * (0.72 + h * 0.48) + h * historySpread * 3.15 * gate,
     depth: h * historyDepth * 2.7 * gate,
     opacity: core ? 1 : gate * Math.max(0, Math.min(1, historicalActivity)) * (1 - h * 0.72),
   };
@@ -102,12 +102,12 @@ void main() {
   float row = (aHistory * (uRingCount - 1.0) + 0.5) / uRingCount;
   vec4 measured = texture2D(uHistoryTexture, vec2(fract(aAngle), row));
   float seamEnvelope = smoothstep(0.0, 0.035, aAngle) * (1.0 - smoothstep(0.965, 1.0, aAngle));
-  float waveform = measured.r * seamEnvelope;
+  float waveform = abs(measured.r) * seamEnvelope;
   float gate = pow(clamp(uActivity, 0.0, 1.0), 0.72);
   float core = 1.0 - step(0.0001, aHistory);
-  float radius = max(0.62, 1.55
+  float radius = 1.55
     + waveform * uWaveformDepth * (0.72 + aHistory * 0.48)
-    + aHistory * uHistorySpread * 3.15 * gate);
+    + aHistory * uHistorySpread * 3.15 * gate;
   float width = uLineWidth * mix(1.0, 0.58, aHistory);
   radius += aSide * width;
   float angle = aAngle * 6.28318530718;
