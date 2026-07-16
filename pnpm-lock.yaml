@@ -60,6 +60,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
+  compilers/vortex-loom:
+    dependencies:
+      '@reaper-viz/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+
   packages/app:
     dependencies:
       '@mediapipe/tasks-vision':
@@ -77,6 +83,9 @@ importers:
       '@reaper-viz/compiler-phaseglass':
         specifier: workspace:*
         version: link:../../compilers/phaseglass
+      '@reaper-viz/compiler-vortex-loom':
+        specifier: workspace:*
+        version: link:../../compilers/vortex-loom
       '@reaper-viz/core':
         specifier: workspace:*
         version: link:../core
@@ -107,6 +116,9 @@ importers:
       '@reaper-viz/scene-testpattern':
         specifier: workspace:*
         version: link:../../scenes/_testpattern
+      '@reaper-viz/scene-vortex-loom':
+        specifier: workspace:*
+        version: link:../../scenes/vortex-loom
       pixi.js:
         specifier: 8.19.0
         version: 8.19.0
@@ -240,6 +252,22 @@ importers:
       pixi.js:
         specifier: 8.19.0
         version: 8.19.0
+
+  scenes/vortex-loom:
+    dependencies:
+      '@reaper-viz/compiler-vortex-loom':
+        specifier: workspace:*
+        version: link:../../compilers/vortex-loom
+      '@reaper-viz/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      three:
+        specifier: 0.170.0
+        version: 0.170.0
+    devDependencies:
+      '@types/three':
+        specifier: 0.170.0
+        version: 0.170.0
 
 packages:
 

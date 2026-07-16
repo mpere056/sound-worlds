@@ -5,6 +5,7 @@ import { MarbleScene, type MarblePerformance, type MarblePreparedTransition, typ
 import { BrickBreakerScene, type BrickBreakerPerformance } from "@reaper-viz/scene-brick-breaker";
 import { AuroraScene, type AuroraPerformance } from "@reaper-viz/scene-aurora";
 import { PhaseglassScene, type PhaseglassDiagnostic, type PhaseglassPerformance } from "@reaper-viz/scene-phaseglass";
+import { VortexLoomScene, type VortexLoomPerformance } from "@reaper-viz/scene-vortex-loom";
 import { MetroScene, type MetroPerformance } from "@reaper-viz/scene-metro";
 import { PaintingScene, type PaintingPerformance } from "@reaper-viz/scene-painting";
 import { RunnerScene, type RunnerPerformance } from "@reaper-viz/scene-runner";
@@ -742,6 +743,24 @@ async function loadConcept(concept: string): Promise<void> {
     const report = performance.statics.routeReport;
     const clearance = report.minimumMembraneClearance === null ? "n/a" : report.minimumMembraneClearance.toFixed(3);
     statusDetail.textContent = `${report.deadlineCount} membranes - exact error ${report.exactCrossingError.toExponential(1)} - speed error ${report.maximumSpeedError.toExponential(1)} - clearance ${clearance} - ${report.earlyCrossingCount} early crossings`;
+  } else if (concept === "vortex-loom") {
+    destroyPixiBackend();
+    const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.vortex-loom.json`);
+    if (!response.ok) throw new Error(`Vortex Loom performance request failed: ${response.status}`);
+    const performance = parsePerformance(await response.json()) as VortexLoomPerformance;
+    const vortexLoom = new VortexLoomScene(canvas, performance);
+    scene = vortexLoom;
+    addTuningBinding(bindingPane, vortexLoom.tuning, "fibers", { min: 0, max: 1.5, step: 0.01, label: "Fibers" });
+    addTuningBinding(bindingPane, vortexLoom.tuning, "pigment", { min: 0, max: 1.5, step: 0.01, label: "Pigment" });
+    addTuningBinding(bindingPane, vortexLoom.tuning, "flow", { min: 0.2, max: 1.8, step: 0.01, label: "Flow" });
+    addTuningBinding(bindingPane, vortexLoom.tuning, "anticipation", { min: 0, max: 1.5, step: 0.01, label: "Anticipation" });
+    addTuningBinding(bindingPane, vortexLoom.tuning, "contactLight", { min: 0, max: 1.5, step: 0.01, label: "Contact" });
+    addTuningBinding(bindingPane, vortexLoom.tuning, "cameraDistance", { min: 0.78, max: 1.28, step: 0.01, label: "Camera" });
+    sceneLabel.textContent = "Vortex Loom - V6 Structural Field";
+    statusTitle.textContent = "Vortex Loom - certified Q0 weave";
+    const report = performance.statics.routeReport;
+    const clearance = report.minimumCoreClearance === null ? "n/a" : report.minimumCoreClearance.toFixed(3);
+    statusDetail.textContent = `${report.deadlineCount} exact entries - ${report.earlyEntryCount} early - divergence ${report.maximumNumericalDivergence.toExponential(1)} - core clearance ${clearance} - ${report.checkpointCount} checkpoints - ${report.violations.length} violations`;
   } else if (concept === "metro") {
     const backend = await ensurePixiBackend();
     const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.metro.json`);
@@ -893,6 +912,12 @@ async function loadProject(id: string): Promise<void> {
     phaseglass.textContent = "Phaseglass - P6 Refractive Field";
     options.push(phaseglass);
   }
+  if (project?.concepts.includes("vortex-loom")) {
+    const vortexLoom = document.createElement("option");
+    vortexLoom.value = "vortex-loom";
+    vortexLoom.textContent = "Vortex Loom - V6 Structural Field";
+    options.push(vortexLoom);
+  }
   const testPattern = document.createElement("option");
   testPattern.value = "testpattern";
   testPattern.textContent = "Pipeline Test Pattern";
@@ -931,6 +956,13 @@ async function loadProject(id: string): Promise<void> {
     phaseglass.textContent = "Phaseglass - compile required";
     phaseglass.disabled = true;
     options.push(phaseglass);
+  }
+  if (!project?.concepts.includes("vortex-loom")) {
+    const vortexLoom = document.createElement("option");
+    vortexLoom.value = "vortex-loom";
+    vortexLoom.textContent = "Vortex Loom - compile required";
+    vortexLoom.disabled = true;
+    options.push(vortexLoom);
   }
   conceptSelect.replaceChildren(...options);
   await loadConcept(options[0]?.value ?? "testpattern");

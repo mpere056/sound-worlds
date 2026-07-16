@@ -1,5 +1,37 @@
 # Vortex Loom implementation plan
 
+## Current implementation state
+
+The first V0-V6 engineering slice is implemented and selectable in the preview
+app. It deliberately proves the authoritative core before attempting the full
+material renderer:
+
+- deterministic one-track source selection and 25 ms grouped deadlines;
+- a chamber-confined stream-function field with regularized, smoothly activated
+  vortices and independently sampled numerical divergence;
+- fixed-step RK4 integration with Hermite route sampling;
+- deterministic fixed-point vortex placement with exact deadline annulus
+  construction;
+- certification of exact first entry, inward radial speed, no early ownership,
+  forbidden-core clearance, chamber margin, and checkpoint replay;
+- deterministic Lagrangian warp-fiber checkpoints at 0.25-second cadence;
+- a Three.js Q0 scene using those real transported fiber positions, one shared
+  flow-derived pigment field, directional future-note anticipation, localized
+  contact light, and a shader-woven shuttle knot;
+- app routing, absolute-time seek/playback, controls, PNG/preview export, tests,
+  and a compiled 19-deadline reference artifact.
+
+On the current reference, all 19 deadlines certify with zero timing error, zero
+early entries, `2.11e-6` maximum sampled divergence, `0.0042` minimum core
+clearance, 51 checkpoints, and no reported violations.
+
+This is not completion of V0-V6 in the stronger sense described below. The
+sequential fixed-point placement is a bounded first solver, not the planned
+independent root oracle, candidate beam, or multiple-shooting global solve.
+Checkpoint payloads currently contain transported fiber positions, not the full
+remeshing, pigment, worker-replay, and checksum state. The scene is a readable
+structural proof, not Q1-Q5 material or visual acceptance.
+
 ## Concept thesis
 
 Vortex Loom is a deterministic fluid-field world in which music weaves one
