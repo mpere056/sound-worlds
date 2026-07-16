@@ -76,6 +76,17 @@ visually complete merely because they run: the shared
 governs architecture declaration, perceptual evidence, art direction, motion,
 performance, and full-song review through Q5.
 
+[Lumenfall](../lumenfall.md) and its detailed
+[implementation plan](lumenfall-implementation.md) add a distinct one-track
+object-first world: a radiant body crosses a pre-existing wet-stone night
+environment and contacts a real surface on every note. The route uses analytic
+gravity arcs, passive reflection plus a bounded mostly normal musical impulse,
+and swept-sphere collision certification against the frozen world. The body's
+position owns inverse-square PBR illumination, shadows, wet reflections, and a
+capped material-aware contact bounce light. Begin with L0-L1 math fixtures and
+the Nocturne Causeway graybox, then require a five-impact physics-and-lighting
+proof with bloom disabled before full-song compilation or cinematic polish.
+
 A separate [Spectral Bloom concept](spectral-bloom-concept.md) and detailed
 [implementation plan](spectral-bloom-implementation.md) now have a corrected
 SB0-SB5 engineering preview. The discarded damped-force model has been replaced

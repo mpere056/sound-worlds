@@ -3,7 +3,9 @@
 This roadmap originally covered five one-track worlds whose visible identity follows from a
 deterministic physical model. They do not all use the same rendering foundation:
 some are object-first, some field-first, and some hybrid. Shader use is chosen
-only when it serves the product invariant.
+only when it serves the product invariant. Lumenfall was added later as a sixth
+object-first hybrid built around static-world ballistics and physically based
+illumination rather than a shader-first identity.
 
 Vortex Loom was shelved on 2026-07-16 after its certified physics did not yield
 a compelling visual or musical identity in repeated human review. It remains in
@@ -49,6 +51,7 @@ consume the artifact without re-solving the world.
 | Aurora Cyclotron | Lorentz fields | field-first hybrid | low-medium | high | 1 |
 | Phaseglass | vector refraction | field-first hybrid | low | high | 2 |
 | Pendulum Cathedral | constrained swing/ballistics | object-first hybrid | medium | medium | 3 |
+| Lumenfall | certified ballistics + PBR illumination | object-first hybrid | medium-high | medium-high | planned |
 | Vortex Loom | incompressible flow | field-first hybrid | medium-high | high | shelved |
 | Singularity Slalom | patched-conic gravity | object-first hybrid | high | high | 5 |
 
@@ -69,6 +72,7 @@ musical expression. Q5 is full-song final acceptance.
 - [Aurora Cyclotron](shader-world-aurora-cyclotron.md)
 - [Phaseglass](shader-world-phaseglass.md)
 - [Pendulum Cathedral](shader-world-pendulum-cathedral.md)
+- [Lumenfall](lumenfall-implementation.md)
 - [Vortex Loom - shelved](shader-world-vortex-loom.md)
 - [Singularity Slalom](shader-world-singularity-slalom.md)
 - [Shared visual-quality standard](shader-worlds-visual-quality-standard.md)
