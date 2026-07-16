@@ -1,7 +1,8 @@
 # Spectral Bloom concept
 
-> Status: concept definition awaiting user approval. Do not begin implementation
-> until the visual and musical interpretation in this document is confirmed.
+> Status: concept approved for detailed planning. Implementation has not started.
+> Use the companion [implementation plan](spectral-bloom-implementation.md)
+> before writing production code.
 
 ## Reference reading
 
@@ -88,6 +89,47 @@ Particles do not respawn at random locations each frame. A particle keeps its
 identity, neighborhood, phase offsets, and material role through the song.
 This persistence is what allows the viewer to understand that the compact orb,
 open flower, twisted shell, and transient spray are one object.
+
+## Acoustic geometry, not a bubble simulation
+
+The new reference adds an important physical idea: sound should appear to shape
+the geometry itself. The body should have coherent lobes, nodes, folds, and
+symmetries that feel like the visible result of resonant pressure patterns. It
+must not look like arbitrary noise attached to an audio amplitude meter.
+
+Bubble cymatics is useful as conceptual evidence that sound can organize a
+closed three-dimensional domain into complex standing-wave geometry. It is not
+the subject or material of this world. Spectral Bloom will not render a soap
+film, liquid surface, transparent bubble, or scientifically literal droplet.
+It remains a dense luminous particle organism with its own synthetic material
+laws.
+
+The mathematical interpretation is:
+
+1. The stable particle body is a closed deformable domain.
+2. Its available motions are a bank of spatial resonance modes with nodal
+   regions and coherent lobes.
+3. Signed, phase-aware spectral controls excite those modes through damped
+   oscillators.
+4. Simultaneous frequencies superpose and interfere, creating one compound
+   geometry rather than several unrelated effects.
+5. Transients inject momentum into the same body and may detach a bounded
+   amount of its existing material.
+
+Real spherical harmonics are the preferred first basis because they provide a
+continuous family of ordered modes on a sphere: low degree produces broad
+lobes, while higher degree produces finer nodal structure. Surface gradients
+and curls of those modes add tangential folds and torsion so the result does
+not merely inflate and deflate radially. The harmonics are a controllable
+mathematical basis, not a claim that the artwork reproduces one particular
+real-world object or exact material equation.
+
+The renderer should make this causality legible. A narrow sustained tone should
+settle into an organized resonant figure. Related frequencies should reinforce
+or slowly rotate that figure. Chords should produce compatible superposed
+lobes. Broadband noise should weaken order and increase fine structure. A
+transient should visibly transfer stored energy through the same geometry,
+not paste an independent burst over it.
 
 ## Spectral-to-form grammar
 
@@ -302,7 +344,7 @@ influence a small lateral bias, but must not make the framing unstable.
 - no camera motion that competes with the sculpture;
 - no claim that a waveform alone provides spectral or timbral information.
 
-## First proof, if approved
+## First proof
 
 The first implementation should be deliberately narrow:
 
@@ -320,9 +362,9 @@ the same body continuously become compact, folded, flower-like, and dispersed,
 and can correctly feel the difference between bass, harmonic density, bright
 detail, transients, and silence without labels.
 
-## Approval questions
+## Confirmed interpretation
 
-Before implementation, confirm these interpretation choices:
+The planning work proceeds with these choices:
 
 - one persistent body rather than several independent clouds;
 - spectral analysis as the primary input rather than note tracking;

@@ -76,10 +76,13 @@ visually complete merely because they run: the shared
 governs architecture declaration, perceptual evidence, art direction, motion,
 performance, and full-song review through Q5.
 
-A separate [Spectral Bloom concept](spectral-bloom-concept.md) is awaiting user
-approval. It uses master-audio spectral analysis to deform one persistent 3D
-particle body and is intentionally independent of the one-note interaction
-contract used by the physics-first roadmap.
+A separate [Spectral Bloom concept](spectral-bloom-concept.md) and detailed
+[implementation plan](spectral-bloom-implementation.md) are documented. It
+uses signed, multiresolution master-audio analysis to excite damped resonant
+modes in one persistent 3D particle body. The cymatics reference informs its
+nodal geometry, but it is explicitly not a bubble or literal droplet
+simulation. Implementation begins with SB0 contracts and synthetic fixtures,
+then proves distinguishable monochrome geometry before GPU particle polish.
 
 A future [Music-synchronized ecosystem worlds roadmap](ecosystem-worlds-roadmap.md)
 defines Pulse District, Tidal Reef, Mycelial Canopy, Emberdeep Dungeon, and Halo

@@ -1,0 +1,580 @@
+# Spectral Bloom implementation plan
+
+> Status: implementation plan complete; production implementation has not
+> started. This document turns the approved
+> [concept](spectral-bloom-concept.md) into staged, testable work orders.
+
+## 1. Product invariant
+
+One stable, luminous 3D particle body is continuously deformed by bounded
+resonant modes excited from the full mastered audio spectrum. Its compact,
+folded, flower-like, and dispersed states are different states of one material,
+not different presets or layered visualizers.
+
+The governing visual equation is conceptually:
+
+```text
+particle position(t)
+  = stable base topology
+  + sum(modal coefficient_k(t) * spatial mode_k)
+  + bounded transient detachment(t)
+  + composition-only camera transform(t)
+```
+
+Every term must be deterministic in absolute song time.
+
+## 2. Interpretation of the cymatics reference
+
+The reference establishes a geometry standard, not a material requirement.
+Sound should appear capable of organizing a closed 3D domain into nodal
+regions, lobes, folds, symmetry, and interference patterns. Spectral Bloom is
+not a bubble, liquid membrane, or literal cymatics simulator.
+
+The first physical model will use real spherical harmonics as an ordered basis
+for the particle domain. This is well suited to the task because spherical
+harmonics are angular eigenfunctions with stable nodal geometry. A forced
+droplet can also be decomposed into spherical-harmonic modes, which is useful
+physical inspiration, but this project deliberately uses tuned synthetic
+damping, coupling, and material limits rather than claiming droplet accuracy.
+
+Primary references:
+
+- [NIST DLMF: spherical harmonics](https://dlmf.nist.gov/14.30)
+- [Forced oscillating droplet modes in spherical harmonics](https://journals.aps.org/pre/abstract/10.1103/PhysRevE.73.045301)
+- [Bello et al.: onset detection tutorial](https://www.iro.umontreal.ca/~pift6080/H09/documents/papers/bello_onset_tutorial.pdf)
+- [Khronos WebGL 2 specification](https://registry.khronos.org/webgl/specs/2.0/)
+
+## 3. Architecture declaration
+
+Use the existing Python analyzer and TypeScript/Three.js preview architecture.
+Do not migrate to C++, Rust, or a new engine before profiling proves a specific
+unmet requirement.
+
+```text
+master.wav
+  -> Python multiresolution spectral analyzer
+  -> spectral-bloom.analysis.json + compact float data
+  -> deterministic modal compiler
+  -> performance.spectral-bloom.json + coefficient/checkpoint data
+  -> Three.js/WebGL2 particle scene
+  -> deterministic preview and export
+```
+
+### Analyzer ownership
+
+Python owns audio decoding, windowed transforms, subband extraction, robust
+normalization, and perceptual summary features. It must not choose visual
+colors or particle positions.
+
+### Compiler ownership
+
+The compiler owns audio-to-mode mapping, oscillator integration, lookahead,
+mode-energy budgets, transient events, camera curves, and checkpoints. It is
+the authoritative bridge from sound to geometry.
+
+### Scene ownership
+
+The scene owns GPU position reconstruction, particles, material response,
+depth, restrained post-processing, and display. It must not analyze audio or
+make random musical decisions at runtime.
+
+## 4. Versioned artifacts
+
+Keep the large spectral data outside the main `song.json` payload.
+
+### `spectral-bloom.analysis.json`
+
+Stores:
+
+- schema/version and source-audio hash;
+- sample rate, channel count, duration, analysis frame rate;
+- frequency-band edges and transform settings;
+- normalization percentiles and silence floor;
+- offsets, shapes, and types for compact binary arrays;
+- analyzer diagnostics and warning codes.
+
+### `spectral-bloom.analysis.bin`
+
+Stores contiguous float arrays for:
+
+- log spectral-band power;
+- signed or complex-derived subband controls;
+- RMS, peak, and onset/flux envelopes;
+- centroid, spread, rolloff, and flatness;
+- stereo balance, width, and correlation;
+- smoothed first derivatives and bounded lookahead envelopes.
+
+### `performance.spectral-bloom.json`
+
+Stores:
+
+- topology seed and material configuration;
+- selected spatial modes and band-to-mode weights;
+- damping, natural frequency, gain, and coupling constants;
+- camera and composition curves;
+- transient-pool policy;
+- references into compact modal-coefficient/checkpoint data;
+- compile diagnostics and acceptance metrics.
+
+The loader must reject mismatched source hashes and unsupported versions.
+
+## 5. Spectral analysis work order
+
+### 5.1 Multiresolution transforms
+
+At 48 kHz, begin with three Hann-windowed analyses:
+
+| Purpose | Window | Hop | Approximate use |
+|---|---:|---:|---|
+| low-frequency structure | 8192 | 512 | bass mass and stable low modes |
+| harmonic body | 4096 | 256 | mids, density, and timbre |
+| transients and highs | 1024 | 128 | flux, attacks, and fine detail |
+
+Resample compiled controls to a common 240 Hz timeline. Preserve the original
+analysis timing metadata so window-center delay remains explicit.
+
+### 5.2 Spectral controls
+
+Use 48 logarithmically spaced bands from approximately 30 Hz to the lower of
+18 kHz or Nyquist. Neighboring bands must overlap smoothly; a frequency sweep
+must move continuously through the shape.
+
+Magnitude alone cannot describe oscillation direction or interference. Retain
+signed subband signals or stable phase-derived controls alongside power. Phase
+must be unwrapped or represented in a form that does not jump at `-pi/pi`.
+
+### 5.3 Summary features
+
+Compile:
+
+- RMS and peak envelope;
+- positive spectral flux and multiresolution onset confidence;
+- centroid, spread, rolloff, and flatness;
+- low, low-mid, high-mid, and high aggregate energy;
+- stereo balance, width, and correlation;
+- attack, sustain, and release confidence;
+- bounded future-energy envelope for prerecorded anticipation.
+
+Normalize against robust song and local percentiles, not each frame's maximum.
+Silence must stay silence, and one extreme transient must not flatten the rest
+of the song.
+
+### 5.4 Analysis fixtures
+
+Automate fixtures for:
+
+- silence and near-silence;
+- single sine tones at low, mid, and high frequencies;
+- a logarithmic frequency sweep;
+- two-tone and four-tone chords;
+- impulse and repeated impulse trains;
+- pink noise and white noise;
+- sustained tone with changing amplitude;
+- stereo pan, stereo width, and phase-inverted stereo;
+- one dense mastered-mix excerpt.
+
+The sweep must cross bands without discontinuity. A chord must activate the
+union of its component regions. Noise must raise flatness without inventing a
+stable pitch identity.
+
+## 6. Stable particle topology
+
+### 6.1 Surface
+
+Begin from a subdivided icosphere, then apply deterministic relaxation and very
+small tangent jitter to avoid visible latitude rings. Every point receives a
+stable ID, base direction, area weight, local tangent frame, and adjacency or
+neighborhood reference.
+
+Initial desktop budget:
+
+- 48,000 surface particles;
+- 12,000 interior/core particles;
+- 8,000 reserved transient particles.
+
+The first physics proof may use fewer particles, but topology and IDs must be
+the same kind of data used by the final renderer.
+
+### 6.2 Interior
+
+Interior points provide depth and a luminous core. They must deform from the
+same modal field with a radius-dependent falloff or phase lag. They are not an
+independent cloud placed behind the surface.
+
+### 6.3 Transient pool
+
+Transient particles are borrowed from known surface neighborhoods or a fixed
+reserve. They inherit local velocity and mode phase. Their detach, dissolve,
+return, or reattachment path is compiled and bounded; no random emitter is
+allowed to sit on top of the body.
+
+## 7. Resonant geometry model
+
+### 7.1 Scalar modes
+
+Use normalized real spherical harmonics `Y_lm` evaluated at each base particle
+direction.
+
+- `l = 0`: global breath and pressure;
+- omit or center-correct `l = 1`, which primarily resembles translation;
+- `l = 2..4`: broad lobes and large mass displacement;
+- `l = 5..8`: folds, petals, and mid-scale structure;
+- `l = 9..12`: fine nodal detail and surface articulation.
+
+Do not necessarily activate every `(l,m)` pair. Select a balanced, reproducible
+bank that spans orientation without exceeding the GPU loop budget.
+
+### 7.2 Tangential modes
+
+Pure radial displacement risks looking like a breathing bubble. Add surface
+gradient and surface-curl modes derived from the scalar basis. These produce
+sliding folds, torsion, asymmetric fins, and material circulation while
+remaining coherent with the same nodal system.
+
+Each particle displacement is therefore:
+
+```text
+delta_i(t) = sum_k q_k(t) * (
+  radialWeight_k * Y_k(i) * normal_i
+  + gradientWeight_k * gradSurface(Y_k(i))
+  + curlWeight_k * curlSurface(Y_k(i))
+)
+```
+
+### 7.3 Damped modal dynamics
+
+Each modal coefficient follows a driven damped oscillator:
+
+```text
+q'' + 2 * zeta * omega * q' + omega^2 * q = gain * force(t)
+```
+
+Compile at a fixed 480 Hz using a stable exact-discrete, state-space, or
+bilinear-transform solution. Do not integrate with variable browser frame
+time. Mode degree should generally increase natural frequency, while damping
+and gain remain art-directable within tested bounds.
+
+### 7.4 Controlled coupling
+
+Linear superposition is the default and must work on its own. Add only bounded,
+named nonlinear couplings, such as low-frequency pressure opening a mid-mode
+fold or dense harmonic energy transferring energy into a compatible petal
+pair. Coupling must never change topology, produce NaNs, or select a random
+shape.
+
+### 7.5 Physical constraints
+
+At every compiled sample:
+
+- correct center-of-mass drift;
+- keep approximate signed volume within a configured envelope;
+- bound radial inversion and local strain;
+- limit displacement, velocity, and acceleration by mode group;
+- preserve a minimum visible core and maximum frame occupancy;
+- record all clamping and instability metrics.
+
+These are synthetic material laws. They prioritize coherence and visual
+causality rather than claiming exact droplet physics.
+
+## 8. Audio-to-mode grammar
+
+Use smooth frequency kernels, not one hard band per mode.
+
+| Audio property | Primary geometric consequence |
+|---|---|
+| sub-bass/bass | breath, compression, `l=2..3` broad mass |
+| low mids | `l=3..5` bowls and petal foundations |
+| high mids | `l=5..8` folds, asymmetry, and torsion |
+| highs | `l=8..12` fine nodes, edge scintillation, limited spray |
+| centroid | shifts modal energy toward higher degree |
+| spread | activates more compatible orientations and degrees |
+| flatness | weakens order, increases tangential microstructure and porosity |
+| spectral flux | broadband pressure impulse through existing modes |
+| stereo balance | azimuthal orientation bias, not camera jumping |
+| stereo width | separation of mirrored mode pairs |
+| correlation | symmetry versus twisting asymmetry |
+
+Signed subband controls decide the direction of pressure and interference.
+Magnitude controls the available energy. This prevents every note from being
+the same outward pulse in a different color.
+
+Similar spectra should create related geometry. Distant spectra should remain
+distinguishable even in a monochrome debug render. Quick successive attacks
+accumulate modal energy smoothly instead of resetting the body.
+
+## 9. Prerecorded anticipation
+
+The compiler may inspect approximately the next three seconds, but only a
+short bounded interval should directly pre-tension the body. Upcoming energy
+can:
+
+- gather particles toward future nodal regions;
+- open negative space that a coming lobe will occupy;
+- increase tension without releasing the impact;
+- orient an existing fold before the audible arrival.
+
+The actual energy transfer and brightest deformation happen on the sound. A
+silence after the event continues the stored modal motion and damping rather
+than freezing.
+
+## 10. GPU rendering plan
+
+### 10.1 Position reconstruction
+
+Use Three.js `Points` with WebGL2. Precompute per-particle basis values and
+surface derivatives into GPU buffers or floating-point textures. Upload the
+small modal-coefficient array each frame, and reconstruct positions in the
+vertex shader.
+
+Benchmark 32, 48, and 64 active modes. Start with a 48-mode cap unless visual
+tests prove it insufficient. Particle count and mode count are independent
+quality controls.
+
+### 10.2 Particle material
+
+The fragment shader renders soft round or slightly elliptical point sprites
+with premultiplied alpha. It must have no square cutoff, hard card edge, or
+uniformly opaque dot wall.
+
+Brightness comes from understandable material properties:
+
+- compressed local area and fold density;
+- silhouette/facing response;
+- modal strain and velocity;
+- depth through the body;
+- transient energy inherited from the local surface.
+
+Color begins in silver, pearl, and soft white. Any spectral tint remains
+restrained and secondary to geometry.
+
+### 10.3 Interior and spray
+
+Interior particles use the same coefficient bank with radial attenuation.
+Transient particles may use transform feedback or analytic absolute-time
+paths only after profiling. The first proof must succeed without spray.
+
+### 10.4 Post-processing
+
+Use restrained high-quality bloom and optional depth haze. The body must remain
+readable with bloom disabled; post-processing cannot hide weak geometry or turn
+the scene into an undifferentiated glow.
+
+## 11. Camera and composition
+
+Use an absolute-time slow orbit or bounded parallax path. The camera observes
+the whole sculpture and reveals depth; it never chases a transient or cuts on a
+beat.
+
+Acceptance constraints:
+
+- the hero body remains inside the title-safe frame;
+- no abrupt zoom, focus pumping, or orientation reset;
+- camera motion is slower than the dominant material modes;
+- stereo may add a slight composition bias but cannot destabilize framing;
+- negative space remains intentional at portrait and landscape viewports.
+
+## 12. Seeking and determinism
+
+Modal coefficients are compiled on a fixed timeline and sampled by absolute
+song time. Transient paths are either analytic in time or restored from fixed
+checkpoints. The scene must not depend on the order in which frames were
+visited.
+
+Required tests:
+
+- byte-identical analysis and performance artifacts on repeated compile;
+- identical frame hashes for linear playback and randomized seek order within
+  a small GPU tolerance;
+- no use of `Math.random`, `Date.now`, or wall-clock frame integration;
+- no stale transient particles after backward seeks;
+- identical state at frame `n` after pause/resume and direct seek.
+
+## 13. Diagnostics
+
+Development-only overlays and reports must expose:
+
+- the multiresolution spectrum and feature curves;
+- active modes grouped by `(l,m)` and radial/tangential type;
+- mode force, displacement, velocity, damping, and clamp counts;
+- center-of-mass and approximate-volume error;
+- maximum strain, displacement, velocity, and acceleration;
+- transient-particle ownership and active count;
+- CPU compile time, artifact size, GPU frame time, and draw count;
+- shader compile/link logs and black-frame detection.
+
+Diagnostics are not part of the exported artwork.
+
+## 14. Work orders and gates
+
+### SB0 - contracts and fixtures
+
+- define artifact schemas and versioning;
+- add deterministic synthetic audio fixtures;
+- scaffold compiler and scene packages;
+- add source-hash and stale-artifact rejection.
+
+**Gate:** repeated fixture builds are byte-identical and invalid artifacts fail
+with actionable errors.
+
+### SB1 - multiresolution spectral analyzer
+
+- implement the three transform resolutions;
+- compile bands, signed controls, perceptual features, and diagnostics;
+- validate all known-signal fixtures.
+
+**Gate:** sine, sweep, chord, impulse, noise, and stereo tests produce the
+expected continuous feature behavior.
+
+### SB2 - topology and modal basis
+
+- generate stable surface/interior topology;
+- evaluate normalized scalar, gradient, and curl basis fields;
+- verify orthogonality, center correction, and bounded reconstruction.
+
+**Gate:** debug mode renders individual modes as coherent nodal geometry with
+no drift, cracks, or topology changes.
+
+### SB3 - modal dynamics compiler
+
+- implement fixed-rate damped oscillators;
+- add energy budgets, coupling, constraints, and checkpoints;
+- compare numerical output to analytic single-mode fixtures.
+
+**Gate:** results are stable across long runs, seeks, dense forcing, and
+silence recovery, with no NaNs or uncontrolled energy growth.
+
+### SB4 - musical grammar proof
+
+- map frequency kernels and summary features into modes;
+- build monochrome demonstrations for bass, tone, chord, transient, noise,
+  dense mix, and silence;
+- tune continuity and repeated-transient accumulation.
+
+**Gate:** reviewers can distinguish the fixture classes from geometry alone;
+successive notes intensify one motion rather than reset it.
+
+### SB5 - Q0 GPU particle scene
+
+- implement basis-texture/buffer upload and vertex reconstruction;
+- render stable surface and interior particles;
+- add deterministic camera and screenshot harness;
+- keep bloom and transient spray disabled.
+
+**Gate:** one persistent body renders at target speed, reads as truly 3D, and
+shows the compiled modal causality without post-processing assistance.
+
+### SB6 - transient material and anticipation
+
+- implement bounded detach/return behavior;
+- compile pre-tension and negative-space anticipation;
+- validate fast passages and backward seeks.
+
+**Gate:** transients feel like energy moving through existing material, and
+future preparation never becomes an early impact or unrelated emitter.
+
+### SB7 - unified material and lighting
+
+- finish pearl/silver particle response, fold density, silhouette light,
+  interior core, restrained tint, haze, and bloom;
+- remove card edges, square points, and layered-effect appearance.
+
+**Gate:** surface, core, folds, and spray read as one material in still frames
+and motion.
+
+### SB8 - composition and visual-quality pass
+
+- tune camera, framing, negative space, scale, and full-song pacing;
+- compare against supplied references for density, elegance, and depth;
+- test desktop, portrait, and mobile-safe output.
+
+**Gate:** Q0-Q4 visual acceptance passes and no section reads as a generic
+audio-reactive blob.
+
+### SB9 - performance, export, and production gate
+
+- add adaptive particle tiers without changing authoritative modal state;
+- complete export, long-song, shader-error, and memory tests;
+- perform full-song audio watch-throughs on at least two contrasting songs.
+
+**Gate:** Q5 passes, exports are deterministic, and performance budgets hold.
+
+## 15. Performance budgets
+
+Initial production targets:
+
+| Metric | Target |
+|---|---:|
+| desktop particles | up to 68,000 visible plus 8,000 transient reserve |
+| medium tier | approximately 40,000 total visible |
+| low tier | approximately 20,000 total visible |
+| 1080 x 1920 GPU frame time | p95 at or below 16.7 ms |
+| hard GPU frame ceiling | 25 ms outside capture stalls |
+| scene CPU time | p95 at or below 2 ms per frame |
+| runtime scene memory | at or below 128 MB |
+| 3-minute analysis time | p95 at or below 20 seconds on the reference PC |
+| 3-minute compressed artifacts | target at or below 24 MB |
+
+Measure before introducing transform feedback, WebGPU, workers, WASM, or a
+native implementation. Escalate architecture only when a named budget fails
+and profiling identifies the bottleneck.
+
+## 16. Visual-quality ladder
+
+### Q0 - motion grammar
+
+Neutral monochrome points prove that spectrum, phase, damping, and superposition
+create coherent and distinguishable geometry.
+
+### Q1 - reference material
+
+Particle density, silhouettes, fold brightness, core depth, and transient spray
+match the quality direction of the supplied references.
+
+### Q2 - composition
+
+The body occupies the frame elegantly, retains negative space, and reveals 3D
+depth without camera distraction.
+
+### Q3 - unity
+
+Surface, interior, spray, light, haze, and bloom feel like one material system.
+
+### Q4 - musical readability
+
+Bass, sustained harmony, polyphony, transient density, brightness, noise, and
+silence have visibly related but distinct consequences over a full song.
+
+### Q5 - production
+
+Two contrasting songs pass full watch-through, seek, export, performance, and
+determinism gates with no black frames or shader errors.
+
+## 17. Principal risks and mitigations
+
+| Risk | Mitigation |
+|---|---|
+| it looks like a bubble | emphasize tangential modes, asymmetry, folds, interior depth, and particles; never render a continuous translucent shell |
+| it becomes a generic pulsing blob | retain signed/phase-aware forcing, stable nodal modes, and geometry-only fixture gates |
+| dense music becomes visual noise | modal energy budgets, damping by scale, compatibility kernels, and bounded coupling |
+| every sound looks the same | require monochrome fixture classification before color and bloom |
+| particles reveal square sprites | analytic soft point mask and screenshot gate at multiple pixel densities |
+| high mode count exceeds GPU budget | benchmark active-mode caps, pack basis data, and reduce modes before reducing physical continuity |
+| spray looks layered on | inherit surface IDs, position, velocity, phase, tint, and explicit reattachment |
+| seeking changes the result | fixed-rate compiled coefficients, analytic/checkpointed transients, and randomized-seek hashes |
+| references are copied too literally | preserve the particle-material direction while using original mode mappings, topology, camera, and compositions |
+
+## 18. First meaningful milestone
+
+Do not begin with maximum particles, bloom, color, or spray. The first useful
+review build is one monochrome particle body driven by five short audio clips:
+
+1. bass-heavy sustained tone;
+2. midrange harmonic tone;
+3. four-note chord;
+4. repeated transients;
+5. broadband noise followed by silence.
+
+It passes only when the clips visibly produce different but related acoustic
+geometries, all geometry flows without resets, the object remains the same
+stable material, and direct seeking reproduces the same frames. That milestone
+proves the idea before expensive visual polish begins.
