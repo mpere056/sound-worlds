@@ -1,0 +1,19 @@
+{
+  "name": "@reaper-viz/scene-waveform-halo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@reaper-viz/compiler-waveform-halo": "workspace:*",
+    "three": "0.170.0"
+  },
+  "devDependencies": { "@types/three": "0.170.0" }
+}

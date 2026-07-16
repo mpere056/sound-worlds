@@ -72,6 +72,15 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
+  compilers/waveform-halo:
+    dependencies:
+      '@reaper-viz/compiler-spectral-bloom':
+        specifier: workspace:*
+        version: link:../spectral-bloom
+      '@reaper-viz/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+
   packages/app:
     dependencies:
       '@mediapipe/tasks-vision':
@@ -95,6 +104,9 @@ importers:
       '@reaper-viz/compiler-vortex-loom':
         specifier: workspace:*
         version: link:../../compilers/vortex-loom
+      '@reaper-viz/compiler-waveform-halo':
+        specifier: workspace:*
+        version: link:../../compilers/waveform-halo
       '@reaper-viz/core':
         specifier: workspace:*
         version: link:../core
@@ -131,6 +143,9 @@ importers:
       '@reaper-viz/scene-vortex-loom':
         specifier: workspace:*
         version: link:../../scenes/vortex-loom
+      '@reaper-viz/scene-waveform-halo':
+        specifier: workspace:*
+        version: link:../../scenes/waveform-halo
       pixi.js:
         specifier: 8.19.0
         version: 8.19.0
@@ -286,6 +301,19 @@ importers:
       '@reaper-viz/core':
         specifier: workspace:*
         version: link:../../packages/core
+      three:
+        specifier: 0.170.0
+        version: 0.170.0
+    devDependencies:
+      '@types/three':
+        specifier: 0.170.0
+        version: 0.170.0
+
+  scenes/waveform-halo:
+    dependencies:
+      '@reaper-viz/compiler-waveform-halo':
+        specifier: workspace:*
+        version: link:../../compilers/waveform-halo
       three:
         specifier: 0.170.0
         version: 0.170.0

@@ -7,6 +7,7 @@ import { AuroraScene, type AuroraPerformance } from "@reaper-viz/scene-aurora";
 import { PhaseglassScene, type PhaseglassDiagnostic, type PhaseglassPerformance } from "@reaper-viz/scene-phaseglass";
 import { VortexLoomScene, type VortexLoomPerformance } from "@reaper-viz/scene-vortex-loom";
 import { SpectralBloomScene, type SpectralBloomPerformance } from "@reaper-viz/scene-spectral-bloom";
+import { WaveformHaloScene, type WaveformHaloPerformance } from "@reaper-viz/scene-waveform-halo";
 import { MetroScene, type MetroPerformance } from "@reaper-viz/scene-metro";
 import { PaintingScene, type PaintingPerformance } from "@reaper-viz/scene-painting";
 import { RunnerScene, type RunnerPerformance } from "@reaper-viz/scene-runner";
@@ -762,6 +763,24 @@ async function loadConcept(concept: string): Promise<void> {
     statusTitle.textContent = "Spectral Bloom - direct master-audio geometry";
     const report = performance.statics.report;
     statusDetail.textContent = `${report.waveformSamplesPerFrame} signed waveform samples - ${report.bandCount} spectral bands - ${performance.statics.topology.surfaceParticles + performance.statics.topology.interiorParticles} persistent particles - zero deformation memory`;
+  } else if (concept === "waveform-halo") {
+    destroyPixiBackend();
+    const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.waveform-halo.json`);
+    if (!response.ok) throw new Error(`Waveform Halo performance request failed: ${response.status}`);
+    const performance = parsePerformance(await response.json()) as WaveformHaloPerformance;
+    const waveformHalo = new WaveformHaloScene(canvas, performance);
+    scene = waveformHalo;
+    addTuningBinding(bindingPane, waveformHalo.tuning, "waveformDepth", { min: 0, max: 2.2, step: 0.01, label: "Waveform" });
+    addTuningBinding(bindingPane, waveformHalo.tuning, "historySpread", { min: 0, max: 1.8, step: 0.01, label: "Outward flow" });
+    addTuningBinding(bindingPane, waveformHalo.tuning, "historyDepth", { min: 0, max: 1.8, step: 0.01, label: "Depth" });
+    addTuningBinding(bindingPane, waveformHalo.tuning, "lineWidth", { min: 0.006, max: 0.045, step: 0.001, label: "Ribbon width" });
+    addTuningBinding(bindingPane, waveformHalo.tuning, "glow", { min: 0.15, max: 1.8, step: 0.01, label: "Glow" });
+    addTuningBinding(bindingPane, waveformHalo.tuning, "color", { min: 0, max: 1.5, step: 0.01, label: "Color" });
+    addTuningBinding(bindingPane, waveformHalo.tuning, "cameraDistance", { min: 0.72, max: 1.4, step: 0.01, label: "Camera" });
+    sceneLabel.textContent = "Waveform Halo - WH1 Contour Aperture";
+    statusTitle.textContent = "Waveform Halo - direct waveform history";
+    const report = performance.statics.report;
+    statusDetail.textContent = `${report.waveformSamplesPerFrame} waveform samples - ${report.ringCount} measured contour frames - ${report.historySec.toFixed(1)}s visible history - exact silent circle`;
   } else if (concept === "vortex-loom") {
     destroyPixiBackend();
     const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.vortex-loom.json`);
@@ -937,6 +956,12 @@ async function loadProject(id: string): Promise<void> {
     spectralBloom.textContent = "Spectral Bloom - SB5 3D Waveform Field";
     options.push(spectralBloom);
   }
+  if (project?.concepts.includes("waveform-halo")) {
+    const waveformHalo = document.createElement("option");
+    waveformHalo.value = "waveform-halo";
+    waveformHalo.textContent = "Waveform Halo - WH1 Contour Aperture";
+    options.push(waveformHalo);
+  }
   if (project?.concepts.includes("vortex-loom")) {
     const vortexLoom = document.createElement("option");
     vortexLoom.value = "vortex-loom";
@@ -988,6 +1013,13 @@ async function loadProject(id: string): Promise<void> {
     spectralBloom.textContent = "Spectral Bloom - compile required";
     spectralBloom.disabled = true;
     options.push(spectralBloom);
+  }
+  if (!project?.concepts.includes("waveform-halo")) {
+    const waveformHalo = document.createElement("option");
+    waveformHalo.value = "waveform-halo";
+    waveformHalo.textContent = "Waveform Halo - compile required";
+    waveformHalo.disabled = true;
+    options.push(waveformHalo);
   }
   if (!project?.concepts.includes("vortex-loom")) {
     const vortexLoom = document.createElement("option");
