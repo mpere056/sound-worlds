@@ -1,7 +1,34 @@
 # Lumenfall implementation plan
 
-> Status: concept and implementation work orders defined on 2026-07-16. No
-> compiler, scene package, world asset, or performance artifact exists yet.
+> Status: L0-L1 foundation and a preliminary L2-L5 engineering slice were
+> implemented on 2026-07-16. Pair-state route search, full mesh CCD, final
+> materials, and production lighting acceptance remain.
+
+## Current engineering checkpoint
+
+Implemented packages:
+
+- `@reaper-viz/compiler-lumenfall` with monophonic deadline grouping, analytic
+  launch solves, passive reflection, bounded impulse diagnostics, a frozen
+  192-slab Nocturne Causeway graybox, exact contact artifacts, deterministic
+  sampling, and contact-plane clearance certification;
+- `@reaper-viz/scene-lumenfall` with generated basalt texture assets, separate
+  wet/dry PBR materials, dark water, an inverse-square point source, a coupled
+  wide shadow spotlight, analytic contact light, velocity-aligned luminous
+  streak, bounded trail, and absolute-time camera following;
+- app discovery, controls, timestamp query links, and reference-project
+  compilation through `performance.lumenfall.json`.
+
+The 19-note reference compiles to 19 exact contacts with approximately
+`1.4e-15` maximum endpoint error, zero contact-plane penetrations, maximum
+speed below `6.1 m/s`, and effectively zero tangential impulse ratio after the
+continuous contact-point correction.
+
+This does **not** complete L2-L5. The current route uses one broad horizontal
+contact family and a continuous-forward heuristic. It does not yet implement
+pair-state beam search across varied surface normals or BVH swept-sphere tests
+against final terrain. The renderer proves the data path and lighting
+architecture, not final realism or concept parity.
 
 ## 1. Architecture
 

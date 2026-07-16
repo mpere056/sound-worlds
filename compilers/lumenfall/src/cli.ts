@@ -1,0 +1,20 @@
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseSong } from "@reaper-viz/core";
+import { compileLumenfall } from "./index.js";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const root = resolve(here, "../../..");
+const args = process.argv.slice(2).filter((value) => value !== "--");
+const projectArg = args[0];
+if (!projectArg) throw new Error("Usage: pnpm compile:lumenfall -- projects/<project> [sourceTrackId]");
+const project = isAbsolute(projectArg) ? projectArg : resolve(root, projectArg);
+const output = resolve(project, "performance.lumenfall.json");
+await mkdir(project, { recursive: true });
+const song = parseSong(JSON.parse(await readFile(resolve(project, "song.json"), "utf8")));
+const performance = compileLumenfall(song, args[1] ? { sourceTrackId: args[1] } : {});
+const temporary = `${output}.tmp`;
+await writeFile(temporary, `${JSON.stringify(performance, null, 2)}\n`, "utf8");
+await rename(temporary, output);
+console.log(`WROTE: ${output}`);

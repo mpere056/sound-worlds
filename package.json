@@ -12,6 +12,7 @@
     "compile:vortex-loom": "corepack pnpm --filter @reaper-viz/compiler-vortex-loom build && corepack pnpm --filter @reaper-viz/compiler-vortex-loom compile",
     "compile:spectral-bloom": "corepack pnpm --filter @reaper-viz/compiler-spectral-bloom build && corepack pnpm --filter @reaper-viz/compiler-spectral-bloom compile",
     "compile:waveform-halo": "corepack pnpm --filter @reaper-viz/compiler-waveform-halo build && corepack pnpm --filter @reaper-viz/compiler-waveform-halo compile",
+    "compile:lumenfall": "corepack pnpm --filter @reaper-viz/compiler-lumenfall build && corepack pnpm --filter @reaper-viz/compiler-lumenfall compile",
     "compile:metro": "corepack pnpm --filter @reaper-viz/compiler-metro build && corepack pnpm --filter @reaper-viz/compiler-metro compile",
     "compile:painting": "corepack pnpm --filter @reaper-viz/compiler-painting build && corepack pnpm --filter @reaper-viz/compiler-painting compile",
     "compile:runner": "corepack pnpm --filter @reaper-viz/compiler-runner build && corepack pnpm --filter @reaper-viz/compiler-runner compile",

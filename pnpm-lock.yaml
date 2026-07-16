@@ -30,6 +30,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
+  compilers/lumenfall:
+    dependencies:
+      '@reaper-viz/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+
   compilers/marble:
     dependencies:
       '@reaper-viz/core':
@@ -92,6 +98,9 @@ importers:
       '@reaper-viz/compiler-brick-breaker':
         specifier: workspace:*
         version: link:../../compilers/brick-breaker
+      '@reaper-viz/compiler-lumenfall':
+        specifier: workspace:*
+        version: link:../../compilers/lumenfall
       '@reaper-viz/compiler-marble':
         specifier: workspace:*
         version: link:../../compilers/marble
@@ -119,6 +128,9 @@ importers:
       '@reaper-viz/scene-brick-breaker':
         specifier: workspace:*
         version: link:../../scenes/brick-breaker
+      '@reaper-viz/scene-lumenfall':
+        specifier: workspace:*
+        version: link:../../scenes/lumenfall
       '@reaper-viz/scene-marble':
         specifier: workspace:*
         version: link:../../scenes/marble
@@ -211,6 +223,19 @@ importers:
       pixi.js:
         specifier: 8.19.0
         version: 8.19.0
+
+  scenes/lumenfall:
+    dependencies:
+      '@reaper-viz/compiler-lumenfall':
+        specifier: workspace:*
+        version: link:../../compilers/lumenfall
+      three:
+        specifier: 0.170.0
+        version: 0.170.0
+    devDependencies:
+      '@types/three':
+        specifier: 0.170.0
+        version: 0.170.0
 
   scenes/marble:
     dependencies:

@@ -8,6 +8,7 @@ import { PhaseglassScene, type PhaseglassDiagnostic, type PhaseglassPerformance 
 import { VortexLoomScene, type VortexLoomPerformance } from "@reaper-viz/scene-vortex-loom";
 import { SpectralBloomScene, type SpectralBloomPerformance } from "@reaper-viz/scene-spectral-bloom";
 import { WaveformHaloScene, type WaveformHaloPerformance } from "@reaper-viz/scene-waveform-halo";
+import { LumenfallScene, type LumenfallPerformance } from "@reaper-viz/scene-lumenfall";
 import { MetroScene, type MetroPerformance } from "@reaper-viz/scene-metro";
 import { PaintingScene, type PaintingPerformance } from "@reaper-viz/scene-painting";
 import { RunnerScene, type RunnerPerformance } from "@reaper-viz/scene-runner";
@@ -781,6 +782,26 @@ async function loadConcept(concept: string): Promise<void> {
     statusTitle.textContent = "Waveform Halo - direct waveform history";
     const report = performance.statics.report;
     statusDetail.textContent = `${report.waveformSamplesPerFrame} waveform samples - ${report.ringCount} measured contour frames - ${report.historySec.toFixed(1)}s visible history - exact silent circle`;
+  } else if (concept === "lumenfall") {
+    destroyPixiBackend();
+    const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.lumenfall.json`);
+    if (!response.ok) throw new Error(`Lumenfall performance request failed: ${response.status}`);
+    const performance = parsePerformance(await response.json()) as LumenfallPerformance;
+    const lumenfall = new LumenfallScene(canvas, performance);
+    scene = lumenfall;
+    addTuningBinding(bindingPane, lumenfall.tuning, "exposure", { min: 0.45, max: 1.8, step: 0.01, label: "Exposure" });
+    addTuningBinding(bindingPane, lumenfall.tuning, "lightIntensity", { min: 0.25, max: 2.2, step: 0.01, label: "Light" });
+    addTuningBinding(bindingPane, lumenfall.tuning, "lightRadius", { min: 0.45, max: 1.8, step: 0.01, label: "Reach" });
+    addTuningBinding(bindingPane, lumenfall.tuning, "wetness", { min: 0, max: 1.5, step: 0.01, label: "Wetness" });
+    addTuningBinding(bindingPane, lumenfall.tuning, "bounceLight", { min: 0, max: 1.5, step: 0.01, label: "Impact light" });
+    addTuningBinding(bindingPane, lumenfall.tuning, "trailLength", { min: 0, max: 1.6, step: 0.01, label: "Trail" });
+    addTuningBinding(bindingPane, lumenfall.tuning, "trailWidth", { min: 0.4, max: 1.8, step: 0.01, label: "Trail width" });
+    addTuningBinding(bindingPane, lumenfall.tuning, "glow", { min: 0, max: 1.5, step: 0.01, label: "Glow" });
+    addTuningBinding(bindingPane, lumenfall.tuning, "cameraDistance", { min: 0.72, max: 1.5, step: 0.01, label: "Camera" });
+    sceneLabel.textContent = "Lumenfall - L2 Nocturne Graybox";
+    statusTitle.textContent = "Lumenfall - analytic ballistic lighting slice";
+    const report = performance.statics.report;
+    statusDetail.textContent = `${report.impactCount} exact contacts - ${report.worldSlabCount} frozen slabs - timing ${report.maximumTimingError.toExponential(1)} - clearance ${report.minimumInteriorClearance.toFixed(3)} - ${report.warnings.length} route warnings`;
   } else if (concept === "vortex-loom") {
     destroyPixiBackend();
     const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.vortex-loom.json`);
@@ -905,7 +926,9 @@ async function loadProject(id: string): Promise<void> {
   audio.load();
   await waitForAudioMetadata(audio);
   scrub.max = String(song.meta.durationSec);
-  audio.currentTime = 0;
+  const requestedTime = Number(new URL(globalThis.location.href).searchParams.get("t"));
+  audio.currentTime = Number.isFinite(requestedTime) ? Math.max(0, Math.min(song.meta.durationSec, requestedTime)) : 0;
+  scrub.value = String(audio.currentTime);
   const project = projects.find((candidate) => candidate.id === id);
   const options: HTMLOptionElement[] = [];
   if (project?.concepts.includes("runner")) {
@@ -961,6 +984,12 @@ async function loadProject(id: string): Promise<void> {
     waveformHalo.value = "waveform-halo";
     waveformHalo.textContent = "Waveform Halo - WH1 Contour Aperture";
     options.push(waveformHalo);
+  }
+  if (project?.concepts.includes("lumenfall")) {
+    const lumenfall = document.createElement("option");
+    lumenfall.value = "lumenfall";
+    lumenfall.textContent = "Lumenfall - L2 Nocturne Graybox";
+    options.push(lumenfall);
   }
   if (project?.concepts.includes("vortex-loom")) {
     const vortexLoom = document.createElement("option");
@@ -1020,6 +1049,13 @@ async function loadProject(id: string): Promise<void> {
     waveformHalo.textContent = "Waveform Halo - compile required";
     waveformHalo.disabled = true;
     options.push(waveformHalo);
+  }
+  if (!project?.concepts.includes("lumenfall")) {
+    const lumenfall = document.createElement("option");
+    lumenfall.value = "lumenfall";
+    lumenfall.textContent = "Lumenfall - compile required";
+    lumenfall.disabled = true;
+    options.push(lumenfall);
   }
   if (!project?.concepts.includes("vortex-loom")) {
     const vortexLoom = document.createElement("option");
