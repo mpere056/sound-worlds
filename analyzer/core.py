@@ -17,6 +17,7 @@ from jsonschema import Draft7Validator
 ROOT = Path(__file__).resolve().parents[1]
 CURVE_DT = 0.02
 WAVEFORM_PEAKS_PER_SEC = 20
+MASTER_SPECTRAL_BANDS = 24
 DRUM_ROLES = {"kick", "snare", "hats", "toms", "percussion"}
 
 
@@ -112,6 +113,83 @@ def audio_curves(audio: AudioData) -> Tuple[Dict[str, Any], Dict[str, Any], Dict
         {"t0": 0.0, "dt": CURVE_DT, "values": centroid_values},
         {"peakRms": round(peak_rms, 9), "meanRms": round(mean_rms, 9)},
     )
+
+
+def master_spectrogram(audio: AudioData, band_count: int = MASTER_SPECTRAL_BANDS) -> Dict[str, Any]:
+    """Compile compact, phase-aware master-audio controls for spectral worlds."""
+    if band_count < 4:
+        raise AnalysisError("Master spectrogram requires at least four bands")
+    hop = max(1, round(audio.sample_rate * CURVE_DT))
+    frame_size = 4096
+    window = np.hanning(frame_size).astype(np.float32)
+    frequencies = np.fft.rfftfreq(frame_size, 1.0 / audio.sample_rate)
+    upper_hz = min(18000.0, audio.sample_rate / 2.0 * 0.999)
+    lower_hz = min(30.0, upper_hz / 4.0)
+    edges = np.geomspace(lower_hz, upper_hz, band_count + 1)
+    centers = np.sqrt(edges[:-1] * edges[1:])
+    masks = [(frequencies >= low) & (frequencies < high) for low, high in zip(edges, edges[1:])]
+    raw_rows: List[List[float]] = []
+    phase_rows: List[List[float]] = []
+    for frame in _frames(audio.samples, frame_size, hop):
+        transformed = np.fft.rfft(frame * window)
+        power = np.square(np.abs(transformed))
+        row: List[float] = []
+        phase_row: List[float] = []
+        for mask in masks:
+            indices = np.flatnonzero(mask)
+            if not len(indices):
+                row.append(0.0)
+                phase_row.append(0.0)
+                continue
+            local_power = power[indices]
+            dominant = int(indices[int(np.argmax(local_power))])
+            row.append(float(local_power.mean()))
+            magnitude = abs(transformed[dominant])
+            phase_row.append(float(transformed[dominant].real / magnitude) if magnitude > 1e-12 else 0.0)
+        raw_rows.append(row)
+        phase_rows.append(phase_row)
+
+    raw = np.asarray(raw_rows, dtype=np.float64)
+    db = 10.0 * np.log10(raw + 1e-15)
+    active = db[np.isfinite(db)]
+    floor = float(np.percentile(active, 8.0)) if active.size else -120.0
+    ceiling = float(np.percentile(active, 99.5)) if active.size else 0.0
+    if ceiling - floor < 12.0:
+        ceiling = floor + 12.0
+    normalized = np.clip((db - floor) / (ceiling - floor), 0.0, 1.0)
+
+    flux = np.zeros(len(normalized), dtype=np.float64)
+    if len(normalized) > 1:
+        flux[1:] = np.maximum(0.0, normalized[1:] - normalized[:-1]).mean(axis=1)
+    flux_peak = float(np.percentile(flux, 99.0)) if len(flux) else 0.0
+    if flux_peak > 1e-12:
+        flux = np.clip(flux / flux_peak, 0.0, 1.0)
+
+    sums = raw.sum(axis=1)
+    centroid = np.divide(raw @ centers, sums, out=np.zeros_like(sums), where=sums > 1e-15)
+    spread_numerator = ((centers[None, :] - centroid[:, None]) ** 2 * raw).sum(axis=1)
+    spread = np.sqrt(np.divide(spread_numerator, sums, out=np.zeros_like(sums), where=sums > 1e-15))
+    centroid = np.clip((centroid - lower_hz) / max(1.0, upper_hz - lower_hz), 0.0, 1.0)
+    spread = np.clip(spread / max(1.0, upper_hz - lower_hz), 0.0, 1.0)
+    geometric = np.exp(np.mean(np.log(raw + 1e-15), axis=1))
+    arithmetic = raw.mean(axis=1)
+    flatness = np.clip(np.divide(geometric, arithmetic, out=np.zeros_like(arithmetic), where=arithmetic > 1e-15), 0.0, 1.0)
+
+    curve = lambda values: {"t0": 0.0, "dt": CURVE_DT, "values": [round(float(value), 6) for value in values]}
+    return {
+        "schemaVersion": 1,
+        "kind": "spectral-bloom-master",
+        "t0": 0.0,
+        "dt": CURVE_DT,
+        "bandsHz": [round(float(value), 3) for value in centers],
+        "bands": [[round(float(value), 6) for value in row] for row in normalized],
+        "phaseCos": [[round(max(-1.0, min(1.0, float(value))), 6) for value in row] for row in phase_rows],
+        "flux": curve(flux),
+        "centroid": curve(centroid),
+        "spread": curve(spread),
+        "flatness": curve(flatness),
+        "normalization": {"floorDb": round(floor, 4), "ceilingDb": round(ceiling, 4)},
+    }
 
 
 def waveform_summary(audio: AudioData) -> Dict[str, Any]:
@@ -327,7 +405,7 @@ def _sections(regions: Sequence[Dict[str, Any]], content_end: float, energy: Dic
 
 
 def _analysis_hash(manifest: Dict[str, Any]) -> str:
-    payload = f"song-v1:p0.1:{manifest['project']['contentHash']}"
+    payload = f"song-v1:p0.2-spectral-bloom:{manifest['project']['contentHash']}"
     return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -373,7 +451,7 @@ def build_song(package_dir: Path, manifest: Dict[str, Any]) -> Dict[str, Any]:
         "tracks": tracks,
         "master": {
             "energy": master_energy, "waveform": waveform_summary(master_audio),
-            "spectrogram": None, "chords": [],
+            "spectrogram": master_spectrogram(master_audio), "chords": [],
             "loudestHit": {"t": round(loudest_time, 6), "trackId": loudest_track},
         },
     }

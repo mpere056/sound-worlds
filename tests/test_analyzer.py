@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from analyzer.core import AudioData, _sections, analyze_project, build_grid, detect_onsets, qn_to_time, read_wav
+from analyzer.core import AudioData, _sections, analyze_project, build_grid, detect_onsets, master_spectrogram, qn_to_time, read_wav
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -97,6 +97,23 @@ class AnalyzerTests(unittest.TestCase):
             decoded = read_wav(path).samples
             np.testing.assert_allclose(decoded[:4], [-1.0, -0.5, 0.0, 0.5], atol=1e-6)
 
+    def test_master_spectrogram_tracks_frequency_and_transients(self) -> None:
+        rate = 48000
+        duration = 0.6
+        times = np.arange(round(rate * duration), dtype=np.float32) / rate
+        low = AudioData(samples=(0.7 * np.sin(2 * np.pi * 110 * times)).astype(np.float32), sample_rate=rate)
+        high_samples = (0.7 * np.sin(2 * np.pi * 4400 * times)).astype(np.float32)
+        high_samples[round(0.3 * rate):round(0.305 * rate)] += 0.8
+        high = AudioData(samples=high_samples, sample_rate=rate)
+        low_result = master_spectrogram(low)
+        high_result = master_spectrogram(high)
+        self.assertEqual(low_result["schemaVersion"], 1)
+        self.assertEqual(len(low_result["bandsHz"]), 24)
+        self.assertEqual(len(low_result["bands"][0]), 24)
+        self.assertLess(np.mean(low_result["centroid"]["values"]), np.mean(high_result["centroid"]["values"]))
+        self.assertGreater(max(high_result["flux"]["values"]), 0.8)
+        self.assertTrue(all(-1 <= value <= 1 for row in high_result["phaseCos"] for value in row))
+
     def test_real_package_shape_is_generated_and_cached(self) -> None:
         fixture = json.loads(
             (ROOT / "fixtures" / "exports" / "minimal" / "manifest.json").read_text(encoding="utf-8")
@@ -124,6 +141,8 @@ class AnalyzerTests(unittest.TestCase):
             self.assertGreater(song["tracks"][0]["gain"]["peakRms"], 0)
             self.assertGreater(song["tracks"][0]["gain"]["meanRms"], 0)
             self.assertEqual(song["master"]["energy"]["dt"], 0.02)
+            self.assertEqual(song["master"]["spectrogram"]["kind"], "spectral-bloom-master")
+            self.assertEqual(len(song["master"]["spectrogram"]["bandsHz"]), 24)
 
             _, cached, changed = analyze_project(package)
             self.assertFalse(changed)

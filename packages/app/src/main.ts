@@ -6,6 +6,7 @@ import { BrickBreakerScene, type BrickBreakerPerformance } from "@reaper-viz/sce
 import { AuroraScene, type AuroraPerformance } from "@reaper-viz/scene-aurora";
 import { PhaseglassScene, type PhaseglassDiagnostic, type PhaseglassPerformance } from "@reaper-viz/scene-phaseglass";
 import { VortexLoomScene, type VortexLoomPerformance } from "@reaper-viz/scene-vortex-loom";
+import { SpectralBloomScene, type SpectralBloomPerformance } from "@reaper-viz/scene-spectral-bloom";
 import { MetroScene, type MetroPerformance } from "@reaper-viz/scene-metro";
 import { PaintingScene, type PaintingPerformance } from "@reaper-viz/scene-painting";
 import { RunnerScene, type RunnerPerformance } from "@reaper-viz/scene-runner";
@@ -743,6 +744,23 @@ async function loadConcept(concept: string): Promise<void> {
     const report = performance.statics.routeReport;
     const clearance = report.minimumMembraneClearance === null ? "n/a" : report.minimumMembraneClearance.toFixed(3);
     statusDetail.textContent = `${report.deadlineCount} membranes - exact error ${report.exactCrossingError.toExponential(1)} - speed error ${report.maximumSpeedError.toExponential(1)} - clearance ${clearance} - ${report.earlyCrossingCount} early crossings`;
+  } else if (concept === "spectral-bloom") {
+    destroyPixiBackend();
+    const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.spectral-bloom.json`);
+    if (!response.ok) throw new Error(`Spectral Bloom performance request failed: ${response.status}`);
+    const performance = parsePerformance(await response.json()) as SpectralBloomPerformance;
+    const spectralBloom = new SpectralBloomScene(canvas, performance);
+    scene = spectralBloom;
+    addTuningBinding(bindingPane, spectralBloom.tuning, "deformation", { min: 0.2, max: 1.8, step: 0.01, label: "Geometry" });
+    addTuningBinding(bindingPane, spectralBloom.tuning, "particleSize", { min: 1.5, max: 7, step: 0.05, label: "Particles" });
+    addTuningBinding(bindingPane, spectralBloom.tuning, "luminosity", { min: 0.2, max: 1.5, step: 0.01, label: "Light" });
+    addTuningBinding(bindingPane, spectralBloom.tuning, "depth", { min: 0, max: 1.4, step: 0.01, label: "Core" });
+    addTuningBinding(bindingPane, spectralBloom.tuning, "cameraDistance", { min: 0.75, max: 1.4, step: 0.01, label: "Camera" });
+    addTuningBinding(bindingPane, spectralBloom.tuning, "motion", { min: 0, max: 1.5, step: 0.01, label: "Orbit" });
+    sceneLabel.textContent = "Spectral Bloom - SB5 Resonant Particle Field";
+    statusTitle.textContent = "Spectral Bloom - master-audio acoustic geometry";
+    const report = performance.statics.report;
+    statusDetail.textContent = `${report.bandCount} spectral bands - ${report.modeCount} damped modes - ${performance.statics.topology.surfaceParticles + performance.statics.topology.interiorParticles} persistent particles - ${report.clampCount} bounded samples`;
   } else if (concept === "vortex-loom") {
     destroyPixiBackend();
     const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.vortex-loom.json`);
@@ -912,6 +930,12 @@ async function loadProject(id: string): Promise<void> {
     phaseglass.textContent = "Phaseglass - P6 Refractive Field";
     options.push(phaseglass);
   }
+  if (project?.concepts.includes("spectral-bloom")) {
+    const spectralBloom = document.createElement("option");
+    spectralBloom.value = "spectral-bloom";
+    spectralBloom.textContent = "Spectral Bloom - SB5 Resonant Particle Field";
+    options.push(spectralBloom);
+  }
   if (project?.concepts.includes("vortex-loom")) {
     const vortexLoom = document.createElement("option");
     vortexLoom.value = "vortex-loom";
@@ -956,6 +980,13 @@ async function loadProject(id: string): Promise<void> {
     phaseglass.textContent = "Phaseglass - compile required";
     phaseglass.disabled = true;
     options.push(phaseglass);
+  }
+  if (!project?.concepts.includes("spectral-bloom")) {
+    const spectralBloom = document.createElement("option");
+    spectralBloom.value = "spectral-bloom";
+    spectralBloom.textContent = "Spectral Bloom - compile required";
+    spectralBloom.disabled = true;
+    options.push(spectralBloom);
   }
   if (!project?.concepts.includes("vortex-loom")) {
     const vortexLoom = document.createElement("option");

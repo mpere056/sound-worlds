@@ -60,6 +60,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
+  compilers/spectral-bloom:
+    dependencies:
+      '@reaper-viz/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+
   compilers/vortex-loom:
     dependencies:
       '@reaper-viz/core':
@@ -83,6 +89,9 @@ importers:
       '@reaper-viz/compiler-phaseglass':
         specifier: workspace:*
         version: link:../../compilers/phaseglass
+      '@reaper-viz/compiler-spectral-bloom':
+        specifier: workspace:*
+        version: link:../../compilers/spectral-bloom
       '@reaper-viz/compiler-vortex-loom':
         specifier: workspace:*
         version: link:../../compilers/vortex-loom
@@ -113,6 +122,9 @@ importers:
       '@reaper-viz/scene-runner':
         specifier: workspace:*
         version: link:../../scenes/runner
+      '@reaper-viz/scene-spectral-bloom':
+        specifier: workspace:*
+        version: link:../../scenes/spectral-bloom
       '@reaper-viz/scene-testpattern':
         specifier: workspace:*
         version: link:../../scenes/_testpattern
@@ -252,6 +264,19 @@ importers:
       pixi.js:
         specifier: 8.19.0
         version: 8.19.0
+
+  scenes/spectral-bloom:
+    dependencies:
+      '@reaper-viz/compiler-spectral-bloom':
+        specifier: workspace:*
+        version: link:../../compilers/spectral-bloom
+      three:
+        specifier: 0.170.0
+        version: 0.170.0
+    devDependencies:
+      '@types/three':
+        specifier: 0.170.0
+        version: 0.170.0
 
   scenes/vortex-loom:
     dependencies:
