@@ -77,13 +77,14 @@ governs architecture declaration, perceptual evidence, art direction, motion,
 performance, and full-song review through Q5.
 
 A separate [Spectral Bloom concept](spectral-bloom-concept.md) and detailed
-[implementation plan](spectral-bloom-implementation.md) now have an SB0-SB5
-engineering preview. Versioned master-audio spectral analysis excites 16
-damped resonant modes in one stable 31,000-particle body, and the selectable
-Three.js scene reconstructs those scalar and tangential deformations on the
-GPU. The cymatics reference informs its nodal geometry, but it is explicitly
-not a bubble or literal droplet simulation. Continue with SB6 detach/return
-material and anticipation before final lighting, adaptive tiers, and Q5.
+[implementation plan](spectral-bloom-implementation.md) now have a corrected
+SB0-SB5 engineering preview. The discarded damped-force model has been replaced
+by a direct 3D oscilloscope/spectral surface: every frame carries signed master
+waveform samples and signed spectral bands, and the GPU maps those measurements
+straight onto one stable 31,000-particle body. Silence exactly restores the
+baseline geometry with no deformation memory. Continue with compact
+high-resolution analysis, stereo/spatial channels, stronger waveform
+parameterization, material refinement, adaptive tiers, and Q5.
 
 A future [Music-synchronized ecosystem worlds roadmap](ecosystem-worlds-roadmap.md)
 defines Pulse District, Tidal Reef, Mycelial Canopy, Emberdeep Dungeon, and Halo

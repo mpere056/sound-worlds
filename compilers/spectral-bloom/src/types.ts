@@ -1,7 +1,5 @@
 import type { Performance, TimedCurve } from "@reaper-viz/core";
 
-export type SpectralBloomModeKind = "radial" | "gradient" | "curl";
-
 export interface SpectralBloomSpectrogram {
   schemaVersion: 1;
   kind: "spectral-bloom-master";
@@ -10,25 +8,14 @@ export interface SpectralBloomSpectrogram {
   bandsHz: number[];
   bands: number[][];
   phaseCos: number[][];
+  waveformSamplesPerFrame: number;
+  waveform: number[][];
+  waveformGain: number;
   flux: TimedCurve;
   centroid: TimedCurve;
   spread: TimedCurve;
   flatness: TimedCurve;
   normalization: { floorDb: number; ceilingDb: number };
-}
-
-export interface SpectralBloomMode {
-  id: string;
-  index: number;
-  degree: number;
-  order: number;
-  kind: SpectralBloomModeKind;
-  naturalFrequencyHz: number;
-  dampingRatio: number;
-  gain: number;
-  bandCenter: number;
-  bandWidth: number;
-  polarity: -1 | 1;
 }
 
 export interface SpectralBloomTopology {
@@ -38,14 +25,24 @@ export interface SpectralBloomTopology {
   topologySeed: string;
 }
 
+export interface SpectralBloomWaveformField {
+  t0: number;
+  dt: number;
+  waveformSamplesPerFrame: number;
+  waveformFrames: number[][];
+  bandFrames: number[][];
+  signedBandFrames: number[][];
+}
+
 export interface SpectralBloomCompileReport {
-  source: "master-spectrogram";
+  source: "master-waveform-and-spectrum";
+  mapping: "direct-spherical-oscilloscope";
   bandCount: number;
   frameCount: number;
-  modeCount: number;
+  waveformSamplesPerFrame: number;
   controlRateHz: number;
-  maximumCoefficient: number;
-  clampCount: number;
+  maximumWaveformMagnitude: number;
+  maximumBandMagnitude: number;
   nonFiniteCount: number;
   warnings: string[];
 }
@@ -53,15 +50,16 @@ export interface SpectralBloomCompileReport {
 export interface SpectralBloomPerformance extends Performance {
   concept: "spectral-bloom";
   statics: {
-    modes: SpectralBloomMode[];
-    coefficientCurves: TimedCurve[];
+    field: SpectralBloomWaveformField;
     topology: SpectralBloomTopology;
     report: SpectralBloomCompileReport;
   };
 }
 
 export interface SpectralBloomState {
-  coefficients: number[];
+  waveform: number[];
+  bands: number[];
+  signedBands: number[];
   energy: number;
   flux: number;
   centroid: number;

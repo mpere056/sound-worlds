@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CURVE_DT = 0.02
 WAVEFORM_PEAKS_PER_SEC = 20
 MASTER_SPECTRAL_BANDS = 24
+MASTER_WAVEFORM_SAMPLES = 128
 DRUM_ROLES = {"kick", "snare", "hats", "toms", "percussion"}
 
 
@@ -130,7 +131,12 @@ def master_spectrogram(audio: AudioData, band_count: int = MASTER_SPECTRAL_BANDS
     masks = [(frequencies >= low) & (frequencies < high) for low, high in zip(edges, edges[1:])]
     raw_rows: List[List[float]] = []
     phase_rows: List[List[float]] = []
+    waveform_rows: List[List[float]] = []
     for frame in _frames(audio.samples, frame_size, hop):
+        waveform_source = frame[:hop]
+        source_positions = np.arange(len(waveform_source), dtype=np.float64)
+        target_positions = np.linspace(0.0, max(0.0, len(waveform_source) - 1.0), MASTER_WAVEFORM_SAMPLES)
+        waveform_rows.append(np.interp(target_positions, source_positions, waveform_source).tolist())
         transformed = np.fft.rfft(frame * window)
         power = np.square(np.abs(transformed))
         row: List[float] = []
@@ -175,6 +181,11 @@ def master_spectrogram(audio: AudioData, band_count: int = MASTER_SPECTRAL_BANDS
     arithmetic = raw.mean(axis=1)
     flatness = np.clip(np.divide(geometric, arithmetic, out=np.zeros_like(arithmetic), where=arithmetic > 1e-15), 0.0, 1.0)
 
+    waveform = np.asarray(waveform_rows, dtype=np.float64)
+    waveform_peak = float(np.percentile(np.abs(waveform), 99.5)) if waveform.size else 0.0
+    waveform_gain = max(1e-6, waveform_peak)
+    waveform = np.clip(waveform / waveform_gain, -1.0, 1.0)
+
     curve = lambda values: {"t0": 0.0, "dt": CURVE_DT, "values": [round(float(value), 6) for value in values]}
     return {
         "schemaVersion": 1,
@@ -184,6 +195,9 @@ def master_spectrogram(audio: AudioData, band_count: int = MASTER_SPECTRAL_BANDS
         "bandsHz": [round(float(value), 3) for value in centers],
         "bands": [[round(float(value), 6) for value in row] for row in normalized],
         "phaseCos": [[round(max(-1.0, min(1.0, float(value))), 6) for value in row] for row in phase_rows],
+        "waveformSamplesPerFrame": MASTER_WAVEFORM_SAMPLES,
+        "waveform": [[round(float(value), 6) for value in row] for row in waveform],
+        "waveformGain": round(waveform_gain, 9),
         "flux": curve(flux),
         "centroid": curve(centroid),
         "spread": curve(spread),
@@ -405,7 +419,7 @@ def _sections(regions: Sequence[Dict[str, Any]], content_end: float, energy: Dic
 
 
 def _analysis_hash(manifest: Dict[str, Any]) -> str:
-    payload = f"song-v1:p0.2-spectral-bloom:{manifest['project']['contentHash']}"
+    payload = f"song-v1:p0.3-direct-waveform:{manifest['project']['contentHash']}"
     return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 

@@ -1,11 +1,17 @@
-import { sampleSpectralBloomState, SPECTRAL_BLOOM_MODE_COUNT, type SpectralBloomPerformance } from "@reaper-viz/compiler-spectral-bloom";
+import { sampleSpectralBloomState, type SpectralBloomPerformance } from "@reaper-viz/compiler-spectral-bloom";
 import {
   AdditiveBlending,
   BufferAttribute,
   BufferGeometry,
+  ClampToEdgeWrapping,
   Color,
+  DataTexture,
+  FloatType,
+  LinearFilter,
   PerspectiveCamera,
   Points,
+  RepeatWrapping,
+  RGBAFormat,
   Scene,
   ShaderMaterial,
   SRGBColorSpace,
@@ -15,19 +21,36 @@ import {
 
 export type { SpectralBloomPerformance } from "@reaper-viz/compiler-spectral-bloom";
 
+export const SPECTRAL_BLOOM_WAVEFORM_SAMPLES = 128;
+export const SPECTRAL_BLOOM_BAND_COUNT = 24;
+
 export interface SpectralBloomTuning {
-  deformation: number;
+  waveformDepth: number;
+  spectralDepth: number;
   particleSize: number;
   luminosity: number;
-  depth: number;
+  core: number;
   cameraDistance: number;
-  motion: number;
+  orbit: number;
 }
 
 export interface SpectralBloomTopologyData {
   positions: Float32Array;
   interior: Float32Array;
   seeds: Float32Array;
+}
+
+export interface SpectralBloomDirectDisplacement {
+  radialScale: number;
+  tangentAmount: number;
+}
+
+export function spectralBloomDirectDisplacement(waveform: number, delayedWaveform: number, signedBand: number, bandMagnitude: number, waveformDepth = 1, spectralDepth = 1, interior = 0): SpectralBloomDirectDisplacement {
+  const response = 1 - Math.max(0, Math.min(1, interior)) * 0.48;
+  return {
+    radialScale: Math.max(0.35, 1 + waveform * 0.58 * waveformDepth * response + signedBand * 0.2 * spectralDepth * response),
+    tangentAmount: delayedWaveform * (0.1 + bandMagnitude * 0.24) * waveformDepth * response,
+  };
 }
 
 function hash01(index: number, salt: number): number {
@@ -66,73 +89,49 @@ const VERTEX_SHADER = `
 precision highp float;
 attribute float aInterior;
 attribute float aSeed;
-uniform float uCoefficients[${SPECTRAL_BLOOM_MODE_COUNT}];
-uniform float uDeformation;
+uniform sampler2D uWaveformTexture;
+uniform sampler2D uBandTexture;
+uniform float uWaveformDepth;
+uniform float uSpectralDepth;
 uniform float uPointSize;
 uniform float uLuminosity;
-uniform float uEnergy;
-uniform float uFlux;
-uniform float uCentroid;
-uniform float uSpread;
-uniform float uFlatness;
-uniform float uTime;
+uniform float uCore;
 varying float vBrightness;
 varying float vInterior;
 varying float vSeed;
 
+float waveformAt(float position) {
+  return texture2D(uWaveformTexture, vec2(fract(position), 0.5)).r;
+}
+
 void main() {
   vec3 n = normalize(position);
-  float x = n.x;
-  float y = n.y;
-  float z = n.z;
-  float basis[${SPECTRAL_BLOOM_MODE_COUNT}];
-  basis[0] = 1.0;
-  basis[1] = 2.0 * x * y;
-  basis[2] = 2.0 * y * z;
-  basis[3] = 0.5 * (3.0 * z * z - 1.0);
-  basis[4] = 2.0 * x * z;
-  basis[5] = x * x - y * y;
-  basis[6] = y * (3.0 * x * x - y * y);
-  basis[7] = 2.0 * x * y * z;
-  basis[8] = y * (5.0 * z * z - 1.0);
-  basis[9] = 0.5 * z * (5.0 * z * z - 3.0);
-  basis[10] = x * (5.0 * z * z - 1.0);
-  basis[11] = z * (x * x - y * y);
-  basis[12] = x * (x * x - 3.0 * y * y);
-  basis[13] = y * z * (7.0 * z * z - 3.0);
-  basis[14] = (35.0 * z * z * z * z - 30.0 * z * z + 3.0) * 0.125;
-  basis[15] = x * z * (7.0 * z * z - 3.0);
-
-  float radial = 0.0;
-  float tangentA = 0.0;
-  float tangentB = 0.0;
-  float strain = 0.0;
-  for (int index = 0; index < ${SPECTRAL_BLOOM_MODE_COUNT}; index += 1) {
-    float response = uCoefficients[index] * basis[index];
-    strain += abs(response);
-    radial += response * 0.32;
-    if (index == 0 || index == 3 || index == 6 || index == 9 || index == 12 || index == 15) radial += response * 0.68;
-    else if (index == 1 || index == 4 || index == 7 || index == 10 || index == 13) tangentA += response;
-    else tangentB += response;
-  }
+  float longitude = atan(n.z, n.x) / 6.28318530718 + 0.5;
+  float latitude = n.y * 0.5 + 0.5;
+  float phaseSkew = (latitude - 0.5) * 0.11;
+  float waveform = waveformAt(longitude + phaseSkew);
+  float delayedWaveform = waveformAt(longitude + 0.25 - phaseSkew * 0.6);
+  vec4 spectral = texture2D(uBandTexture, vec2(latitude, 0.5));
+  float bandMagnitude = spectral.r;
+  float signedBand = spectral.g;
 
   vec3 reference = abs(n.y) < 0.88 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
   vec3 tangent = normalize(cross(reference, n));
   vec3 bitangent = normalize(cross(n, tangent));
-  float interiorResponse = mix(1.0, 0.48, aInterior);
-  float breathing = uCoefficients[0] * 0.11 + uEnergy * 0.045;
-  float radialScale = max(0.28, 1.0 + breathing + radial * 0.72 * uDeformation * interiorResponse);
-  float torsionScale = 0.52 * uDeformation * interiorResponse * (0.72 + uSpread * 0.38);
-  vec3 displaced = position * radialScale + tangent * tangentA * torsionScale + bitangent * tangentB * torsionScale;
-  float circulation = sin(uTime * (0.16 + uCentroid * 0.18) + aSeed * 6.28318) * uFlatness * 0.018 * interiorResponse;
-  displaced += (tangent + bitangent * 0.45) * circulation;
+  float interiorResponse = mix(1.0, 0.52, aInterior);
+  float radialScale = max(0.35, 1.0
+    + waveform * 0.58 * uWaveformDepth * interiorResponse
+    + signedBand * 0.2 * uSpectralDepth * interiorResponse);
+  float tangentAmount = delayedWaveform * (0.1 + bandMagnitude * 0.24) * uWaveformDepth * interiorResponse;
+  float spectralShear = signedBand * bandMagnitude * 0.15 * uSpectralDepth * interiorResponse;
+  vec3 displaced = position * radialScale + tangent * tangentAmount + bitangent * spectralShear;
 
   vec4 view = modelViewMatrix * vec4(displaced, 1.0);
   gl_Position = projectionMatrix * view;
   float perspective = 8.5 / max(1.2, -view.z);
-  float energySize = 0.9 + uEnergy * 0.34 + uFlux * 0.22;
-  gl_PointSize = clamp(uPointSize * perspective * energySize * mix(1.0, 0.78, aInterior), 1.0, 6.2);
-  vBrightness = uLuminosity * (0.32 + min(1.0, strain * 0.36) + uEnergy * 0.24 + uFlux * 0.38);
+  float measuredActivity = max(abs(waveform), bandMagnitude);
+  gl_PointSize = clamp(uPointSize * perspective * (0.92 + measuredActivity * 0.34) * mix(1.0, 0.78, aInterior), 1.0, 6.2);
+  vBrightness = uLuminosity * (0.22 + abs(waveform) * 0.58 + bandMagnitude * 0.32 + abs(signedBand) * 0.24);
   vInterior = aInterior;
   vSeed = aSeed;
 }`;
@@ -141,7 +140,7 @@ const FRAGMENT_SHADER = `
 precision highp float;
 uniform vec3 uSurfaceColor;
 uniform vec3 uCoreColor;
-uniform float uDepth;
+uniform float uCore;
 varying float vBrightness;
 varying float vInterior;
 varying float vSeed;
@@ -150,23 +149,35 @@ void main() {
   vec2 centered = gl_PointCoord - 0.5;
   float distanceToCenter = length(centered) * 2.0;
   float disc = 1.0 - smoothstep(0.46, 1.0, distanceToCenter);
-  float core = exp(-distanceToCenter * distanceToCenter * 4.8);
+  float pointCore = exp(-distanceToCenter * distanceToCenter * 4.8);
   if (disc < 0.005) discard;
-  vec3 color = mix(uSurfaceColor, uCoreColor, vInterior * (0.58 + uDepth * 0.28));
+  vec3 color = mix(uSurfaceColor, uCoreColor, vInterior * (0.5 + uCore * 0.34));
   color *= 0.78 + vSeed * 0.22;
-  float alpha = disc * mix(0.52, 0.2 + uDepth * 0.15, vInterior) * (0.5 + vBrightness * 0.58);
-  gl_FragColor = vec4(color * (0.46 + vBrightness + core * 0.32), alpha);
+  float alpha = disc * mix(0.52, 0.2 + uCore * 0.15, vInterior) * (0.5 + vBrightness * 0.58);
+  gl_FragColor = vec4(color * (0.46 + vBrightness + pointCore * 0.32), alpha);
 }`;
+
+function makeDataTexture(data: Float32Array<ArrayBuffer>, width: number, repeat: boolean): DataTexture {
+  const texture = new DataTexture(data, width, 1, RGBAFormat, FloatType);
+  texture.minFilter = LinearFilter;
+  texture.magFilter = LinearFilter;
+  texture.wrapS = repeat ? RepeatWrapping : ClampToEdgeWrapping;
+  texture.wrapT = ClampToEdgeWrapping;
+  texture.generateMipmaps = false;
+  texture.needsUpdate = true;
+  return texture;
+}
 
 export class SpectralBloomScene {
   readonly backendKind = "three" as const;
   readonly tuning: SpectralBloomTuning = {
-    deformation: 1.12,
+    waveformDepth: 1,
+    spectralDepth: 0.82,
     particleSize: 4.3,
     luminosity: 0.92,
-    depth: 0.78,
+    core: 0.78,
     cameraDistance: 1,
-    motion: 1,
+    orbit: 0.42,
   };
 
   readonly #performance: SpectralBloomPerformance;
@@ -176,9 +187,14 @@ export class SpectralBloomScene {
   readonly #geometry: BufferGeometry;
   readonly #material: ShaderMaterial;
   readonly #points: Points;
-  readonly #coefficientUniforms = new Float32Array(SPECTRAL_BLOOM_MODE_COUNT);
+  readonly #waveformData = new Float32Array(SPECTRAL_BLOOM_WAVEFORM_SAMPLES * 4);
+  readonly #bandData = new Float32Array(SPECTRAL_BLOOM_BAND_COUNT * 4);
+  readonly #waveformTexture: DataTexture;
+  readonly #bandTexture: DataTexture;
 
   constructor(canvas: HTMLCanvasElement, performance: SpectralBloomPerformance) {
+    if (performance.statics.field.waveformSamplesPerFrame !== SPECTRAL_BLOOM_WAVEFORM_SAMPLES) throw new Error(`Spectral Bloom scene requires ${SPECTRAL_BLOOM_WAVEFORM_SAMPLES} waveform samples per frame`);
+    if (performance.statics.field.bandFrames[0]?.length !== SPECTRAL_BLOOM_BAND_COUNT) throw new Error(`Spectral Bloom scene requires ${SPECTRAL_BLOOM_BAND_COUNT} spectral bands`);
     this.#performance = performance;
     this.#renderer = new WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: "high-performance" });
     this.#renderer.setPixelRatio(1);
@@ -186,7 +202,7 @@ export class SpectralBloomScene {
     this.#renderer.setClearColor(new Color(performance.palette.bg), 1);
     this.#renderer.outputColorSpace = SRGBColorSpace;
 
-    this.#camera = new PerspectiveCamera(31, performance.resolution.w / performance.resolution.h, 0.05, 30);
+    this.#camera = new PerspectiveCamera(31, performance.resolution.w / performance.resolution.h, 0.05, 40);
     this.#camera.position.set(0, 0, 16.5);
     this.#camera.lookAt(0, 0, 0);
 
@@ -197,6 +213,8 @@ export class SpectralBloomScene {
     this.#geometry.setAttribute("aSeed", new BufferAttribute(topology.seeds, 1));
     this.#geometry.computeBoundingSphere();
 
+    this.#waveformTexture = makeDataTexture(this.#waveformData, SPECTRAL_BLOOM_WAVEFORM_SAMPLES, true);
+    this.#bandTexture = makeDataTexture(this.#bandData, SPECTRAL_BLOOM_BAND_COUNT, false);
     this.#material = new ShaderMaterial({
       vertexShader: VERTEX_SHADER,
       fragmentShader: FRAGMENT_SHADER,
@@ -205,17 +223,13 @@ export class SpectralBloomScene {
       depthWrite: false,
       blending: AdditiveBlending,
       uniforms: {
-        uCoefficients: { value: this.#coefficientUniforms },
-        uDeformation: { value: this.tuning.deformation },
+        uWaveformTexture: { value: this.#waveformTexture },
+        uBandTexture: { value: this.#bandTexture },
+        uWaveformDepth: { value: this.tuning.waveformDepth },
+        uSpectralDepth: { value: this.tuning.spectralDepth },
         uPointSize: { value: this.tuning.particleSize },
         uLuminosity: { value: this.tuning.luminosity },
-        uDepth: { value: this.tuning.depth },
-        uEnergy: { value: 0 },
-        uFlux: { value: 0 },
-        uCentroid: { value: 0 },
-        uSpread: { value: 0 },
-        uFlatness: { value: 0 },
-        uTime: { value: 0 },
+        uCore: { value: this.tuning.core },
         uSurfaceColor: { value: new Color(performance.palette.roles.surface ?? "#e8edf2") },
         uCoreColor: { value: new Color(performance.palette.roles.core ?? "#9eb9d4") },
       },
@@ -225,34 +239,47 @@ export class SpectralBloomScene {
     this.#scene.add(this.#points);
   }
 
+  #uploadMeasuredState(time: number): void {
+    const state = sampleSpectralBloomState(this.#performance, time);
+    for (let index = 0; index < SPECTRAL_BLOOM_WAVEFORM_SAMPLES; index += 1) {
+      const offset = index * 4;
+      this.#waveformData[offset] = state.waveform[index] ?? 0;
+      this.#waveformData[offset + 1] = 0;
+      this.#waveformData[offset + 2] = 0;
+      this.#waveformData[offset + 3] = 1;
+    }
+    for (let index = 0; index < SPECTRAL_BLOOM_BAND_COUNT; index += 1) {
+      const offset = index * 4;
+      this.#bandData[offset] = state.bands[index] ?? 0;
+      this.#bandData[offset + 1] = state.signedBands[index] ?? 0;
+      this.#bandData[offset + 2] = 0;
+      this.#bandData[offset + 3] = 1;
+    }
+    this.#waveformTexture.needsUpdate = true;
+    this.#bandTexture.needsUpdate = true;
+  }
+
   renderFrame(time: number): void {
     const bounded = Math.max(0, Math.min(this.#performance.durationSec, time));
-    const state = sampleSpectralBloomState(this.#performance, bounded);
-    this.#coefficientUniforms.fill(0);
-    this.#coefficientUniforms.set(state.coefficients.slice(0, SPECTRAL_BLOOM_MODE_COUNT));
+    this.#uploadMeasuredState(bounded);
     const uniforms = this.#material.uniforms;
-    uniforms.uDeformation!.value = this.tuning.deformation;
+    uniforms.uWaveformDepth!.value = this.tuning.waveformDepth;
+    uniforms.uSpectralDepth!.value = this.tuning.spectralDepth;
     uniforms.uPointSize!.value = this.tuning.particleSize;
     uniforms.uLuminosity!.value = this.tuning.luminosity;
-    uniforms.uDepth!.value = this.tuning.depth;
-    uniforms.uEnergy!.value = state.energy;
-    uniforms.uFlux!.value = state.flux;
-    uniforms.uCentroid!.value = state.centroid;
-    uniforms.uSpread!.value = state.spread;
-    uniforms.uFlatness!.value = state.flatness;
-    uniforms.uTime!.value = bounded;
+    uniforms.uCore!.value = this.tuning.core;
 
-    const motion = this.tuning.motion;
-    const yaw = bounded * 0.055 * motion + Math.sin(bounded * 0.13) * 0.08;
-    const pitch = Math.sin(bounded * 0.09) * 0.1 * motion;
+    const yaw = bounded * 0.018 * this.tuning.orbit;
+    const pitch = Math.sin(bounded * 0.035) * 0.04 * this.tuning.orbit;
     const distance = 16.5 * Math.max(0.72, this.tuning.cameraDistance);
     this.#camera.position.set(Math.sin(yaw) * distance, Math.sin(pitch) * distance * 0.52, Math.cos(yaw) * distance);
-    this.#camera.lookAt(new Vector3(0, -0.02, 0));
-    this.#points.rotation.z = Math.sin(bounded * 0.07) * 0.08 * motion;
+    this.#camera.lookAt(new Vector3(0, 0, 0));
     this.#renderer.render(this.#scene, this.#camera);
   }
 
   destroy(): void {
+    this.#waveformTexture.dispose();
+    this.#bandTexture.dispose();
     this.#geometry.dispose();
     this.#material.dispose();
     this.#renderer.dispose();

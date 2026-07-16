@@ -1,16 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { buildFixtureSong } from "@reaper-viz/core";
-import { buildSpectralBloomModes, compileSpectralBloom, parseSpectralBloomSpectrogram, sampleSpectralBloomState, SPECTRAL_BLOOM_MODE_COUNT } from "./index.js";
+import { compileSpectralBloom, parseSpectralBloomSpectrogram, sampleSpectralBloomState } from "./index.js";
 
-function spectralSong(kind: "low" | "high") {
+function directWaveformSong(kind: "silence" | "sine" | "square") {
   const song = buildFixtureSong({ bars: 2 });
   const frameCount = Math.ceil(song.meta.durationSec / 0.02) + 1;
   const bandCount = 24;
-  const bands = Array.from({ length: frameCount }, (_, frame) => Array.from({ length: bandCount }, (_, band) => {
-    const center = kind === "low" ? 2 : 20;
-    return Math.exp(-Math.pow((band - center) / 2, 2)) * (0.55 + 0.35 * Math.pow(Math.sin(frame * 0.11), 2));
+  const sampleCount = 128;
+  const waveform = Array.from({ length: frameCount }, (_, frame) => Array.from({ length: sampleCount }, (_, sample) => {
+    if (kind === "silence") return 0;
+    const phase = sample / sampleCount * Math.PI * 2 + frame * 0.13;
+    return kind === "sine" ? Math.sin(phase) * 0.7 : Math.sign(Math.sin(phase)) * 0.7;
   }));
+  const bands = Array.from({ length: frameCount }, () => Array.from({ length: bandCount }, (_, band) => kind === "silence" ? 0 : Math.exp(-Math.pow((band - 8) / 3, 2))));
   const curve = (value: number) => ({ t0: 0, dt: 0.02, values: Array.from({ length: frameCount }, () => value) });
+  song.master.energy = curve(kind === "silence" ? 0 : 0.6);
   song.master.spectrogram = {
     schemaVersion: 1,
     kind: "spectral-bloom-master",
@@ -19,43 +23,53 @@ function spectralSong(kind: "low" | "high") {
     bandsHz: Array.from({ length: bandCount }, (_, index) => 30 * 1.28 ** index),
     bands,
     phaseCos: bands.map((row, frame) => row.map((_, band) => Math.cos(frame * 0.17 + band * 0.31))),
-    flux: curve(0.12),
-    centroid: curve(kind === "low" ? 0.12 : 0.82),
-    spread: curve(0.28),
-    flatness: curve(0.08),
+    waveformSamplesPerFrame: sampleCount,
+    waveform,
+    waveformGain: 0.7,
+    flux: curve(kind === "silence" ? 0 : 0.12),
+    centroid: curve(kind === "silence" ? 0 : 0.35),
+    spread: curve(kind === "silence" ? 0 : 0.28),
+    flatness: curve(kind === "silence" ? 0 : 0.08),
     normalization: { floorDb: -80, ceilingDb: -8 },
   };
   return song;
 }
 
-describe("Spectral Bloom modal compiler", () => {
-  it("builds a stable ordered acoustic mode bank", () => {
-    const modes = buildSpectralBloomModes();
-    expect(modes).toHaveLength(SPECTRAL_BLOOM_MODE_COUNT);
-    expect(modes[0]).toMatchObject({ degree: 0, order: 0, kind: "radial" });
-    expect(modes.some((mode) => mode.kind === "gradient")).toBe(true);
-    expect(modes.some((mode) => mode.kind === "curl")).toBe(true);
+describe("Spectral Bloom direct waveform compiler", () => {
+  it("copies the measured waveform into the authoritative field without modal integration", () => {
+    const song = directWaveformSong("sine");
+    const performance = compileSpectralBloom(song);
+    expect(performance.statics.report.mapping).toBe("direct-spherical-oscilloscope");
+    expect(performance.statics.field.waveformFrames).toEqual((song.master.spectrogram as { waveform: number[][] }).waveform);
+    expect(performance.statics.report.waveformSamplesPerFrame).toBe(128);
   });
 
-  it("compiles deterministically with finite bounded coefficients", () => {
-    const song = spectralSong("low");
-    const first = compileSpectralBloom(song);
-    const second = compileSpectralBloom(song);
-    expect(second).toEqual(first);
-    expect(first.statics.report.nonFiniteCount).toBe(0);
-    expect(first.statics.report.maximumCoefficient).toBeLessThanOrEqual(0.68);
-    expect(first.statics.coefficientCurves).toHaveLength(SPECTRAL_BLOOM_MODE_COUNT);
-    expect(sampleSpectralBloomState(first, 1).coefficients.every(Number.isFinite)).toBe(true);
+  it("returns the exact baseline data at every silent time", () => {
+    const performance = compileSpectralBloom(directWaveformSong("silence"));
+    for (const time of [0, 0.1, 1.7, performance.durationSec]) {
+      const state = sampleSpectralBloomState(performance, time);
+      expect(state.waveform.every((value) => value === 0)).toBe(true);
+      expect(state.bands.every((value) => value === 0)).toBe(true);
+      expect(state.signedBands.every((value) => value === 0)).toBe(true);
+    }
   });
 
-  it("gives low and high spectra different modal identities", () => {
-    const low = sampleSpectralBloomState(compileSpectralBloom(spectralSong("low")), 1.4).coefficients;
-    const high = sampleSpectralBloomState(compileSpectralBloom(spectralSong("high")), 1.4).coefficients;
-    const difference = low.reduce((sum, value, index) => sum + Math.abs(value - high[index]!), 0);
-    expect(difference).toBeGreaterThan(0.1);
+  it("preserves distinct measured waveform identities", () => {
+    const sine = sampleSpectralBloomState(compileSpectralBloom(directWaveformSong("sine")), 1.2).waveform;
+    const square = sampleSpectralBloomState(compileSpectralBloom(directWaveformSong("square")), 1.2).waveform;
+    const difference = sine.reduce((sum, value, index) => sum + Math.abs(value - square[index]!), 0);
+    expect(difference).toBeGreaterThan(20);
   });
 
-  it("rejects stale songs without the versioned master analysis", () => {
+  it("interpolates direct frames without adding deformation memory", () => {
+    const performance = compileSpectralBloom(directWaveformSong("sine"));
+    const left = sampleSpectralBloomState(performance, 0).waveform;
+    const middle = sampleSpectralBloomState(performance, 0.01).waveform;
+    const right = sampleSpectralBloomState(performance, 0.02).waveform;
+    expect(middle[17]).toBeCloseTo((left[17]! + right[17]!) / 2, 8);
+  });
+
+  it("rejects old analysis without direct waveform frames", () => {
     expect(() => parseSpectralBloomSpectrogram(null)).toThrow(/rerun the analyzer/i);
   });
 });

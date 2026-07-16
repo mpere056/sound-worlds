@@ -751,16 +751,17 @@ async function loadConcept(concept: string): Promise<void> {
     const performance = parsePerformance(await response.json()) as SpectralBloomPerformance;
     const spectralBloom = new SpectralBloomScene(canvas, performance);
     scene = spectralBloom;
-    addTuningBinding(bindingPane, spectralBloom.tuning, "deformation", { min: 0.2, max: 1.8, step: 0.01, label: "Geometry" });
+    addTuningBinding(bindingPane, spectralBloom.tuning, "waveformDepth", { min: 0, max: 1.8, step: 0.01, label: "Waveform" });
+    addTuningBinding(bindingPane, spectralBloom.tuning, "spectralDepth", { min: 0, max: 1.8, step: 0.01, label: "Spectrum" });
     addTuningBinding(bindingPane, spectralBloom.tuning, "particleSize", { min: 1.5, max: 7, step: 0.05, label: "Particles" });
     addTuningBinding(bindingPane, spectralBloom.tuning, "luminosity", { min: 0.2, max: 1.5, step: 0.01, label: "Light" });
-    addTuningBinding(bindingPane, spectralBloom.tuning, "depth", { min: 0, max: 1.4, step: 0.01, label: "Core" });
+    addTuningBinding(bindingPane, spectralBloom.tuning, "core", { min: 0, max: 1.4, step: 0.01, label: "Core" });
     addTuningBinding(bindingPane, spectralBloom.tuning, "cameraDistance", { min: 0.75, max: 1.4, step: 0.01, label: "Camera" });
-    addTuningBinding(bindingPane, spectralBloom.tuning, "motion", { min: 0, max: 1.5, step: 0.01, label: "Orbit" });
-    sceneLabel.textContent = "Spectral Bloom - SB5 Resonant Particle Field";
-    statusTitle.textContent = "Spectral Bloom - master-audio acoustic geometry";
+    addTuningBinding(bindingPane, spectralBloom.tuning, "orbit", { min: 0, max: 1.5, step: 0.01, label: "Orbit" });
+    sceneLabel.textContent = "Spectral Bloom - SB5 3D Waveform Field";
+    statusTitle.textContent = "Spectral Bloom - direct master-audio geometry";
     const report = performance.statics.report;
-    statusDetail.textContent = `${report.bandCount} spectral bands - ${report.modeCount} damped modes - ${performance.statics.topology.surfaceParticles + performance.statics.topology.interiorParticles} persistent particles - ${report.clampCount} bounded samples`;
+    statusDetail.textContent = `${report.waveformSamplesPerFrame} signed waveform samples - ${report.bandCount} spectral bands - ${performance.statics.topology.surfaceParticles + performance.statics.topology.interiorParticles} persistent particles - zero deformation memory`;
   } else if (concept === "vortex-loom") {
     destroyPixiBackend();
     const response = await fetch(`/api/projects/${encodeURIComponent(currentProjectId)}/performance.vortex-loom.json`);
@@ -933,7 +934,7 @@ async function loadProject(id: string): Promise<void> {
   if (project?.concepts.includes("spectral-bloom")) {
     const spectralBloom = document.createElement("option");
     spectralBloom.value = "spectral-bloom";
-    spectralBloom.textContent = "Spectral Bloom - SB5 Resonant Particle Field";
+    spectralBloom.textContent = "Spectral Bloom - SB5 3D Waveform Field";
     options.push(spectralBloom);
   }
   if (project?.concepts.includes("vortex-loom")) {

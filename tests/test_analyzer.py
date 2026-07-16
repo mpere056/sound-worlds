@@ -110,9 +110,18 @@ class AnalyzerTests(unittest.TestCase):
         self.assertEqual(low_result["schemaVersion"], 1)
         self.assertEqual(len(low_result["bandsHz"]), 24)
         self.assertEqual(len(low_result["bands"][0]), 24)
+        self.assertEqual(low_result["waveformSamplesPerFrame"], 128)
+        self.assertEqual(len(low_result["waveform"][0]), 128)
+        self.assertLess(min(low_result["waveform"][2]), 0)
+        self.assertGreater(max(low_result["waveform"][2]), 0)
         self.assertLess(np.mean(low_result["centroid"]["values"]), np.mean(high_result["centroid"]["values"]))
         self.assertGreater(max(high_result["flux"]["values"]), 0.8)
         self.assertTrue(all(-1 <= value <= 1 for row in high_result["phaseCos"] for value in row))
+
+    def test_master_spectrogram_silence_has_exact_zero_waveform(self) -> None:
+        silence = master_spectrogram(AudioData(samples=np.zeros(4800, dtype=np.float32), sample_rate=48000))
+        self.assertTrue(all(value == 0 for row in silence["waveform"] for value in row))
+        self.assertTrue(all(value == 0 for row in silence["bands"] for value in row))
 
     def test_real_package_shape_is_generated_and_cached(self) -> None:
         fixture = json.loads(

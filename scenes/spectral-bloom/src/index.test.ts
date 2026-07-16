@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateSpectralBloomTopology } from "./index.js";
+import { generateSpectralBloomTopology, spectralBloomDirectDisplacement } from "./index.js";
 
 describe("Spectral Bloom topology", () => {
   it("is deterministic and keeps one stable particle identity set", () => {
@@ -17,5 +17,19 @@ describe("Spectral Bloom topology", () => {
     expect(Math.min(...radii.slice(0, 512))).toBeGreaterThan(1.46);
     expect(Math.max(...radii.slice(0, 512))).toBeLessThan(1.5);
     expect(Math.max(...radii.slice(512))).toBeLessThan(1.34);
+  });
+
+  it("returns the exact same baseline shape for silent measured data", () => {
+    expect(spectralBloomDirectDisplacement(0, 0, 0, 0)).toEqual({ radialScale: 1, tangentAmount: 0 });
+    expect(spectralBloomDirectDisplacement(0, 0, 0, 0, 1.8, 1.5, 1)).toEqual({ radialScale: 1, tangentAmount: 0 });
+  });
+
+  it("maps waveform sign directly to outward and inward geometry", () => {
+    const positive = spectralBloomDirectDisplacement(0.7, 0.2, 0, 0.4);
+    const negative = spectralBloomDirectDisplacement(-0.7, -0.2, 0, 0.4);
+    expect(positive.radialScale).toBeGreaterThan(1);
+    expect(negative.radialScale).toBeLessThan(1);
+    expect(positive.tangentAmount).toBeGreaterThan(0);
+    expect(negative.tangentAmount).toBeLessThan(0);
   });
 });
