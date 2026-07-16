@@ -32,6 +32,17 @@ Checkpoint payloads currently contain transported fiber positions, not the full
 remeshing, pigment, worker-replay, and checksum state. The scene is a readable
 structural proof, not Q1-Q5 material or visual acceptance.
 
+The first browser review rejected the literal checkpoint polyline display: it
+became angular and visually unordered, while a hard-coded cyan contact light
+made physically different notes appear causally identical. The current scene
+therefore treats checkpoints as subdued structural evidence inside a continuous
+silk field. Circulation sign now controls visual turning direction, contact
+light uses the struck note's pigment, recent motion leaves only a short material
+stitch, the next note parts the same material into a colored aperture, and
+encountered pigment relaxes over several seconds. This correction improves the
+grammar but does not substitute for the true remeshing and advected pigment
+state required by V5 and the visual gates in V7-V10.
+
 ## Concept thesis
 
 Vortex Loom is a deterministic fluid-field world in which music weaves one
