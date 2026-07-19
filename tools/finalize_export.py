@@ -121,8 +121,8 @@ def finalize(snapshot_path: Path, render_index_path: Path) -> Path:
         "exportRange": project_source["exportRange"],
     }
     expected_audio = project["contentDurationSec"] + project["exportRange"]["tailSec"]
-    one_sample = 1.0 / project["sampleRate"]
-    if abs(project["audioDurationSec"] - expected_audio) > one_sample:
+    endpoint_tolerance = validate_export.render_endpoint_tolerance(project["sampleRate"])
+    if abs(project["audioDurationSec"] - expected_audio) > endpoint_tolerance + 1e-9:
         raise ValueError(
             f"Master duration {project['audioDurationSec']:.6f}s does not match expected "
             f"{expected_audio:.6f}s"

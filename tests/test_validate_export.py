@@ -111,6 +111,23 @@ class ExportValidationTests(unittest.TestCase):
             path.write_text(json.dumps(manifest), encoding="utf-8")
             validate_export.validate_manifest(path)
 
+    def test_sub_millisecond_render_endpoint_quantization_is_valid(self) -> None:
+        manifest = copy.deepcopy(self.fixture("minimal"))
+        manifest["project"]["audioDurationSec"] -= 0.00075
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "manifest.json"
+            path.write_text(json.dumps(manifest), encoding="utf-8")
+            validate_export.validate_manifest(path, structure_only=True)
+
+    def test_render_endpoint_drift_over_one_millisecond_fails(self) -> None:
+        manifest = copy.deepcopy(self.fixture("minimal"))
+        manifest["project"]["audioDurationSec"] -= 0.0011
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "manifest.json"
+            path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(validate_export.PackageError, "audioDurationSec"):
+                validate_export.validate_manifest(path, structure_only=True)
+
     def test_snapshot_and_render_index_finalize_to_valid_package(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             package = Path(temp)

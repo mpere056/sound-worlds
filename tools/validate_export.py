@@ -16,10 +16,16 @@ import jsonschema
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = ROOT / "schemas" / "manifest.v2.schema.json"
+MAX_RENDER_ENDPOINT_QUANTIZATION_SEC = 0.001
 
 
 class PackageError(ValueError):
     pass
+
+
+def render_endpoint_tolerance(sample_rate: int) -> float:
+    """Allow REAPER's sub-millisecond native render endpoint quantization."""
+    return max(1.0 / sample_rate, MAX_RENDER_ENDPOINT_QUANTIZATION_SEC)
 
 
 def _sha256(path: Path) -> str:
@@ -69,12 +75,12 @@ def validate_manifest(manifest_path: Path, structure_only: bool = False) -> list
     export_range = project["exportRange"]
     content_duration = export_range["projectEndSec"] - export_range["projectStartSec"]
     expected_audio_duration = content_duration + export_range["tailSec"]
-    one_sample = 1.0 / project["sampleRate"]
+    endpoint_tolerance = render_endpoint_tolerance(project["sampleRate"])
     if abs(project["contentDurationSec"] - content_duration) > 1e-6:
         errors.append("project.contentDurationSec does not match exportRange")
-    # A render boundary is quantized to whole samples. Accept exactly that
-    # unavoidable rounding while still rejecting meaningfully misaligned files.
-    if abs(project["audioDurationSec"] - expected_audio_duration) > one_sample + 1e-9:
+    # REAPER can quantize a native render endpoint by a fraction of a processing
+    # block. Keep that exception sub-millisecond and reject meaningful drift.
+    if abs(project["audioDurationSec"] - expected_audio_duration) > endpoint_tolerance + 1e-9:
         errors.append("project.audioDurationSec does not equal content duration + tail")
     if project["audioDurationSec"] < project["contentDurationSec"]:
         errors.append("audioDurationSec is shorter than contentDurationSec")
