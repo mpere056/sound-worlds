@@ -30,7 +30,8 @@ async function projectNames(): Promise<string[]> {
   if (!existsSync(PROJECTS)) return [];
   const entries = await readdir(PROJECTS, { withFileTypes: true });
   return entries.filter((entry) => entry.isDirectory() && existsSync(join(PROJECTS, entry.name, "song.json")))
-    .map((entry) => entry.name).sort();
+    .map((entry) => entry.name)
+    .sort((left, right) => statSync(join(PROJECTS, right, "song.json")).mtimeMs - statSync(join(PROJECTS, left, "song.json")).mtimeMs);
 }
 
 async function resolveProject(name: string): Promise<string | null> {

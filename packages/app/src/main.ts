@@ -1165,7 +1165,7 @@ async function start(): Promise<void> {
   select.replaceChildren(...projects.map((project) => {
     const option = document.createElement("option");
     option.value = project.id;
-    option.textContent = `${project.name} · ${project.durationSec.toFixed(1)}s`;
+    option.textContent = `${project.name} · ${project.durationSec.toFixed(1)}s · ${project.id.slice(-8)}`;
     return option;
   }));
   await loadProject(projects[0]!.id);
