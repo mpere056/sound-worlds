@@ -311,6 +311,44 @@ export function compileAurora(song: Song, options: AuroraCompileOptions = {}): A
   let previousAxis: AuroraVec3 | undefined;
   const familyCounts = { planar: 0, depth: 0, inward: 0 };
   for (const [index, deadline] of plan.deadlines.entries()) {
+    if (index === 0 && Math.abs(deadline.t - t0) <= 1e-9) {
+      const arrivalDirection = auroraNormalize(state.velocity);
+      const axis = auroraNormalize(auroraCross(arrivalDirection, [0, 1, 0]), [0, 0, 1]);
+      const field = { electric: [0, 0, 0] as AuroraVec3, magnetic: [0, 0, 0] as AuroraVec3 };
+      const segment: AuroraRouteSegment = {
+        id: "aurora-segment:0",
+        kind: "deadline",
+        deadlineId: deadline.id,
+        t0,
+        t1: deadline.t,
+        start: { position: [...state.position], velocity: [...state.velocity] },
+        end: { position: [...state.position], velocity: [...state.velocity] },
+        field,
+        charge: plan.options.charge,
+        mass: plan.options.mass,
+        turnAngle: 0,
+        fieldMagnitude: 0,
+        family: "planar",
+      };
+      const coil: AuroraCoil = {
+        id: "aurora-coil:0",
+        deadlineId: deadline.id,
+        t: deadline.t,
+        center: [...state.position],
+        axis,
+        arrivalDirection,
+        pitch: deadline.representativePitch,
+        energy: deadline.energy,
+        radius: 0.6 + deadline.energy * 0.12,
+        tubeRadius: 0.085,
+        color: AURORA_COLORS[((Math.round(deadline.representativePitch) % 12) + 12) % 12 % AURORA_COLORS.length]!,
+      };
+      route.push(segment);
+      coils.push(coil);
+      familyCounts.planar += 1;
+      previousAxis = coil.axis;
+      continue;
+    }
     const selected = solveDeadlineSegment(state, t0, deadline, index, plan, coils, route, previousAxis);
     const segment: AuroraRouteSegment = {
       id: `aurora-segment:${index}`,

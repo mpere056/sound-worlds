@@ -89,6 +89,19 @@ describe("Aurora Cyclotron A2 route compiler", () => {
     }
   });
 
+  it("treats a note at project time zero as the initial exact crossing", () => {
+    const song = routeSong();
+    song.tracks[0]!.events[0]!.t = 0;
+    const performance = compileAurora(song);
+    const firstCoil = performance.statics.coils[0]!;
+    const firstSegment = performance.statics.route[0]!;
+    expect(firstCoil.t).toBe(0);
+    expect(firstSegment.t0).toBe(0);
+    expect(firstSegment.t1).toBe(0);
+    expect(firstSegment.end.position).toEqual(firstCoil.center);
+    expect(performance.statics.routeReport.exactCrossingError).toBe(0);
+  });
+
   it("keeps every authored segment within the magnetic-field bound", () => {
     const performance = compileAurora(routeSong(), { charge: -0.7, mass: 1.3, maxMagneticField: 3.5 });
     expect(performance.statics.routeReport.maximumField).toBeLessThanOrEqual(3.5 + 1e-12);

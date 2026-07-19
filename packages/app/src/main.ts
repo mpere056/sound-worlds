@@ -1022,6 +1022,13 @@ async function loadProject(id: string): Promise<void> {
     marble.disabled = true;
     options.push(marble);
   }
+  if (!project?.concepts.includes("brick-breaker")) {
+    const brickBreaker = document.createElement("option");
+    brickBreaker.value = "brick-breaker";
+    brickBreaker.textContent = "Brick Breaker · compile required";
+    brickBreaker.disabled = true;
+    options.push(brickBreaker);
+  }
   if (!project?.concepts.includes("aurora")) {
     const aurora = document.createElement("option");
     aurora.value = "aurora";
